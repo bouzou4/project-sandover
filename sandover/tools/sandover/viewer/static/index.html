@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sandover viewer</title>
+<style>
+  :root {
+    --bg: #1b1d21; --panel: rgba(24,26,30,0.94); --line: #353941; --text: #e6e8eb;
+    --muted: #9aa1ab; --accent: #7fb8ff; --field: #262a31; --danger: #ff8a7a;
+    --b-skinned: #3d6e4f; --b-prop: #5b5170; --b-background: #6c5a34;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 12.5px/1.4 system-ui, sans-serif; }
+  #canvas-wrap { position: absolute; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #panel { position: absolute; top: 8px; left: 8px; bottom: 8px; width: 290px; overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  #panel h1 { font-size: 13px; margin: 2px 4px 8px; color: var(--accent); font-weight: 600; }
+  details { border-top: 1px solid var(--line); padding: 6px 4px; }
+  summary { cursor: pointer; font-weight: 600; color: var(--muted); text-transform: uppercase;
+    font-size: 11px; letter-spacing: .04em; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "\25B8"; display: inline-block; width: 12px; }
+  details[open] > summary::before { content: "\25BE"; }
+  .body { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .row > span { color: var(--muted); }
+  select, input[type=search], input[type=number], textarea {
+    background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 4px;
+    padding: 3px 5px; font: inherit; }
+  select { min-width: 160px; }
+  input[type=number] { width: 64px; }
+  input[type=range] { flex: 1; min-width: 0; }
+  button { cursor: pointer; background: var(--field); color: var(--text); border: 1px solid var(--line);
+    border-radius: 4px; padding: 4px 8px; font: inherit; }
+  button:hover { border-color: var(--accent); }
+  .buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+  kbd { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+  .hint { color: var(--muted); font-size: 11px; }
+  .ax { font-weight: 700; } .ax.x { color: #ff6b6b; } .ax.y { color: #6bd66b; } .ax.z { color: #6b9bff; }
+  #picker { position: relative; }
+  #modelSearch { width: 100%; }
+  #modelList { position: absolute; z-index: 5; left: 0; right: 0; top: 100%; max-height: 55vh; overflow-y: auto;
+    margin: 2px 0 0; padding: 0; list-style: none; background: #202329; border: 1px solid var(--line);
+    border-radius: 4px; }
+  #modelList[hidden] { display: none; }
+  #modelList .group { padding: 4px 6px 2px; color: var(--accent); font-size: 11px; font-weight: 600;
+    position: sticky; top: 0; background: #202329; }
+  #modelList .opt { padding: 2px 6px 2px 14px; display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  #modelList .opt.active, #modelList .opt:hover { background: #2e3440; }
+  #modelList .opt .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #modelList .empty { padding: 6px; color: var(--muted); }
+  .badge { font-size: 10px; border-radius: 3px; padding: 0 4px; color: #fff; }
+  .badge.skinned { background: var(--b-skinned); } .badge.prop { background: var(--b-prop); }
+  .badge.background { background: var(--b-background); }
+  #modelInfo { font-size: 11.5px; color: var(--muted); }
+  #modelInfo b { color: var(--text); font-weight: 500; }
+  .warn { color: var(--danger); }
+  #reports { list-style: none; margin: 0; padding: 0; max-height: 160px; overflow-y: auto; font-size: 11.5px; }
+  #reports li { padding: 3px 0; border-bottom: 1px solid var(--line); }
+  #reports a { color: var(--accent); }
+  #status { position: absolute; bottom: 8px; right: 10px; color: var(--muted); font-size: 11px;
+    background: var(--panel); padding: 2px 6px; border-radius: 4px; }
+  #highlightLegend { position: absolute; top: 8px; right: 8px; display: flex; align-items: center;
+    gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 10px; font-size: 12px; }
+  #highlightLegend[hidden] { display: none; }
+  #highlightLegend .swatch { width: 10px; height: 10px; border-radius: 50%; background: #ffcf3f;
+    flex: none; }
+  #inspectPanel { position: absolute; bottom: 8px; right: 8px; width: 300px; max-height: 55vh;
+    overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px; font-size: 12px; }
+  #inspectPanel[hidden] { display: none; }
+  #inspectPanel .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  #inspectPanel h2 { font-size: 12.5px; margin: 0; color: var(--accent); font-weight: 600;
+    overflow-wrap: anywhere; }
+  #inspectSwatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--line);
+    flex: none; background-image: linear-gradient(45deg, #444 25%, transparent 25%),
+      linear-gradient(-45deg, #444 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #444 75%),
+      linear-gradient(-45deg, transparent 75%, #444 75%);
+    background-size: 8px 8px; background-position: 0 0, 0 4px, 4px -4px, -4px 0; background-color: #777; }
+  #inspectBody { color: var(--muted); line-height: 1.6; margin: 6px 0; }
+  dialog { background: #202329; color: var(--text); border: 1px solid var(--line); border-radius: 8px; width: 360px; }
+  dialog textarea { width: 100%; height: 110px; margin: 6px 0; }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+</style>
+</head>
+<body>
+<div id="canvas-wrap"></div>
+<div id="panel">
+  <h1>Sandover viewer</h1>
+
+  <details open>
+    <summary>Model</summary>
+    <div class="body">
+      <div id="picker">
+        <input type="search" id="modelSearch" placeholder="Search models (level or name)" autocomplete="off"
+               role="combobox" aria-expanded="false" aria-controls="modelList" aria-autocomplete="list" />
+        <ul id="modelList" role="listbox" hidden></ul>
+      </div>
+      <label class="row"><span>Show</span>
+        <select id="kindFilter">
+          <option value="all">All kinds</option>
+          <option value="skinned">Skinned</option>
+          <option value="prop">Props</option>
+          <option value="background">Backgrounds</option>
+        </select>
+      </label>
+      <label class="row"><span>Pose</span><select id="pose"></select></label>
+      <div id="modelInfo">No model loaded.</div>
+      <div class="buttons"><button id="resetView">Reset view <kbd>R</kbd></button></div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Textures</summary>
+    <div class="body">
+      <label class="row"><span>Set</span><select id="textureSet"></select></label>
+      <div id="textureInfo" class="hint"></div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Shading</summary>
+    <div class="body">
+      <label class="row"><span>Mode</span>
+        <select id="shadeMode">
+          <option value="unlit">Unlit texture</option>
+          <option value="baked">Baked (vtx x tex x 2)</option>
+          <option value="pbr">PBR preview</option>
+        </select>
+      </label>
+      <label class="row"><span>Alpha</span>
+        <select id="alphaMode">
+          <option value="engine">Engine (a x 2, cut 0.128)</option>
+          <option value="legacy">Old viewer (raw a, cut 0.1)</option>
+        </select>
+      </label>
+      <label class="row"><span>Normals</span>
+        <select id="normalsMode">
+          <option value="file">File (else smooth)</option>
+          <option value="smooth">Smooth</option>
+          <option value="flat">Flat</option>
+        </select>
+      </label>
+      <label class="row"><span><input type="checkbox" id="envmap" checked /> Envmap pass</span>
+        <input type="range" id="envStrength" min="0" max="2" step="0.05" value="0.5" title="Envmap strength" />
+      </label>
+      <label class="row"><span><input type="checkbox" id="pbrMaps" /> Derived maps</span>
+        <input type="range" id="mapStrength" min="0" max="3" step="0.05" value="1" title="Normal map strength" />
+        <output id="mapStrengthOut">1.00</output></label>
+      <div id="pbrMapsHint" class="hint"></div>
+      <label class="row"><span><input type="checkbox" id="eyes" checked /> Stand-in eyes</span></label>
+      <label class="row"><span><input type="checkbox" id="wireframe" /> Wireframe</span></label>
+      <label class="row"><span><input type="checkbox" id="axes" checked /> Axes (X red, Y green, Z blue)</span></label>
+      <label class="row"><span>Background</span><input type="color" id="bgColor" value="#333333" /></label>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Light</summary>
+    <div class="body">
+      <div class="hint">PBR preview only. Drag the light's arrows in the viewport.</div>
+      <div class="hint">Metres from the model centre. <span class="ax x">X</span> = screen right in the
+        default front view (the model's own left), <span class="ax y">Y</span> = up,
+        <span class="ax z">Z</span> = the way a character faces. Same axes as the game; 1 m = 4096 game units.</div>
+      <div class="row">
+        <label><span class="ax x">X</span> <input type="number" id="lightX" step="0.1" /></label>
+        <label><span class="ax y">Y</span> <input type="number" id="lightY" step="0.1" /></label>
+        <label><span class="ax z">Z</span> <input type="number" id="lightZ" step="0.1" /></label>
+      </div>
+      <div id="lightGame" class="hint"></div>
+      <label class="row"><span>Intensity</span>
+        <input type="range" id="lightIntensity" min="0" max="10" step="0.1" value="3" />
+        <output id="lightIntensityOut">3.0</output></label>
+      <label class="row"><span>Color</span><input type="color" id="lightColor" value="#ffffff" /></label>
+      <div class="buttons"><button id="resetLight">Reset light</button></div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Capture</summary>
+    <div class="body">
+      <div class="buttons">
+        <button id="screenshot">Screenshot <kbd>P</kbd></button>
+        <button id="flagBug">Flag render bug <kbd>B</kbd></button>
+      </div>
+      <div class="hint">Reports</div>
+      <ul id="reports"></ul>
+    </div>
+  </details>
+</div>
+<div id="status">loading...</div>
+
+<div id="highlightLegend" hidden>
+  <span class="swatch"></span>
+  <span id="highlightLabel"></span>
+  <button id="toggleHighlightPulse">Stop pulse</button>
+</div>
+
+<div id="inspectPanel" hidden>
+  <div class="row">
+    <h2 id="inspectName">-</h2>
+    <button id="inspectClose" title="Close">x</button>
+  </div>
+  <div class="row" style="margin-top:6px;">
+    <div id="inspectSwatch" title="texel colour"></div>
+    <div id="inspectBody" style="flex:1;"></div>
+  </div>
+  <div class="buttons">
+    <button id="markEmissive">Mark emissive <kbd>E</kbd></button>
+    <button id="markNotEmissive">Not emissive <kbd>N</kbd></button>
+    <button id="markClear">Clear</button>
+  </div>
+  <div id="inspectStatus" class="hint"></div>
+</div>
+
+<dialog id="reportDialog">
+  <form method="dialog">
+    <div>Flag render bug</div>
+    <div class="hint">Saves this view as PNG plus model, textures, shading, camera and light.</div>
+    <textarea id="reportNote" placeholder="What looks wrong?"></textarea>
+    <div class="buttons"><button value="save">Save report</button><button value="cancel">Cancel</button></div>
+  </form>
+</dialog>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.js"
+  }
+}
+</script>
+<script type="module" src="./viewer.js"></script>
+</body>
+</html>

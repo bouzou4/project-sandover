@@ -1,0 +1,4920 @@
+{
+ "mechanism": "Merc actors get no point lights: each draw converts one light-group (3 directional lights dir0-2 plus ambient) to vu-lights (goal_src/jak1/engine/draw/drawable.gc:500-548, goal_src/jak1/engine/gfx/foreground/bones.gc:222). The group is picked by the actor's draw-control light-index from its level's mood-context light-group[0..7] (drawable.gc:505-510); 255 falls back to the player's group. Group 0 is the sun/moon kit that update-mood-palette/-quick write every frame from the level's mood-lights-table hour snapshots (goal_src/jak1/engine/gfx/mood/mood.gc:146-204, 259-287), plus dir2 effects (lightning mood.gc:474, lava mood.gc:587-592). Groups 1-7 are static per-level light kits (goal_src/jak1/engine/gfx/mood/mood-tables.gc:13-205) refreshed in update-mood-<level>. Positional lighting is faked: update-mood-<level> measures target/camera distance to hard-coded points and either blends the player into a kit (set-target-light-index + target-interp, lerped at goal_src/jak1/engine/gfx/mood/time-of-day.gc:403-437) or rewrites a direction/level/colour (village2 kit 6, jungleb, village3, ogre, finalboss, citadel, darkcave crystals).",
+ "light_index": "'light-index' is an entity lump read at goal_src/jak1/engine/common-obs/process-drawable.gc:373 into draw-control light-index (goal_src/jak1/engine/data/art-h.gc:236). NPC init methods also set it in code. It selects which of the level's 8 light-groups lights that actor: 0 = sun kit (default, lump absent), 1-7 = level light kits (indoor or under-glow), 255 = use the player's current light group (drawable.gc:508). Lump users: village1 crate-3147=6, crate-3145=7, warp-gate-switch-3/evilplant-2=1; village2 ceilingflag x4=5, warp-gate-switch-7/villageb-water=1, sunken-elevator=255; jungleb plats/eggtop/darkvines=1-2, ecovents/iris doors/plant-boss=2-3; rolling pushers=1/4, gorge=3; sunken exit-chamber=255; village3 cavegem-1=1. No crate or ecovent outside jungleb/village1 carries it.",
+ "conventions": {
+  "units": "pos in metres (game units/4096); a null y means the check uses the target/camera y (horizontal distance only)",
+  "dir": "points from the lit surface toward the light (shadow = -dir, mood-tables.gc:207-218); (0,-1,0) = light from below",
+  "colour": "raw light-group colour multiplier (can exceed 1; vu-lights scale by levels.x), not clamped",
+  "kind": "directional | positional (has a world position) | region-kit (position+radius that switches the player to a directional kit) | none",
+  "affects": "merc = actor light-group; palette = tfrag/tie time-of-day palette weights only; both",
+  "gating": "all effect code is also gated by *time-of-day-effects* unless noted; no vanilla ambient uses the 'dark' type (ambient.gc:500) and none carries light data"
+ },
+ "lights": [
+  {
+   "level": "village1",
+   "name": "sun slot 0 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    0.9659
+   ],
+   "colour": [
+    1.558,
+    1.454,
+    0.228
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:563",
+   "ambient": [
+    0.4,
+    0.266,
+    0.6
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3236"
+  },
+  {
+   "level": "village1",
+   "name": "sun slot 1 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.183,
+    0.683,
+    0.7071
+   ],
+   "colour": [
+    1.632,
+    1.586,
+    1.428
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:575",
+   "ambient": [
+    0.387,
+    0.387,
+    0.475
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3236"
+  },
+  {
+   "level": "village1",
+   "name": "sun slot 2 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.2588,
+    0.9659,
+    0.0
+   ],
+   "colour": [
+    1.644,
+    1.598,
+    1.438
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:587",
+   "ambient": [
+    0.362,
+    0.362,
+    0.425
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3236"
+  },
+  {
+   "level": "village1",
+   "name": "sun slot 3 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.183,
+    0.683,
+    -0.7071
+   ],
+   "colour": [
+    1.632,
+    1.586,
+    1.428
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:599",
+   "ambient": [
+    0.387,
+    0.387,
+    0.475
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3236"
+  },
+  {
+   "level": "village1",
+   "name": "sun slot 4 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    -0.9659
+   ],
+   "colour": [
+    1.646,
+    1.118,
+    0.0
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:611",
+   "ambient": [
+    0.32,
+    0.35,
+    0.6
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3236"
+  },
+  {
+   "level": "village1",
+   "name": "sun slot 6 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.8365,
+    0.483,
+    0.2588
+   ],
+   "colour": [
+    0.192,
+    0.256,
+    0.961
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:635",
+   "ambient": [
+    0.383,
+    0.439,
+    0.7
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3236"
+  },
+  {
+   "level": "village1",
+   "name": "sun slot 7 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.354,
+    0.866,
+    0.354
+   ],
+   "colour": [
+    0.0495,
+    0.6208,
+    0.326
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:647",
+   "ambient": [
+    0.25,
+    0.439,
+    0.7
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3236"
+  },
+  {
+   "level": "beach",
+   "name": "sun slot 0 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    0.9659
+   ],
+   "colour": [
+    1.558,
+    1.454,
+    0.228
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:563",
+   "ambient": [
+    0.4,
+    0.266,
+    0.6
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3254"
+  },
+  {
+   "level": "beach",
+   "name": "sun slot 1 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.183,
+    0.683,
+    0.7071
+   ],
+   "colour": [
+    1.632,
+    1.586,
+    1.428
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:575",
+   "ambient": [
+    0.387,
+    0.387,
+    0.475
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3254"
+  },
+  {
+   "level": "beach",
+   "name": "sun slot 2 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.2588,
+    0.9659,
+    0.0
+   ],
+   "colour": [
+    1.644,
+    1.598,
+    1.438
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:587",
+   "ambient": [
+    0.362,
+    0.362,
+    0.425
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3254"
+  },
+  {
+   "level": "beach",
+   "name": "sun slot 3 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.183,
+    0.683,
+    -0.7071
+   ],
+   "colour": [
+    1.632,
+    1.586,
+    1.428
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:599",
+   "ambient": [
+    0.387,
+    0.387,
+    0.475
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3254"
+  },
+  {
+   "level": "beach",
+   "name": "sun slot 4 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    -0.9659
+   ],
+   "colour": [
+    1.646,
+    1.118,
+    0.0
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:611",
+   "ambient": [
+    0.32,
+    0.35,
+    0.6
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3254"
+  },
+  {
+   "level": "beach",
+   "name": "sun slot 6 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.8365,
+    0.483,
+    0.2588
+   ],
+   "colour": [
+    0.192,
+    0.256,
+    0.961
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:635",
+   "ambient": [
+    0.383,
+    0.439,
+    0.7
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3254"
+  },
+  {
+   "level": "beach",
+   "name": "sun slot 7 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.354,
+    0.866,
+    0.354
+   ],
+   "colour": [
+    0.0495,
+    0.6208,
+    0.326
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:647",
+   "ambient": [
+    0.25,
+    0.439,
+    0.7
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3254"
+  },
+  {
+   "level": "jungle",
+   "name": "sun slot 0 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    0.9659
+   ],
+   "colour": [
+    1.558,
+    1.454,
+    0.228
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:563",
+   "ambient": [
+    0.4,
+    0.266,
+    0.6
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3272"
+  },
+  {
+   "level": "jungle",
+   "name": "sun slot 1 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.183,
+    0.683,
+    0.7071
+   ],
+   "colour": [
+    1.632,
+    1.586,
+    1.428
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:575",
+   "ambient": [
+    0.387,
+    0.387,
+    0.475
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3272"
+  },
+  {
+   "level": "jungle",
+   "name": "sun slot 2 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.2588,
+    0.9659,
+    0.0
+   ],
+   "colour": [
+    1.644,
+    1.598,
+    1.438
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:587",
+   "ambient": [
+    0.362,
+    0.362,
+    0.425
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3272"
+  },
+  {
+   "level": "jungle",
+   "name": "sun slot 3 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.183,
+    0.683,
+    -0.7071
+   ],
+   "colour": [
+    1.632,
+    1.586,
+    1.428
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:599",
+   "ambient": [
+    0.387,
+    0.387,
+    0.475
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3272"
+  },
+  {
+   "level": "jungle",
+   "name": "sun slot 4 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    -0.9659
+   ],
+   "colour": [
+    1.646,
+    1.118,
+    0.0
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:611",
+   "ambient": [
+    0.32,
+    0.35,
+    0.6
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3272"
+  },
+  {
+   "level": "jungle",
+   "name": "sun slot 6 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.8365,
+    0.483,
+    0.2588
+   ],
+   "colour": [
+    0.192,
+    0.256,
+    0.961
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:635",
+   "ambient": [
+    0.383,
+    0.439,
+    0.7
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3272"
+  },
+  {
+   "level": "jungle",
+   "name": "sun slot 7 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.354,
+    0.866,
+    0.354
+   ],
+   "colour": [
+    0.0495,
+    0.6208,
+    0.326
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:647",
+   "ambient": [
+    0.25,
+    0.439,
+    0.7
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3272"
+  },
+  {
+   "level": "training",
+   "name": "sun slot 0 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    0.9659
+   ],
+   "colour": [
+    1.558,
+    1.454,
+    0.228
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:563",
+   "ambient": [
+    0.4,
+    0.266,
+    0.6
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3422"
+  },
+  {
+   "level": "training",
+   "name": "sun slot 1 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.183,
+    0.683,
+    0.7071
+   ],
+   "colour": [
+    1.632,
+    1.586,
+    1.428
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:575",
+   "ambient": [
+    0.387,
+    0.387,
+    0.475
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3422"
+  },
+  {
+   "level": "training",
+   "name": "sun slot 2 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.2588,
+    0.9659,
+    0.0
+   ],
+   "colour": [
+    1.644,
+    1.598,
+    1.438
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:587",
+   "ambient": [
+    0.362,
+    0.362,
+    0.425
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3422"
+  },
+  {
+   "level": "training",
+   "name": "sun slot 3 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.183,
+    0.683,
+    -0.7071
+   ],
+   "colour": [
+    1.632,
+    1.586,
+    1.428
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:599",
+   "ambient": [
+    0.387,
+    0.387,
+    0.475
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3422"
+  },
+  {
+   "level": "training",
+   "name": "sun slot 4 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    -0.9659
+   ],
+   "colour": [
+    1.646,
+    1.118,
+    0.0
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:611",
+   "ambient": [
+    0.32,
+    0.35,
+    0.6
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3422"
+  },
+  {
+   "level": "training",
+   "name": "sun slot 6 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.8365,
+    0.483,
+    0.2588
+   ],
+   "colour": [
+    0.192,
+    0.256,
+    0.961
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:635",
+   "ambient": [
+    0.383,
+    0.439,
+    0.7
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3422"
+  },
+  {
+   "level": "training",
+   "name": "sun slot 7 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.354,
+    0.866,
+    0.354
+   ],
+   "colour": [
+    0.0495,
+    0.6208,
+    0.326
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:647",
+   "ambient": [
+    0.25,
+    0.439,
+    0.7
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3422"
+  },
+  {
+   "level": "finalboss",
+   "name": "sun slot 0 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    0.9659
+   ],
+   "colour": [
+    1.558,
+    1.454,
+    0.228
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:563",
+   "ambient": [
+    0.4,
+    0.266,
+    0.6
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3568"
+  },
+  {
+   "level": "finalboss",
+   "name": "sun slot 1 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.183,
+    0.683,
+    0.7071
+   ],
+   "colour": [
+    1.632,
+    1.586,
+    1.428
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:575",
+   "ambient": [
+    0.387,
+    0.387,
+    0.475
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3568"
+  },
+  {
+   "level": "finalboss",
+   "name": "sun slot 2 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.2588,
+    0.9659,
+    0.0
+   ],
+   "colour": [
+    1.644,
+    1.598,
+    1.438
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:587",
+   "ambient": [
+    0.362,
+    0.362,
+    0.425
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3568"
+  },
+  {
+   "level": "finalboss",
+   "name": "sun slot 3 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.183,
+    0.683,
+    -0.7071
+   ],
+   "colour": [
+    1.632,
+    1.586,
+    1.428
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:599",
+   "ambient": [
+    0.387,
+    0.387,
+    0.475
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3568"
+  },
+  {
+   "level": "finalboss",
+   "name": "sun slot 4 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    -0.9659
+   ],
+   "colour": [
+    1.646,
+    1.118,
+    0.0
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:611",
+   "ambient": [
+    0.32,
+    0.35,
+    0.6
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3568"
+  },
+  {
+   "level": "finalboss",
+   "name": "sun slot 6 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.8365,
+    0.483,
+    0.2588
+   ],
+   "colour": [
+    0.192,
+    0.256,
+    0.961
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:635",
+   "ambient": [
+    0.383,
+    0.439,
+    0.7
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3568"
+  },
+  {
+   "level": "finalboss",
+   "name": "sun slot 7 (village1 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.354,
+    0.866,
+    0.354
+   ],
+   "colour": [
+    0.0495,
+    0.6208,
+    0.326
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:647",
+   "ambient": [
+    0.25,
+    0.439,
+    0.7
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3568"
+  },
+  {
+   "level": "misty",
+   "name": "sun slot 0 (misty table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.25,
+    0.933,
+    0.2588
+   ],
+   "colour": [
+    0.877,
+    0.877,
+    0.877
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1396",
+   "ambient": [
+    0.374,
+    0.374,
+    0.375
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3304"
+  },
+  {
+   "level": "misty",
+   "name": "sun slot 1 (misty table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.8365,
+    0.483,
+    0.2588
+   ],
+   "colour": [
+    0.334,
+    0.348,
+    0.64
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1408",
+   "ambient": [
+    0.428,
+    0.44,
+    0.55
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3304"
+  },
+  {
+   "level": "village2",
+   "name": "sun slot 0 (village2 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.25,
+    0.933,
+    0.2588
+   ],
+   "colour": [
+    0.793,
+    0.793,
+    0.793
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1569",
+   "ambient": [
+    0.374,
+    0.374,
+    0.374
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3338"
+  },
+  {
+   "level": "village2",
+   "name": "sun slot 1 (village2 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.8365,
+    0.483,
+    0.2588
+   ],
+   "colour": [
+    0.173,
+    0.259,
+    0.432
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1581",
+   "ambient": [
+    0.463,
+    0.412,
+    0.55
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3338"
+  },
+  {
+   "level": "swamp",
+   "name": "sun slot 0 (swamp table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.25,
+    0.933,
+    0.2588
+   ],
+   "colour": [
+    0.825,
+    0.825,
+    0.825
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1758",
+   "ambient": [
+    0.374,
+    0.374,
+    0.374
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3356"
+  },
+  {
+   "level": "swamp",
+   "name": "sun slot 1 (swamp table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.8365,
+    0.483,
+    0.2588
+   ],
+   "colour": [
+    0.173,
+    0.259,
+    0.519
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1770",
+   "ambient": [
+    0.412,
+    0.463,
+    0.55
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3356"
+  },
+  {
+   "level": "sunken",
+   "name": "sun slot 0 (sunken table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "colour": [
+    0.265,
+    0.387,
+    0.509
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1905",
+   "ambient": [
+    0.374,
+    0.374,
+    0.374
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3372",
+   "note": "lg0 dir0/dir1/dir2/ambient overwritten after update-mood-palette when effects are on (see sunken entries)"
+  },
+  {
+   "level": "sunken",
+   "name": "sun slot 1 (sunken table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "colour": [
+    0.172,
+    0.185,
+    0.298
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1917",
+   "ambient": [
+    0.463,
+    0.412,
+    0.55
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3372",
+   "note": "lg0 dir0/dir1/dir2/ambient overwritten after update-mood-palette when effects are on (see sunken entries)"
+  },
+  {
+   "level": "sunkenb",
+   "name": "sun slot 0 (sunken table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "colour": [
+    0.265,
+    0.387,
+    0.509
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1905",
+   "ambient": [
+    0.374,
+    0.374,
+    0.374
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3388",
+   "note": "lg0 dir0/dir1/dir2/ambient overwritten after update-mood-palette when effects are on (see sunkenb entries)"
+  },
+  {
+   "level": "sunkenb",
+   "name": "sun slot 1 (sunken table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "colour": [
+    0.172,
+    0.185,
+    0.298
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1917",
+   "ambient": [
+    0.463,
+    0.412,
+    0.55
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3388",
+   "note": "lg0 dir0/dir1/dir2/ambient overwritten after update-mood-palette when effects are on (see sunkenb entries)"
+  },
+  {
+   "level": "rolling",
+   "name": "sun slot 0 (rolling table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.183,
+    0.683,
+    0.7071
+   ],
+   "colour": [
+    0.922,
+    0.905,
+    0.873
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2048",
+   "ambient": [
+    0.346,
+    0.359,
+    0.384
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3404"
+  },
+  {
+   "level": "rolling",
+   "name": "sun slot 1 (rolling table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.2432,
+    0.9077,
+    -0.342
+   ],
+   "colour": [
+    0.914,
+    0.898,
+    0.866
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2060",
+   "ambient": [
+    0.346,
+    0.359,
+    0.384
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3404"
+  },
+  {
+   "level": "rolling",
+   "name": "sun slot 2 (rolling table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.8365,
+    0.483,
+    0.2588
+   ],
+   "colour": [
+    0.09,
+    0.135,
+    0.225
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2072",
+   "ambient": [
+    0.398,
+    0.398,
+    0.574
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3404"
+  },
+  {
+   "level": "rolling",
+   "name": "sun slot 3 (rolling table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.6262,
+    0.7098,
+    0.3222
+   ],
+   "colour": [
+    0.0464,
+    0.1344,
+    0.1254
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2084",
+   "ambient": [
+    0.398,
+    0.398,
+    0.574
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3404"
+  },
+  {
+   "level": "firecanyon",
+   "name": "sun slot 0 (firecanyon table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.0278,
+    0.6578,
+    0.7526
+   ],
+   "colour": [
+    1.0979,
+    1.0567,
+    0.4653
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2237",
+   "ambient": [
+    0.574,
+    0.32,
+    0.487
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3322"
+  },
+  {
+   "level": "firecanyon",
+   "name": "sun slot 1 (firecanyon table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.2588,
+    0.9659,
+    0.0
+   ],
+   "colour": [
+    1.644,
+    1.598,
+    1.438
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2249",
+   "ambient": [
+    0.368,
+    0.368,
+    0.4
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3322"
+  },
+  {
+   "level": "firecanyon",
+   "name": "sun slot 2 (firecanyon table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.0353,
+    0.8338,
+    -0.5508
+   ],
+   "colour": [
+    1.1419,
+    0.8887,
+    0.3513
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2261",
+   "ambient": [
+    0.347,
+    0.362,
+    0.487
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3322"
+  },
+  {
+   "level": "firecanyon",
+   "name": "sun slot 3 (firecanyon table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.8365,
+    0.4829,
+    0.2588
+   ],
+   "colour": [
+    0.1824,
+    0.2574,
+    0.6964
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2273",
+   "ambient": [
+    0.434,
+    0.423,
+    0.625
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3322"
+  },
+  {
+   "level": "snow",
+   "name": "sun slot 0 (snow table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    0.966
+   ],
+   "colour": [
+    0.943,
+    0.88,
+    0.137
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:887",
+   "ambient": [
+    0.449,
+    0.35,
+    0.599
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3486"
+  },
+  {
+   "level": "snow",
+   "name": "sun slot 1 (snow table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.259,
+    0.966,
+    0.0
+   ],
+   "colour": [
+    0.66,
+    0.436,
+    0.291
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:899",
+   "ambient": [
+    0.358,
+    0.575,
+    0.716
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3486"
+  },
+  {
+   "level": "snow",
+   "name": "sun slot 2 (snow table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    -0.966
+   ],
+   "colour": [
+    1.056,
+    0.747,
+    0.0
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:911",
+   "ambient": [
+    0.383,
+    0.366,
+    0.599
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3486"
+  },
+  {
+   "level": "snow",
+   "name": "sun slot 3 (snow table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.866,
+    0.5,
+    0.0
+   ],
+   "colour": [
+    0.067,
+    0.089,
+    0.333
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:923",
+   "ambient": [
+    0.304,
+    0.409,
+    0.76
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3486"
+  },
+  {
+   "level": "ogre",
+   "name": "sun slot 0 (ogre table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.183,
+    0.683,
+    0.7071
+   ],
+   "colour": [
+    1.154,
+    1.132,
+    1.093
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2445",
+   "ambient": [
+    0.346,
+    0.359,
+    0.384
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3502"
+  },
+  {
+   "level": "ogre",
+   "name": "sun slot 1 (ogre table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.2432,
+    0.9077,
+    -0.342
+   ],
+   "colour": [
+    1.144,
+    1.124,
+    0.939
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2457",
+   "ambient": [
+    0.346,
+    0.359,
+    0.384
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3502"
+  },
+  {
+   "level": "ogre",
+   "name": "sun slot 2 (ogre table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.8365,
+    0.483,
+    0.2588
+   ],
+   "colour": [
+    0.113,
+    0.169,
+    0.282
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2469",
+   "ambient": [
+    0.398,
+    0.398,
+    0.574
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3502"
+  },
+  {
+   "level": "ogre",
+   "name": "sun slot 3 (ogre table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.6262,
+    0.7098,
+    0.3222
+   ],
+   "colour": [
+    0.058,
+    0.168,
+    0.157
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2481",
+   "ambient": [
+    0.398,
+    0.398,
+    0.574
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3502"
+  },
+  {
+   "level": "village3",
+   "name": "sun slot 0 (village3 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    0.966
+   ],
+   "colour": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2762",
+   "ambient": [
+    0.449,
+    0.35,
+    0.599
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3550",
+   "note": "table values overwritten every frame by update-mood-village3 (see village3 code-override entries)"
+  },
+  {
+   "level": "village3",
+   "name": "sun slot 1 (village3 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.259,
+    0.966,
+    0.0
+   ],
+   "colour": [
+    0.66,
+    0.436,
+    0.291
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2774",
+   "ambient": [
+    0.358,
+    0.575,
+    0.716
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3550",
+   "note": "table values overwritten every frame by update-mood-village3 (see village3 code-override entries)"
+  },
+  {
+   "level": "village3",
+   "name": "sun slot 2 (village3 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    -0.966
+   ],
+   "colour": [
+    1.056,
+    0.747,
+    0.0
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2786",
+   "ambient": [
+    0.383,
+    0.366,
+    0.599
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3550",
+   "note": "table values overwritten every frame by update-mood-village3 (see village3 code-override entries)"
+  },
+  {
+   "level": "village3",
+   "name": "sun slot 3 (village3 table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.866,
+    0.5,
+    0.0
+   ],
+   "colour": [
+    0.067,
+    0.089,
+    0.333
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day: palette-interp hour snapshot (update-mood-palette)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2798",
+   "ambient": [
+    0.304,
+    0.409,
+    0.76
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3550",
+   "note": "table values overwritten every frame by update-mood-village3 (see village3 code-override entries)"
+  },
+  {
+   "level": "maincave",
+   "name": "sun slot 0 (maincave table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "colour": [
+    0.25,
+    0.6,
+    0.75
+   ],
+   "radius_hint_m": null,
+   "driver": "always: update-mood-quick pins slot 0",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1175",
+   "ambient": [
+    0.15,
+    0.2,
+    0.25
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3438"
+  },
+  {
+   "level": "robocave",
+   "name": "sun slot 0 (maincave table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "colour": [
+    0.25,
+    0.6,
+    0.75
+   ],
+   "radius_hint_m": null,
+   "driver": "always: update-mood-quick pins slot 0",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1175",
+   "ambient": [
+    0.15,
+    0.2,
+    0.25
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3470"
+  },
+  {
+   "level": "darkcave",
+   "name": "sun slot 0 (darkcave table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "colour": [
+    0.3,
+    0.4,
+    0.5
+   ],
+   "radius_hint_m": null,
+   "driver": "always: update-mood-quick pins slot 0",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1273",
+   "ambient": [
+    0.3,
+    0.4,
+    0.5
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3454",
+   "note": "amb-color and shadow rewritten by crystal proximity (see darkcave crystal entries)"
+  },
+  {
+   "level": "jungleb",
+   "name": "sun slot 0 (jungleb table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "colour": [
+    0.287,
+    0.283,
+    0.4
+   ],
+   "radius_hint_m": null,
+   "driver": "always: update-mood-quick pins slot 0",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:1101",
+   "ambient": [
+    0.1412,
+    0.1875,
+    0.375
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3288",
+   "note": "slot 0 rewritten every frame by update-mood-jungleb / -jungleb-blue (see jungleb entries)"
+  },
+  {
+   "level": "lavatube",
+   "name": "sun slot 0 (lavatube table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "colour": [
+    0.19,
+    0.128,
+    0.128
+   ],
+   "radius_hint_m": null,
+   "driver": "always: update-mood-quick pins slot 0",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:2847",
+   "ambient": [
+    0.31,
+    0.372,
+    0.372
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3600"
+  },
+  {
+   "level": "citadel",
+   "name": "sun slot 0 (citadel table)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "colour": [
+    0.75,
+    0.725,
+    0.5
+   ],
+   "radius_hint_m": null,
+   "driver": "always: update-mood-quick pins slot 0",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3175",
+   "ambient": [
+    0.3,
+    0.3,
+    0.3
+   ],
+   "light_group": 0,
+   "table_ref": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:3616",
+   "note": "dir0 overwritten to (0,1,0) flicker colour when effects are on (see citadel entries)"
+  },
+  {
+   "level": "village2",
+   "name": "lightning flash slot 2",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.4096,
+    0.5736,
+    0.7094
+   ],
+   "colour": [
+    2.0,
+    2.0,
+    2.0
+   ],
+   "radius_hint_m": null,
+   "driver": "always (random flashes, *flash0-7* envelopes)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:675",
+   "mechanism_ref": "goal_src/jak1/engine/gfx/mood/mood.gc:474-478",
+   "light_group": 0,
+   "light_slot": "dir2"
+  },
+  {
+   "level": "village2",
+   "name": "lightning flash slot 3",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.4096,
+    0.5736,
+    -0.7094
+   ],
+   "colour": [
+    2.0,
+    2.0,
+    2.0
+   ],
+   "radius_hint_m": null,
+   "driver": "always (random flashes, *flash0-7* envelopes)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:675",
+   "mechanism_ref": "goal_src/jak1/engine/gfx/mood/mood.gc:474-478",
+   "light_group": 0,
+   "light_slot": "dir2"
+  },
+  {
+   "level": "swamp",
+   "name": "lightning flash slot 2",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.7094,
+    0.5736,
+    -0.4096
+   ],
+   "colour": [
+    2.0,
+    2.0,
+    2.0
+   ],
+   "radius_hint_m": null,
+   "driver": "always (random flashes, *flash0-7* envelopes)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:745",
+   "mechanism_ref": "goal_src/jak1/engine/gfx/mood/mood.gc:474-478",
+   "light_group": 0,
+   "light_slot": "dir2"
+  },
+  {
+   "level": "swamp",
+   "name": "lightning flash slot 3",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.7094,
+    0.5736,
+    0.4096
+   ],
+   "colour": [
+    2.0,
+    2.0,
+    2.0
+   ],
+   "radius_hint_m": null,
+   "driver": "always (random flashes, *flash0-7* envelopes)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:745",
+   "mechanism_ref": "goal_src/jak1/engine/gfx/mood/mood.gc:474-478",
+   "light_group": 0,
+   "light_slot": "dir2"
+  },
+  {
+   "level": "ogre",
+   "name": "lightning flash slot 4",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.4096,
+    0.5736,
+    0.7094
+   ],
+   "colour": [
+    2.0,
+    2.0,
+    2.0
+   ],
+   "radius_hint_m": null,
+   "driver": "always (random flashes, *flash0-7* envelopes); ogre: only while camera within 150 m of (212,37,-1885)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1507",
+   "mechanism_ref": "goal_src/jak1/engine/gfx/mood/mood.gc:474-478",
+   "light_group": 0,
+   "light_slot": "dir2"
+  },
+  {
+   "level": "ogre",
+   "name": "lightning flash slot 5",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.4096,
+    0.5736,
+    -0.7094
+   ],
+   "colour": [
+    2.0,
+    2.0,
+    2.0
+   ],
+   "radius_hint_m": null,
+   "driver": "always (random flashes, *flash0-7* envelopes); ogre: only while camera within 150 m of (212,37,-1885)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1507",
+   "mechanism_ref": "goal_src/jak1/engine/gfx/mood/mood.gc:474-478",
+   "light_group": 0,
+   "light_slot": "dir2"
+  },
+  {
+   "level": "rolling",
+   "name": "lightning (sky only)",
+   "kind": "none",
+   "affects": "sky",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1139",
+   "note": "last arg #t: writes sky-times only, never the light-group; not a merc light"
+  },
+  {
+   "level": "firecanyon",
+   "name": "lava glow (update-mood-lava dir2)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.364,
+    0.0
+   ],
+   "radius_hint_m": null,
+   "driver": "always when effects on; level 0.875+-0.125 random flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1200",
+   "mechanism_ref": "goal_src/jak1/engine/gfx/mood/mood.gc:587-592",
+   "light_group": 0,
+   "light_slot": "dir2"
+  },
+  {
+   "level": "lavatube",
+   "name": "lava glow (update-mood-lava dir2)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.364,
+    0.0
+   ],
+   "radius_hint_m": null,
+   "driver": "always when effects on; level 0.875+-0.125 random flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1477",
+   "mechanism_ref": "goal_src/jak1/engine/gfx/mood/mood.gc:587-592",
+   "light_group": 0,
+   "light_slot": "dir2"
+  },
+  {
+   "level": "village1",
+   "name": "indoor kit 1 region: sage hut (assistant/sage code light-index 1; warp-gate-switch-3, evilplant-2 lumps)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -128.0,
+    null,
+    209.0
+   ],
+   "dir": [
+    0.224,
+    0.5,
+    -0.836
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 22.0,
+   "driver": "distance: target xz within 22 m blends target to light-group 1 (full inside 18 m); NPCs with light-index 1 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:777",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:42",
+   "light_group": 1,
+   "kit": {
+    "dir0": {
+     "dir": [
+      0.224,
+      0.5,
+      -0.836
+     ],
+     "level": 0.9
+    },
+    "dir1": {
+     "dir": [
+      -0.224,
+      0.5,
+      0.836
+     ],
+     "level": 0.9
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.4,
+     "colour": [
+      0.8,
+      0.775,
+      0.7
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   }
+  },
+  {
+   "level": "beach",
+   "name": "indoor kit 1 region: sage hut (assistant/sage code light-index 1; warp-gate-switch-3, evilplant-2 lumps)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -128.0,
+    null,
+    209.0
+   ],
+   "dir": [
+    0.224,
+    0.5,
+    -0.836
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 22.0,
+   "driver": "distance: target xz within 22 m blends target to light-group 1 (full inside 18 m); NPCs with light-index 1 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:777",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:42",
+   "light_group": 1,
+   "kit": {
+    "dir0": {
+     "dir": [
+      0.224,
+      0.5,
+      -0.836
+     ],
+     "level": 0.9
+    },
+    "dir1": {
+     "dir": [
+      -0.224,
+      0.5,
+      0.836
+     ],
+     "level": 0.9
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.4,
+     "colour": [
+      0.8,
+      0.775,
+      0.7
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   },
+   "note": "beach runs update-mood-village1 with make-village1-light-kit (level-info.gc:288, mood-tables.gc:3250-3266); same hut coordinates"
+  },
+  {
+   "level": "village1",
+   "name": "indoor kit 2 region: mayor hut (mayor.gc:634)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -110.0,
+    null,
+    43.5
+   ],
+   "dir": [
+    -0.4327,
+    0.5,
+    0.7495
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 20.0,
+   "driver": "distance: target xz within 20 m blends target to light-group 2 (full inside 16 m); NPCs with light-index 2 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:798",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:43",
+   "light_group": 2,
+   "kit": {
+    "dir0": {
+     "dir": [
+      -0.4327,
+      0.5,
+      0.7495
+     ],
+     "level": 1.0
+    },
+    "dir1": {
+     "dir": [
+      0.4327,
+      0.5,
+      -0.7495
+     ],
+     "level": 1.0
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.8,
+     "colour": [
+      0.75,
+      0.375,
+      0.0
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   }
+  },
+  {
+   "level": "beach",
+   "name": "indoor kit 2 region: mayor hut (mayor.gc:634)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -110.0,
+    null,
+    43.5
+   ],
+   "dir": [
+    -0.4327,
+    0.5,
+    0.7495
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 20.0,
+   "driver": "distance: target xz within 20 m blends target to light-group 2 (full inside 16 m); NPCs with light-index 2 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:798",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:43",
+   "light_group": 2,
+   "kit": {
+    "dir0": {
+     "dir": [
+      -0.4327,
+      0.5,
+      0.7495
+     ],
+     "level": 1.0
+    },
+    "dir1": {
+     "dir": [
+      0.4327,
+      0.5,
+      -0.7495
+     ],
+     "level": 1.0
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.8,
+     "colour": [
+      0.75,
+      0.375,
+      0.0
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   },
+   "note": "beach runs update-mood-village1 with make-village1-light-kit (level-info.gc:288, mood-tables.gc:3250-3266); same hut coordinates"
+  },
+  {
+   "level": "village1",
+   "name": "indoor kit 3 region: sculptor hut (sculptor.gc:242, muse)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -126.5,
+    null,
+    -18.0
+   ],
+   "dir": [
+    -0.8133,
+    0.5,
+    -0.296
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 14.0,
+   "driver": "distance: target xz within 14 m blends target to light-group 3 (full inside 10 m); NPCs with light-index 3 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:791",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:51",
+   "light_group": 3,
+   "kit": {
+    "dir0": {
+     "dir": [
+      -0.8133,
+      0.5,
+      -0.296
+     ],
+     "level": 0.9
+    },
+    "dir1": {
+     "dir": [
+      0.8133,
+      0.5,
+      0.296
+     ],
+     "level": 0.9
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.5,
+     "colour": [
+      0.8,
+      0.775,
+      0.7
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   }
+  },
+  {
+   "level": "beach",
+   "name": "indoor kit 3 region: sculptor hut (sculptor.gc:242, muse)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -126.5,
+    null,
+    -18.0
+   ],
+   "dir": [
+    -0.8133,
+    0.5,
+    -0.296
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 14.0,
+   "driver": "distance: target xz within 14 m blends target to light-group 3 (full inside 10 m); NPCs with light-index 3 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:791",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:51",
+   "light_group": 3,
+   "kit": {
+    "dir0": {
+     "dir": [
+      -0.8133,
+      0.5,
+      -0.296
+     ],
+     "level": 0.9
+    },
+    "dir1": {
+     "dir": [
+      0.8133,
+      0.5,
+      0.296
+     ],
+     "level": 0.9
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.5,
+     "colour": [
+      0.8,
+      0.775,
+      0.7
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   },
+   "note": "beach runs update-mood-village1 with make-village1-light-kit (level-info.gc:288, mood-tables.gc:3250-3266); same hut coordinates"
+  },
+  {
+   "level": "village1",
+   "name": "indoor kit 4 region: bird-lady hut (bird-lady.gc:104)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -62.0,
+    null,
+    -28.5
+   ],
+   "dir": [
+    -0.836,
+    0.5,
+    -0.224
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 17.0,
+   "driver": "distance: target xz within 17 m blends target to light-group 4 (full inside 13 m); NPCs with light-index 4 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:784",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:52",
+   "light_group": 4,
+   "kit": {
+    "dir0": {
+     "dir": [
+      -0.836,
+      0.5,
+      -0.224
+     ],
+     "level": 0.9
+    },
+    "dir1": {
+     "dir": [
+      0.836,
+      0.5,
+      0.224
+     ],
+     "level": 0.9
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.4,
+     "colour": [
+      0.8,
+      0.775,
+      0.7
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   }
+  },
+  {
+   "level": "beach",
+   "name": "indoor kit 4 region: bird-lady hut (bird-lady.gc:104)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -62.0,
+    null,
+    -28.5
+   ],
+   "dir": [
+    -0.836,
+    0.5,
+    -0.224
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 17.0,
+   "driver": "distance: target xz within 17 m blends target to light-group 4 (full inside 13 m); NPCs with light-index 4 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:784",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:52",
+   "light_group": 4,
+   "kit": {
+    "dir0": {
+     "dir": [
+      -0.836,
+      0.5,
+      -0.224
+     ],
+     "level": 0.9
+    },
+    "dir1": {
+     "dir": [
+      0.836,
+      0.5,
+      0.224
+     ],
+     "level": 0.9
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.4,
+     "colour": [
+      0.8,
+      0.775,
+      0.7
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   },
+   "note": "beach runs update-mood-village1 with make-village1-light-kit (level-info.gc:288, mood-tables.gc:3250-3266); same hut coordinates"
+  },
+  {
+   "level": "village1",
+   "name": "indoor kit 5 region: explorer hut (explorer.gc:223)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -58.5,
+    null,
+    32.0
+   ],
+   "dir": [
+    -0.836,
+    0.5,
+    -0.224
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 14.0,
+   "driver": "distance: target xz within 14 m blends target to light-group 5 (full inside 10 m); NPCs with light-index 5 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:805",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:53",
+   "light_group": 5,
+   "kit": {
+    "dir0": {
+     "dir": [
+      -0.836,
+      0.5,
+      -0.224
+     ],
+     "level": 0.9
+    },
+    "dir1": {
+     "dir": [
+      0.836,
+      0.5,
+      0.224
+     ],
+     "level": 0.9
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.4,
+     "colour": [
+      0.8,
+      0.775,
+      0.7
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   }
+  },
+  {
+   "level": "beach",
+   "name": "indoor kit 5 region: explorer hut (explorer.gc:223)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -58.5,
+    null,
+    32.0
+   ],
+   "dir": [
+    -0.836,
+    0.5,
+    -0.224
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 14.0,
+   "driver": "distance: target xz within 14 m blends target to light-group 5 (full inside 10 m); NPCs with light-index 5 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:805",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:53",
+   "light_group": 5,
+   "kit": {
+    "dir0": {
+     "dir": [
+      -0.836,
+      0.5,
+      -0.224
+     ],
+     "level": 0.9
+    },
+    "dir1": {
+     "dir": [
+      0.836,
+      0.5,
+      0.224
+     ],
+     "level": 0.9
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.4,
+     "colour": [
+      0.8,
+      0.775,
+      0.7
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   },
+   "note": "beach runs update-mood-village1 with make-village1-light-kit (level-info.gc:288, mood-tables.gc:3250-3266); same hut coordinates"
+  },
+  {
+   "level": "village1",
+   "name": "indoor kit 6 region: hut with crate-3147 (lump light-index 6)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -69.5,
+    null,
+    70.5
+   ],
+   "dir": [
+    -0.224,
+    0.5,
+    0.836
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 19.0,
+   "driver": "distance: target xz within 19 m blends target to light-group 6 (full inside 15 m); NPCs with light-index 6 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:812",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:54",
+   "light_group": 6,
+   "kit": {
+    "dir0": {
+     "dir": [
+      -0.224,
+      0.5,
+      0.836
+     ],
+     "level": 0.9
+    },
+    "dir1": {
+     "dir": [
+      0.224,
+      0.5,
+      -0.836
+     ],
+     "level": 0.0
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.4,
+     "colour": [
+      0.8,
+      0.775,
+      0.7
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   }
+  },
+  {
+   "level": "beach",
+   "name": "indoor kit 6 region: hut with crate-3147 (lump light-index 6)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -69.5,
+    null,
+    70.5
+   ],
+   "dir": [
+    -0.224,
+    0.5,
+    0.836
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 19.0,
+   "driver": "distance: target xz within 19 m blends target to light-group 6 (full inside 15 m); NPCs with light-index 6 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:812",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:54",
+   "light_group": 6,
+   "kit": {
+    "dir0": {
+     "dir": [
+      -0.224,
+      0.5,
+      0.836
+     ],
+     "level": 0.9
+    },
+    "dir1": {
+     "dir": [
+      0.224,
+      0.5,
+      -0.836
+     ],
+     "level": 0.0
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.4,
+     "colour": [
+      0.8,
+      0.775,
+      0.7
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   },
+   "note": "beach runs update-mood-village1 with make-village1-light-kit (level-info.gc:288, mood-tables.gc:3250-3266); same hut coordinates"
+  },
+  {
+   "level": "village1",
+   "name": "indoor kit 7 region: hut with crate-3145 (lump light-index 7)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -20.5,
+    null,
+    -74.5
+   ],
+   "dir": [
+    -0.0754,
+    0.5,
+    -0.8622
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 15.0,
+   "driver": "distance: target xz within 15 m blends target to light-group 7 (full inside 11 m); NPCs with light-index 7 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:818",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:55",
+   "light_group": 7,
+   "kit": {
+    "dir0": {
+     "dir": [
+      -0.0754,
+      0.5,
+      -0.8622
+     ],
+     "level": 0.9
+    },
+    "dir1": {
+     "dir": [
+      0.0754,
+      0.5,
+      0.8622
+     ],
+     "level": 0.9
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.4,
+     "colour": [
+      0.8,
+      0.775,
+      0.7
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   }
+  },
+  {
+   "level": "beach",
+   "name": "indoor kit 7 region: hut with crate-3145 (lump light-index 7)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -20.5,
+    null,
+    -74.5
+   ],
+   "dir": [
+    -0.0754,
+    0.5,
+    -0.8622
+   ],
+   "colour": [
+    0.8,
+    0.775,
+    0.7
+   ],
+   "radius_hint_m": 15.0,
+   "driver": "distance: target xz within 15 m blends target to light-group 7 (full inside 11 m); NPCs with light-index 7 use it always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:818",
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:55",
+   "light_group": 7,
+   "kit": {
+    "dir0": {
+     "dir": [
+      -0.0754,
+      0.5,
+      -0.8622
+     ],
+     "level": 0.9
+    },
+    "dir1": {
+     "dir": [
+      0.0754,
+      0.5,
+      0.8622
+     ],
+     "level": 0.9
+    },
+    "dir2": {
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "level": 0.4,
+     "colour": [
+      0.8,
+      0.775,
+      0.7
+     ]
+    },
+    "ambient": "copied from light-group 0 each frame (mood.gc:767-773)"
+   },
+   "note": "beach runs update-mood-village1 with make-village1-light-kit (level-info.gc:288, mood-tables.gc:3250-3266); same hut coordinates"
+  },
+  {
+   "level": "misty",
+   "name": "kit 1 (orange, cutscene babak/evilbro/evilsis)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.8655,
+    0.5,
+    0.0
+   ],
+   "colour": [
+    0.75,
+    0.3,
+    0.0
+   ],
+   "radius_hint_m": null,
+   "driver": "always for actors with light-index 1 (sidekick-human.gc:1192-1342); dir0 level 1+0.333*flame slot 2",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:59",
+   "light_group": 1,
+   "update": "goal_src/jak1/engine/gfx/mood/mood.gc:656-658"
+  },
+  {
+   "level": "misty",
+   "name": "warehouse room light (palette slots 6/7)",
+   "kind": "positional",
+   "affects": "palette",
+   "pos": [
+    -197.5,
+    27.0,
+    959.0
+   ],
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": 44.0,
+   "driver": "distance+task: target xz < 44 m and y < 29 m, or misty-warehouse reminder bits; flicker via update-mood-light",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:639",
+   "note": "background palette weights only; merc light-group untouched"
+  },
+  {
+   "level": "village2",
+   "name": "kit 1 region (blue sage hut)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    383.5,
+    24.0,
+    -1543.5
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.375,
+    0.25,
+    0.25
+   ],
+   "radius_hint_m": 12.0,
+   "driver": "distance: target 3D within 12 m blends to kit 1 (full inside 8 m); warp-gate-switch-7, villageb-water, sage/assistant/flutflut-bluehut use light-index 1 always",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:720",
+   "light_group": 1,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:66",
+   "kit": {
+    "dir0": {
+     "dir": [
+      0,
+      1,
+      0
+     ],
+     "colour": [
+      0.375,
+      0.25,
+      0.25
+     ],
+     "level": 1
+    },
+    "dir1": {
+     "dir": [
+      -0.6119,
+      0.5,
+      -0.6119
+     ],
+     "colour": [
+      0.25,
+      0.75,
+      1.0
+     ],
+     "level": 0.666
+    },
+    "dir2": {
+     "dir": [
+      0.9961,
+      0,
+      -0.0871
+     ],
+     "colour": [
+      0,
+      0.25,
+      1.0
+     ],
+     "level": 1
+    }
+   }
+  },
+  {
+   "level": "village2",
+   "name": "kit 2 (grey key + lightning copy)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.2239,
+    0.5,
+    0.836
+   ],
+   "colour": [
+    0.8,
+    0.8,
+    0.8
+   ],
+   "radius_hint_m": null,
+   "driver": "always; dir2 copies light-group 0 lightning each frame",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:88",
+   "light_group": 2,
+   "update": "goal_src/jak1/engine/gfx/mood/mood.gc:677-681",
+   "kit": {
+    "dir1": {
+     "dir": [
+      -0.2959,
+      0.5,
+      -0.8133
+     ],
+     "colour": [
+      0.8,
+      0.8,
+      0.8
+     ],
+     "level": 0.7
+    }
+   },
+   "note": "used by geologist (geologist.gc:106)"
+  },
+  {
+   "level": "village2",
+   "name": "kit 3 (warm key)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.224,
+    0.5,
+    0.836
+   ],
+   "colour": [
+    0.675,
+    0.45,
+    0.15
+   ],
+   "radius_hint_m": null,
+   "driver": "always; dir0 level 0.666+0.333*flame slot 4",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:103",
+   "light_group": 3,
+   "update": "goal_src/jak1/engine/gfx/mood/mood.gc:682-687",
+   "note": "used by warrior.gc:142"
+  },
+  {
+   "level": "village2",
+   "name": "kit 4 (warm key)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.8655,
+    0.5,
+    -0.0
+   ],
+   "colour": [
+    0.675,
+    0.45,
+    0.15
+   ],
+   "radius_hint_m": null,
+   "driver": "always; dir0 level 0.666+0.333*flame slot 4",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:106",
+   "light_group": 4,
+   "update": "goal_src/jak1/engine/gfx/mood/mood.gc:682-687",
+   "note": "used by gambler.gc:134"
+  },
+  {
+   "level": "village2",
+   "name": "kit 5 (orange under-glow)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.2425,
+    -0.9701,
+    0.0
+   ],
+   "colour": [
+    2.0,
+    1.0,
+    0.0
+   ],
+   "radius_hint_m": null,
+   "driver": "always; ambient = lg0 ambient*0.5 + 0.25 red",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:109",
+   "light_group": 5,
+   "update": "goal_src/jak1/engine/gfx/mood/mood.gc:688-691",
+   "note": "used by ceilingflag x4 (lump light-index 5)"
+  },
+  {
+   "level": "village2",
+   "name": "kit 6 dir0: hut lamp point (warrior/gambler hut)",
+   "kind": "positional",
+   "affects": "merc",
+   "pos": [
+    296.0,
+    27.0,
+    -1631.0
+   ],
+   "dir": null,
+   "colour": [
+    1.0,
+    0.5,
+    0.0
+   ],
+   "radius_hint_m": null,
+   "driver": "always: direction recomputed each frame from target joint to the point, no distance falloff; level 0.666+0.333*flame slot 4; only matters while target is in the kit 6 region",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:696",
+   "light_group": 6,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:118"
+  },
+  {
+   "level": "village2",
+   "name": "kit 6 dir1: second hut light",
+   "kind": "positional",
+   "affects": "merc",
+   "pos": [
+    338.0,
+    null,
+    -1633.0
+   ],
+   "dir": null,
+   "colour": [
+    0.6,
+    0.5813,
+    0.525
+   ],
+   "radius_hint_m": 44.0,
+   "driver": "distance: direction from target to point (horizontal); level 1 inside 22 m fading to 0 at 44 m",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:701",
+   "light_group": 6
+  },
+  {
+   "level": "village2",
+   "name": "kit 6 ambient orange boost",
+   "kind": "positional",
+   "affects": "merc",
+   "pos": [
+    296.0,
+    null,
+    -1631.0
+   ],
+   "dir": null,
+   "colour": [
+    0.5,
+    0.25,
+    0.0
+   ],
+   "radius_hint_m": 15.0,
+   "driver": "distance: ambient += (1,0.5,0)*0.5*(1-d/15 m), target xz distance",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:709",
+   "light_group": 6
+  },
+  {
+   "level": "village2",
+   "name": "kit 6 region (warrior/gambler hut)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    285.5,
+    15.0,
+    -1630.0
+   ],
+   "dir": null,
+   "colour": [
+    1.0,
+    0.5,
+    0.0
+   ],
+   "radius_hint_m": 41.0,
+   "driver": "distance: target 3D within 41 m blends to kit 6 (full inside 31 m)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:727",
+   "light_group": 6
+  },
+  {
+   "level": "jungle",
+   "name": "kit 1 (copied from jungleb kit 3: warm up-light)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.4,
+    0.25,
+    0.1
+   ],
+   "radius_hint_m": null,
+   "driver": "written by update-mood-jungleb into *jungle-mood*; used by jungle-elevator light-index 1 during the ride (jungle-elevator.gc:68)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:933-945",
+   "light_group": 1,
+   "note": "ambient +0.25 grey"
+  },
+  {
+   "level": "jungleb",
+   "name": "slot 0 vent-off key",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.287,
+    0.283,
+    0.4
+   ],
+   "radius_hint_m": null,
+   "driver": "task: jungle-eggtop reminder clear (vent not blue)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:915",
+   "light_group": 0,
+   "ambient": [
+    0.166125,
+    0.2125,
+    0.4
+   ]
+  },
+  {
+   "level": "jungleb",
+   "name": "slot 0 blue vent key (jungleb-blue)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "colour": [
+    0.0,
+    0.0,
+    1.5
+   ],
+   "radius_hint_m": null,
+   "driver": "task: jungle-eggtop reminder set; blue scaled by light flicker times[5]",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:870",
+   "light_group": 0,
+   "ambient": [
+    0.4,
+    0.433,
+    0.7
+   ]
+  },
+  {
+   "level": "jungleb",
+   "name": "kit 2 (cyan up-light dir2)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.0,
+    0.5,
+    0.75
+   ],
+   "radius_hint_m": null,
+   "driver": "always; copy of light-group 0 plus dir2",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:924-932",
+   "light_group": 2,
+   "note": "ecovent-171/170, jng-iris-door-1, darkvines, plant-boss (lump light-index 2)"
+  },
+  {
+   "level": "jungleb",
+   "name": "kit 3 (warm up-light dir2)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.4,
+    0.25,
+    0.1
+   ],
+   "radius_hint_m": null,
+   "driver": "always; ambient +0.25",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:933-945",
+   "light_group": 3,
+   "note": "jng-iris-door-2, ecovent-206 (lump light-index 3)"
+  },
+  {
+   "level": "jungleb",
+   "name": "vent pit glow on lg0 dir2",
+   "kind": "positional",
+   "affects": "merc",
+   "pos": [
+    362.0,
+    null,
+    -240.5
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.4,
+    0.25,
+    0.1
+   ],
+   "radius_hint_m": 20.0,
+   "driver": "distance: target xz within 20 m (full inside 13 m) times height factor (full at y<=-40 m, zero at y>=+40 m); also ambient +0.25; mirrored into *jungle-mood* lg0",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:949",
+   "light_group": 0
+  },
+  {
+   "level": "jungleb",
+   "name": "kit 2 region A (eggtop room)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    435.0,
+    -40.0,
+    -253.5
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.0,
+    0.5,
+    0.75
+   ],
+   "radius_hint_m": 36.0,
+   "driver": "distance: target 3D within 36 m (full inside 28 m)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:979",
+   "light_group": 2
+  },
+  {
+   "level": "jungleb",
+   "name": "kit 2 region B (plant-boss room)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    270.0,
+    -46.0,
+    -294.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.0,
+    0.5,
+    0.75
+   ],
+   "radius_hint_m": 26.0,
+   "driver": "distance: target 3D within 26 m (full inside 18 m)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:985",
+   "light_group": 2
+  },
+  {
+   "level": "sunken",
+   "name": "depth-lerped key dir0",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.192,
+    0.192,
+    0.24
+   ],
+   "radius_hint_m": null,
+   "driver": "camera depth: colour lerps to (0.181,0.181,0.226) at camera y=-440 m",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1014-1029",
+   "light_group": 0
+  },
+  {
+   "level": "sunken",
+   "name": "depth-lerped fill dir1",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.192,
+    0.192,
+    0.24
+   ],
+   "radius_hint_m": null,
+   "driver": "camera depth: colour lerps to (0.124,0.124,0.156)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1014-1022",
+   "light_group": 0
+  },
+  {
+   "level": "sunken",
+   "name": "caustic flicker dir2",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    0.999,
+    0.011
+   ],
+   "colour": [
+    0.193,
+    0.336,
+    0.721
+   ],
+   "radius_hint_m": null,
+   "driver": "always; level 0.75 + cos flicker; colour lerped by camera depth and day/night",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1050-1057",
+   "light_group": 0,
+   "ambient_note": "ambient lerps between (0.101,0.392,1.064)/(0.104,0.587,1.074) and deep (0.132,0.22,0.52)/(0.228,0.3,0.52)"
+  },
+  {
+   "level": "sunken",
+   "name": "deadly water (palette slot 3)",
+   "kind": "positional",
+   "affects": "palette",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "distance: nearest sunken-water actor with deadly-fade, via set-fade! control 3",
+   "source": "goal_src/jak1/levels/sunken/sunken-water.gc:116",
+   "note": "background palette only; merc tint is per-actor color-mult on the water itself"
+  },
+  {
+   "level": "sunkenb",
+   "name": "depth-lerped key dir0",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.192,
+    0.192,
+    0.24
+   ],
+   "radius_hint_m": null,
+   "driver": "camera depth: colour lerps to (0.181,0.181,0.226) at camera y=-440 m",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1014-1029",
+   "light_group": 0
+  },
+  {
+   "level": "sunkenb",
+   "name": "depth-lerped fill dir1",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.192,
+    0.192,
+    0.24
+   ],
+   "radius_hint_m": null,
+   "driver": "camera depth: colour lerps to (0.124,0.124,0.156)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1014-1022",
+   "light_group": 0
+  },
+  {
+   "level": "sunkenb",
+   "name": "caustic flicker dir2",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    0.999,
+    0.011
+   ],
+   "colour": [
+    0.193,
+    0.336,
+    0.721
+   ],
+   "radius_hint_m": null,
+   "driver": "always; level 0.75 + cos flicker; colour lerped by camera depth and day/night",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1050-1057",
+   "light_group": 0,
+   "ambient_note": "ambient lerps between (0.101,0.392,1.064)/(0.104,0.587,1.074) and deep (0.132,0.22,0.52)/(0.228,0.3,0.52)"
+  },
+  {
+   "level": "sunkenb",
+   "name": "deadly water (palette slot 3)",
+   "kind": "positional",
+   "affects": "palette",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "distance: nearest sunken-water actor with deadly-fade, via set-fade! control 3",
+   "source": "goal_src/jak1/levels/sunken/sunken-water.gc:116",
+   "note": "background palette only; merc tint is per-actor color-mult on the water itself"
+  },
+  {
+   "level": "sunken",
+   "name": "exit-chamber (light-index 255)",
+   "kind": "none",
+   "affects": "merc",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "light-index 255 = keep the player's light group",
+   "source": "goal_src/jak1/engine/draw/drawable.gc:508"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-on*[0] -> kit 1 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -177.0,
+    50.0,
+    -1620.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 1 (full inside 3 m); kit dir0 level 1.0 (steady)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1076",
+   "light_group": 1,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:126"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-on*[1] -> kit 1 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -169.0,
+    50.0,
+    -1607.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 1 (full inside 3 m); kit dir0 level 1.0 (steady)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1077",
+   "light_group": 1,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:126"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-on*[2] -> kit 1 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -168.0,
+    50.0,
+    -1592.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 1 (full inside 3 m); kit dir0 level 1.0 (steady)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1078",
+   "light_group": 1,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:126"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-on*[3] -> kit 1 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -174.0,
+    50.0,
+    -1576.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 1 (full inside 3 m); kit dir0 level 1.0 (steady)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1079",
+   "light_group": 1,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:126"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-on*[4] -> kit 1 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -181.0,
+    50.0,
+    -1555.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 1 (full inside 3 m); kit dir0 level 1.0 (steady)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1080",
+   "light_group": 1,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:126"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-on*[5] -> kit 1 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -189.0,
+    50.0,
+    -1543.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 1 (full inside 3 m); kit dir0 level 1.0 (steady)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1081",
+   "light_group": 1,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:126"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-on*[6] -> kit 1 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -185.0,
+    50.0,
+    -1522.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 1 (full inside 3 m); kit dir0 level 1.0 (steady)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1082",
+   "light_group": 1,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:126"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-on*[7] -> kit 1 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -170.0,
+    50.0,
+    -1513.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 1 (full inside 3 m); kit dir0 level 1.0 (steady)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1083",
+   "light_group": 1,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:126"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-on*[8] -> kit 1 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -156.0,
+    50.0,
+    -1505.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 1 (full inside 3 m); kit dir0 level 1.0 (steady)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1084",
+   "light_group": 1,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:126"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-on*[9] -> kit 1 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -183.0,
+    27.0,
+    -1668.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 1 (full inside 3 m); kit dir0 level 1.0 (steady)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1085",
+   "light_group": 1,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:126"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-on*[10] -> kit 1 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -130.0,
+    27.0,
+    -1469.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 1 (full inside 3 m); kit dir0 level 1.0 (steady)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1086",
+   "light_group": 1,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:126"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-light0*[0] -> kit 2 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -128.0,
+    27.0,
+    -1552.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 2 (full inside 3 m); kit dir0 level times[4] flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1088",
+   "light_group": 2,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:134"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-light1*[0] -> kit 3 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -111.0,
+    28.0,
+    -1729.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 20.0,
+   "driver": "distance: target 3D within 20 m blends to kit 3 (full inside 10 m); kit dir0 level times[5] flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1095",
+   "light_group": 3,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:142"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-light1*[1] -> kit 3 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -142.0,
+    27.0,
+    -1565.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 3 (full inside 3 m); kit dir0 level times[5] flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1096",
+   "light_group": 3,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:142"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-light1*[2] -> kit 3 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -309.0,
+    26.0,
+    -1585.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 3 (full inside 3 m); kit dir0 level times[5] flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1097",
+   "light_group": 3,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:142"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-light1*[3] -> kit 3 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -318.0,
+    26.0,
+    -1571.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 3 (full inside 3 m); kit dir0 level times[5] flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1098",
+   "light_group": 3,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:142"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-light2*[0] -> kit 4 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -142.0,
+    28.0,
+    -1582.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 4 (full inside 3 m); kit dir0 level times[6] flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1111",
+   "light_group": 4,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:150"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-light2*[1] -> kit 4 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -180.0,
+    27.0,
+    -1748.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 4 (full inside 3 m); kit dir0 level times[6] flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1112",
+   "light_group": 4,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:150"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-light2*[2] -> kit 4 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -179.0,
+    27.0,
+    -1774.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 4 (full inside 3 m); kit dir0 level times[6] flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1113",
+   "light_group": 4,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:150"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-light2*[3] -> kit 4 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -333.0,
+    27.0,
+    -1606.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 4 (full inside 3 m); kit dir0 level times[6] flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1114",
+   "light_group": 4,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:150"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-light2*[4] -> kit 4 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -343.0,
+    27.0,
+    -1597.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 4 (full inside 3 m); kit dir0 level times[6] flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1116",
+   "light_group": 4,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:150",
+   "note": "5th sphere is stored in the light-ellipse colour field"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-light3*[0] -> kit 5 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -132.0,
+    27.0,
+    -1599.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 5 (full inside 3 m); kit dir0 level times[7] flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1123",
+   "light_group": 5,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:158"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-light3*[1] -> kit 5 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -189.0,
+    50.0,
+    -1532.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 6.0,
+   "driver": "distance: target 3D within 6 m blends to kit 5 (full inside 3 m); kit dir0 level times[7] flicker",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1124",
+   "light_group": 5,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:158"
+  },
+  {
+   "level": "rolling",
+   "name": "*rolling-spheres-light4*[0] -> kit 6 (yellow top light)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    -168.0,
+    53.0,
+    -1391.0
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.9,
+    0.0
+   ],
+   "radius_hint_m": 35.0,
+   "driver": "distance: target 3D within 35 m blends to kit 6 (full inside 17.5 m); kit dir0 level mean of times[4..7]",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1126",
+   "light_group": 6,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:166"
+  },
+  {
+   "level": "rolling",
+   "name": "actor kit users",
+   "kind": "none",
+   "affects": "merc",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "pusher-25/26/28/31 light-index 1, pusher-23 light-index 4, gorge-start/gorge-pushers light-index 3 (lumps)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1140-1148"
+  },
+  {
+   "level": "village3",
+   "name": "sun slot 0 (code override)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    0.966
+   ],
+   "colour": [
+    0,
+    0,
+    0
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day via slot weights; as camera y drops from 100 m to 45 m the direction lerps to (0,1,0) and colours to dim cave values",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1367",
+   "ambient": [
+    0.449,
+    0.35,
+    0.599
+   ],
+   "light_group": 0,
+   "mechanism_ref": "goal_src/jak1/engine/gfx/mood/mood.gc:1441-1457"
+  },
+  {
+   "level": "village3",
+   "name": "sun slot 1 (code override)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.259,
+    0.966,
+    0.0
+   ],
+   "colour": [
+    0.66,
+    0.436,
+    0.291
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day via slot weights; as camera y drops from 100 m to 45 m the direction lerps to (0,1,0) and colours to dim cave values",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1373",
+   "ambient": [
+    0.358,
+    0.575,
+    0.716
+   ],
+   "light_group": 0,
+   "mechanism_ref": "goal_src/jak1/engine/gfx/mood/mood.gc:1441-1457"
+  },
+  {
+   "level": "village3",
+   "name": "sun slot 2 (code override)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.067,
+    0.25,
+    -0.966
+   ],
+   "colour": [
+    0,
+    0,
+    0
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day via slot weights; as camera y drops from 100 m to 45 m the direction lerps to (0,1,0) and colours to dim cave values",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1379",
+   "ambient": [
+    0.383,
+    0.366,
+    0.599
+   ],
+   "light_group": 0,
+   "mechanism_ref": "goal_src/jak1/engine/gfx/mood/mood.gc:1441-1457"
+  },
+  {
+   "level": "village3",
+   "name": "sun slot 3 (code override)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.866,
+    0.5,
+    0.0
+   ],
+   "colour": [
+    0,
+    0,
+    0
+   ],
+   "radius_hint_m": null,
+   "driver": "time-of-day via slot weights; as camera y drops from 100 m to 45 m the direction lerps to (0,1,0) and colours to dim cave values",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1385",
+   "ambient": [
+    0.304,
+    0.409,
+    0.76
+   ],
+   "light_group": 0,
+   "mechanism_ref": "goal_src/jak1/engine/gfx/mood/mood.gc:1441-1457"
+  },
+  {
+   "level": "village3",
+   "name": "lava glow (lg0 dir2)",
+   "kind": "positional",
+   "affects": "merc",
+   "pos": [
+    1124.485,
+    null,
+    -3479.79
+   ],
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.38,
+    0.0
+   ],
+   "radius_hint_m": 130.0,
+   "driver": "distance: target xz within 130 m (full inside 100 m); level 0.875+-0.125 flicker; fades out as camera y rises 45->100 m; slot-1 key colour lerps to (0.19,0.128,0.128) with the same distance",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1400",
+   "light_group": 0
+  },
+  {
+   "level": "village3",
+   "name": "kit 1 (cyan key + warm under-glow)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0.6281,
+    0.7208,
+    0.2929
+   ],
+   "colour": [
+    0.5,
+    1.0,
+    1.0
+   ],
+   "radius_hint_m": null,
+   "driver": "always; ambient = lg0*1.25; dir2 (0,-1,0) (0.625,0.375,0.1) level 0.666+0.333*flame",
+   "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:177",
+   "light_group": 1,
+   "update": "goal_src/jak1/engine/gfx/mood/mood.gc:1394-1396",
+   "note": "miners (miners.gc:76,379) and cavegem-1 (lump light-index 1)"
+  },
+  {
+   "level": "village3",
+   "name": "kit 2 region (miners' hut)",
+   "kind": "region-kit",
+   "affects": "merc",
+   "pos": [
+    1087.5,
+    48.0,
+    -3595.0
+   ],
+   "dir": [
+    0.6281,
+    0.7208,
+    0.2929
+   ],
+   "colour": [
+    0.25,
+    0.5,
+    0.5
+   ],
+   "radius_hint_m": 30.0,
+   "driver": "distance: target 3D within 30 m (full inside 15 m)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1435",
+   "light_group": 2,
+   "kit_source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc:191"
+  },
+  {
+   "level": "ogre",
+   "name": "ogre2 context crossfade (lava end)",
+   "kind": "positional",
+   "affects": "merc",
+   "pos": [
+    212.0,
+    37.0,
+    -1885.0
+   ],
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": 150.0,
+   "driver": "distance: camera within 150 m blends lg0 dir0/dir1/ambi toward *ogre2-mood* (full inside 100 m)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1498",
+   "light_group": 0,
+   "note": "colour/dir come from *ogre2-mood-lights-table* hour snapshots"
+  },
+  {
+   "level": "ogre",
+   "name": "lava glow between lightning flashes (lg0 dir2)",
+   "kind": "positional",
+   "affects": "merc",
+   "pos": [
+    212.0,
+    37.0,
+    -1885.0
+   ],
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.38,
+    0.0
+   ],
+   "radius_hint_m": 150.0,
+   "driver": "distance+event: camera within 150 m (full inside 100 m) between lightning flashes (*lightning-time2* counting down) or during a movie; off while a flash plays (lava-fade reset), fades back in at 0.2 per frame; flicker 0.875+-0.125",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1505-1520",
+   "light_group": 0
+  },
+  {
+   "level": "ogre",
+   "name": "ogre3 context crossfade (far end)",
+   "kind": "positional",
+   "affects": "merc",
+   "pos": [
+    726.0,
+    45.0,
+    -3275.0
+   ],
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": 317.0,
+   "driver": "distance: camera within 317 m blends lg0 + fog toward *ogre3-mood* slot 0 (full inside 267 m)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1547",
+   "light_group": 0,
+   "note": "ogre3 table has one slot"
+  },
+  {
+   "level": "finalboss",
+   "name": "energy glow from below (lg0 dir2)",
+   "kind": "positional",
+   "affects": "merc",
+   "pos": [
+    3022.0,
+    486.0,
+    -4852.0
+   ],
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "colour": [
+    1.0,
+    0.8,
+    2.0
+   ],
+   "radius_hint_m": 200.0,
+   "driver": "distance: camera within 200 m (full inside 150 m); both branches",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1636",
+   "light_group": 0,
+   "source2": "goal_src/jak1/engine/gfx/mood/mood.gc:1709"
+  },
+  {
+   "level": "finalboss",
+   "name": "secret light (lg0 dir2 + shadow)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.5768,
+    0.1697,
+    -0.799
+   ],
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "radius_hint_m": null,
+   "driver": "task: finalboss-movies reminder bit 2, fades in over 6 s",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1654",
+   "light_group": 0
+  },
+  {
+   "level": "finalboss",
+   "name": "robot/sage palette light added to key",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    -0.2588,
+    0.9659,
+    0.0
+   ],
+   "colour": [
+    1.644,
+    1.598,
+    1.438
+   ],
+   "radius_hint_m": null,
+   "driver": "task/event: *palette-fade-controls* control 2 (robotboss.gc:92, sage-finalboss.gc:567) adds village1 table slot 2 direction+colour into lg0 dir0 (hour 6 / pre-movie branch)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1626-1632",
+   "light_group": 0
+  },
+  {
+   "level": "maincave",
+   "name": "far chamber palette fade (slot 3)",
+   "kind": "positional",
+   "affects": "palette",
+   "pos": [
+    1078.5,
+    21.0,
+    -3235.0
+   ],
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": 118.0,
+   "driver": "distance: camera within 118 m, weight (d-68 m)/200 m",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1238",
+   "note": "background palette only"
+  },
+  {
+   "level": "maincave",
+   "name": "palette slots 1-2",
+   "kind": "none",
+   "affects": "palette",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "palette-fade controls 1-2; no maincave caller found, only darkcave crystals set controls 1-7",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1233-1234"
+  },
+  {
+   "level": "robocave",
+   "name": "no positional merc light",
+   "kind": "none",
+   "affects": "merc",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "only update-mood-quick slot 0 plus flames palette slots",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1296"
+  },
+  {
+   "level": "darkcave",
+   "name": "cavecrystal-1 (crystal-id 0, palette control 1)",
+   "kind": "positional",
+   "affects": "both",
+   "pos": [
+    935.4473,
+    31.6161,
+    -2948.2908
+   ],
+   "dir": null,
+   "colour": [
+    0.0,
+    1.0,
+    0.5
+   ],
+   "radius_hint_m": 20.0,
+   "driver": "event: glows after being hit, for 'timeout' seconds; merc: lg0 ambient lerps (0.3,0.4,0.5)->(0,1,0.5) by max glow*(1-d/20 m) and the shadow points away from the weighted crystals; crystal-light actors' color-mult lerps 0.05->1 with fade 5 m..70 m",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1253-1284",
+   "light_group": 0,
+   "entity": "decompiler_out/jak1/entities/darkcave-actors.json (cavecrystal-1)",
+   "extra_source": "goal_src/jak1/levels/maincave/cavecrystal-light.gc:69-70,121; goal_src/jak1/levels/darkcave/darkcave-obs.gc:121,161"
+  },
+  {
+   "level": "darkcave",
+   "name": "cavecrystal-2 (crystal-id 1, palette control 2)",
+   "kind": "positional",
+   "affects": "both",
+   "pos": [
+    937.681,
+    34.5427,
+    -2913.3489
+   ],
+   "dir": null,
+   "colour": [
+    0.0,
+    1.0,
+    0.5
+   ],
+   "radius_hint_m": 20.0,
+   "driver": "event: glows after being hit, for 'timeout' seconds; merc: lg0 ambient lerps (0.3,0.4,0.5)->(0,1,0.5) by max glow*(1-d/20 m) and the shadow points away from the weighted crystals; crystal-light actors' color-mult lerps 0.05->1 with fade 5 m..70 m",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1253-1284",
+   "light_group": 0,
+   "entity": "decompiler_out/jak1/entities/darkcave-actors.json (cavecrystal-2)",
+   "extra_source": "goal_src/jak1/levels/maincave/cavecrystal-light.gc:69-70,121; goal_src/jak1/levels/darkcave/darkcave-obs.gc:121,161"
+  },
+  {
+   "level": "darkcave",
+   "name": "cavecrystal-3 (crystal-id 2, palette control 3)",
+   "kind": "positional",
+   "affects": "both",
+   "pos": [
+    926.6752,
+    39.3837,
+    -2861.2859
+   ],
+   "dir": null,
+   "colour": [
+    0.0,
+    1.0,
+    0.5
+   ],
+   "radius_hint_m": 20.0,
+   "driver": "event: glows after being hit, for 'timeout' seconds; merc: lg0 ambient lerps (0.3,0.4,0.5)->(0,1,0.5) by max glow*(1-d/20 m) and the shadow points away from the weighted crystals; crystal-light actors' color-mult lerps 0.05->1 with fade 5 m..70 m",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1253-1284",
+   "light_group": 0,
+   "entity": "decompiler_out/jak1/entities/darkcave-actors.json (cavecrystal-3)",
+   "extra_source": "goal_src/jak1/levels/maincave/cavecrystal-light.gc:69-70,121; goal_src/jak1/levels/darkcave/darkcave-obs.gc:121,161"
+  },
+  {
+   "level": "darkcave",
+   "name": "cavecrystal-4 (crystal-id 3, palette control 4)",
+   "kind": "positional",
+   "affects": "both",
+   "pos": [
+    867.7841,
+    46.9325,
+    -2871.6245
+   ],
+   "dir": null,
+   "colour": [
+    0.0,
+    1.0,
+    0.5
+   ],
+   "radius_hint_m": 20.0,
+   "driver": "event: glows after being hit, for 'timeout' seconds; merc: lg0 ambient lerps (0.3,0.4,0.5)->(0,1,0.5) by max glow*(1-d/20 m) and the shadow points away from the weighted crystals; crystal-light actors' color-mult lerps 0.05->1 with fade 5 m..70 m",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1253-1284",
+   "light_group": 0,
+   "entity": "decompiler_out/jak1/entities/darkcave-actors.json (cavecrystal-4)",
+   "extra_source": "goal_src/jak1/levels/maincave/cavecrystal-light.gc:69-70,121; goal_src/jak1/levels/darkcave/darkcave-obs.gc:121,161"
+  },
+  {
+   "level": "darkcave",
+   "name": "cavecrystal-5 (crystal-id 4, palette control 5)",
+   "kind": "positional",
+   "affects": "both",
+   "pos": [
+    858.9518,
+    55.0484,
+    -2911.6736
+   ],
+   "dir": null,
+   "colour": [
+    0.0,
+    1.0,
+    0.5
+   ],
+   "radius_hint_m": 20.0,
+   "driver": "event: glows after being hit, for 'timeout' seconds; merc: lg0 ambient lerps (0.3,0.4,0.5)->(0,1,0.5) by max glow*(1-d/20 m) and the shadow points away from the weighted crystals; crystal-light actors' color-mult lerps 0.05->1 with fade 5 m..70 m",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1253-1284",
+   "light_group": 0,
+   "entity": "decompiler_out/jak1/entities/darkcave-actors.json (cavecrystal-5)",
+   "extra_source": "goal_src/jak1/levels/maincave/cavecrystal-light.gc:69-70,121; goal_src/jak1/levels/darkcave/darkcave-obs.gc:121,161"
+  },
+  {
+   "level": "darkcave",
+   "name": "cavecrystal-6 (crystal-id 5, palette control 6)",
+   "kind": "positional",
+   "affects": "both",
+   "pos": [
+    859.6866,
+    68.3333,
+    -2964.1838
+   ],
+   "dir": null,
+   "colour": [
+    0.0,
+    1.0,
+    0.5
+   ],
+   "radius_hint_m": 20.0,
+   "driver": "event: glows after being hit, for 'timeout' seconds; merc: lg0 ambient lerps (0.3,0.4,0.5)->(0,1,0.5) by max glow*(1-d/20 m) and the shadow points away from the weighted crystals; crystal-light actors' color-mult lerps 0.05->1 with fade 5 m..70 m",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1253-1284",
+   "light_group": 0,
+   "entity": "decompiler_out/jak1/entities/darkcave-actors.json (cavecrystal-6)",
+   "extra_source": "goal_src/jak1/levels/maincave/cavecrystal-light.gc:69-70,121; goal_src/jak1/levels/darkcave/darkcave-obs.gc:121,161"
+  },
+  {
+   "level": "darkcave",
+   "name": "cavecrystal-7 (crystal-id 6, palette control 7)",
+   "kind": "positional",
+   "affects": "both",
+   "pos": [
+    887.0473,
+    80.4409,
+    -2977.5486
+   ],
+   "dir": null,
+   "colour": [
+    0.0,
+    1.0,
+    0.5
+   ],
+   "radius_hint_m": 20.0,
+   "driver": "event: glows after being hit, for 'timeout' seconds; merc: lg0 ambient lerps (0.3,0.4,0.5)->(0,1,0.5) by max glow*(1-d/20 m) and the shadow points away from the weighted crystals; crystal-light actors' color-mult lerps 0.05->1 with fade 5 m..70 m",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1253-1284",
+   "light_group": 0,
+   "entity": "decompiler_out/jak1/entities/darkcave-actors.json (cavecrystal-7)",
+   "extra_source": "goal_src/jak1/levels/maincave/cavecrystal-light.gc:69-70,121; goal_src/jak1/levels/darkcave/darkcave-obs.gc:121,161"
+  },
+  {
+   "level": "citadel",
+   "name": "flicker key (lg0 dir0)",
+   "kind": "directional",
+   "affects": "merc",
+   "pos": null,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.5,
+    0.5,
+    0.5
+   ],
+   "radius_hint_m": null,
+   "driver": "always when effects on; colour lerps to (0.75,0.725,0.5) with the flicker light",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1761-1768",
+   "light_group": 0
+  },
+  {
+   "level": "citadel",
+   "name": "shield generator under-glow (lg0 dir1)",
+   "kind": "positional",
+   "affects": "merc",
+   "pos": [
+    2790.0,
+    null,
+    -4700.0
+   ],
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "colour": [
+    0.35,
+    0.1,
+    1.1
+   ],
+   "radius_hint_m": 120.0,
+   "driver": "distance+task: camera xz within 120 m (full inside 100 m) times shield-fade (1 while citb-robotboss shield is on, citadel-obs.gc:614); otherwise dir1 = (0.1,0.1,0.1) from below",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1781",
+   "light_group": 0
+  },
+  {
+   "level": "citadel",
+   "name": "top-room key override",
+   "kind": "positional",
+   "affects": "merc",
+   "pos": [
+    2793.0,
+    null,
+    -4711.5
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "colour": [
+    0.5,
+    0.5,
+    0.5
+   ],
+   "radius_hint_m": 42.0,
+   "driver": "distance: target y > 50 m and xz within 42 m (full inside 38 m): dir0 colour -> 0.5 grey, dir1 off",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1827",
+   "light_group": 0
+  },
+  {
+   "level": "citadel",
+   "name": "citb-plat (light-index 255)",
+   "kind": "none",
+   "affects": "merc",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "light-index 255 = keep the player's light group",
+   "source": "goal_src/jak1/levels/citadel/citb-plat.gc:861"
+  },
+  {
+   "level": "training",
+   "name": "no positional merc light",
+   "kind": "none",
+   "affects": "merc",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "only palette slot 5 light (background); merc sees the village1 sun table",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1210"
+  },
+  {
+   "level": "snow",
+   "name": "no positional merc light",
+   "kind": "none",
+   "affects": "merc",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "flames/light slots are palette-only; merc gets sun slots plus env-color weather crossfade",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1313"
+  },
+  {
+   "level": "swamp",
+   "name": "no positional merc light",
+   "kind": "none",
+   "affects": "merc",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "lightning dir2 only (listed); no positional merc lights",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:738"
+  },
+  {
+   "level": "jungle",
+   "name": "no positional merc light",
+   "kind": "none",
+   "affects": "merc",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "palette slot 5 light is background-only; kit 1 comes from jungleb",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:834"
+  },
+  {
+   "level": "firecanyon",
+   "name": "no positional merc light",
+   "kind": "none",
+   "affects": "merc",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "lava glow is directional (0,-1,0) level-wide",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1195"
+  },
+  {
+   "level": "lavatube",
+   "name": "no positional merc light",
+   "kind": "none",
+   "affects": "merc",
+   "pos": null,
+   "dir": null,
+   "colour": null,
+   "radius_hint_m": null,
+   "driver": "lava glow directional; energyhub drives palette slot 2 only (lavatube-energy.gc:891)",
+   "source": "goal_src/jak1/engine/gfx/mood/mood.gc:1470"
+  }
+ ]
+}

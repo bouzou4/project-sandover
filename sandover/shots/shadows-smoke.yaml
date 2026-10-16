@@ -1,0 +1,16 @@
+# shadow spike: one-shot smoke test.
+set: shadows-smoke
+defaults:
+  resolution: [1920, 1080]
+  msaa: 4
+  settle_frames: 60
+  camera: from_continue
+  effects: off
+  wind: off
+  particles: off
+  jak: show
+generate:
+  from: continue_points
+  continues: [village1-hut]
+  hours: { noon: 12 }
+shots: []

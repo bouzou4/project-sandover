@@ -6,6 +6,7 @@
  */
 
 #define GLFW_INCLUDE_NONE
+#include <chrono>
 #include <mutex>
 
 #include "game/graphics/display.h"
@@ -34,6 +35,11 @@ class GLDisplay : public GfxDisplay {
 
   bool m_should_quit = false;
   bool m_take_screenshot_next_frame = false;
+  bool m_xr_paced = false;
+  int m_xr_recentre_seen = 0;
+  bool m_xr_tick_started = false;
+  std::chrono::steady_clock::time_point m_xr_next_tick;
+  bool xr_game_tick();
   void process_sdl_events();
 
   struct DisplayState {

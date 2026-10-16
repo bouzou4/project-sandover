@@ -1,0 +1,159 @@
+# Per-class recipes for `sandover-materials derive-maps` (kb/howto/materials.md "PBR maps").
+#
+# Each texture's albedo is filtered into a height estimate, a tangent-space normal map and a
+# roughness map; metallic is a scalar per texture. A texture takes [defaults], then its
+# class's [class.<name>] table, then the table of any tag it carries ([tag.<name>]) on top.
+# Tuning is an edit here plus a rerun. Bump `version` when a change alters the output.
+#
+# Distances are in vanilla texels, so the 4x pack and the vanilla rip get the same look.
+#   flat            write a flat normal (0, 0, 1); roughness is still written
+#   band_lo/band_hi height = G(band_lo) - G(band_hi) of luminance: a band-pass, sigmas in texels;
+#                   everything wider than band_hi (baked shading, AO gradients) is dropped
+#   extra_bands     more [lo, hi, weight] bands summed in, a small multi-scale pyramid
+#   invert          bright = low (scratches, grooves that catch light)
+#   gain            height units per unit of band-passed luminance
+#   normal_strength slope multiplier from height to normal
+#   max_slope       soft clip (tanh) on the slope, keeps the look stylized
+#   grain           blur along the dominant orientation (structure tensor), texels; 0 = off
+#   grain_coherence below this orientation coherence the grain blur is skipped
+#   rough_base      roughness at zero local contrast
+#   rough_contrast  added roughness at full local contrast (contrast_ref)
+#   rough_luma      added roughness per unit of (luminance - mean); negative = bright is glossy
+#   metallic        the scalar written to the index
+#   min_size        textures smaller than this on either side (vanilla texels) are flat
+#
+# [parallax] picks the textures that also get a height for the engine's parallax offset
+# (<name>.parallax.png): a class in `classes` whose name contains one of `cues`, or a row with
+# `parallax = yes` in materials.csv; `parallax = no` opts a texture out. Textures with less
+# than `min_coverage` opaque texels (mostly cut-out) never qualify.
+
+version = 3
+
+[parallax]
+classes = ["stone"]
+cues = ["brick", "stone", "block", "wall", "tile", "cobble"]
+min_coverage = 0.4
+
+[defaults]
+flat = false
+band_lo = 0.5
+band_hi = 4.0
+invert = false
+gain = 1.0
+normal_strength = 1.0
+max_slope = 0.6
+grain = 0.0
+grain_coherence = 0.15
+rough_base = 0.8
+rough_contrast = 0.1
+rough_luma = 0.0
+contrast_ref = 0.08
+rough_min = 0.04
+rough_max = 1.0
+metallic = 0.0
+min_size = 16
+
+[class.stone]
+# engraved lines and cracks are darker: dark = low
+band_lo = 0.5
+band_hi = 5.0
+extra_bands = [[5.0, 12.0, 0.3]]  # broad rock forms, still high-passed above 12
+normal_strength = 3.0
+rough_base = 0.86
+rough_contrast = 0.12
+
+[class.wood]
+# grain follows the dominant orientation; dark grain lines are grooves
+band_lo = 0.4
+band_hi = 3.0
+grain = 3.0
+normal_strength = 2.5
+rough_base = 0.72
+rough_contrast = 0.12
+
+[class.metal]
+# near flat: only fine scratches from a high-pass, bright scratches are grooves
+band_lo = 0.35
+band_hi = 1.5
+invert = true
+normal_strength = 1.0
+max_slope = 0.3
+rough_base = 0.32
+rough_contrast = 0.15
+rough_luma = -0.15
+metallic = 1.0
+
+[class.foliage]
+# soft veins
+band_lo = 0.8
+band_hi = 4.0
+normal_strength = 1.5
+max_slope = 0.45
+rough_base = 0.6
+rough_contrast = 0.1
+
+[class.organic]
+# fine pores and weave of hide, skin and fur
+band_lo = 0.35
+band_hi = 2.0
+normal_strength = 1.2
+max_slope = 0.4
+rough_base = 0.62
+rough_contrast = 0.1
+
+[class.cloth]
+band_lo = 0.35
+band_hi = 2.0
+normal_strength = 1.4
+max_slope = 0.45
+rough_base = 0.9
+rough_contrast = 0.05
+
+[class.ice]
+# smooth: broad flowing forms only, low roughness
+band_lo = 1.0
+band_hi = 6.0
+normal_strength = 0.8
+max_slope = 0.4
+rough_base = 0.12
+rough_contrast = 0.1
+
+[class.snow]
+# fine sparkle bumps
+band_lo = 0.35
+band_hi = 1.2
+normal_strength = 1.2
+max_slope = 0.35
+rough_base = 0.55
+rough_contrast = 0.15
+
+[class.special]
+flat = true
+rough_base = 1.0
+rough_contrast = 0.0
+
+[class.glass]
+flat = true
+rough_base = 0.06
+rough_contrast = 0.0
+
+[class.lava]
+# the crust shades as stone (the glow mixes molten texels back to their own colour)
+band_lo = 0.5
+band_hi = 5.0
+extra_bands = [[5.0, 12.0, 0.3]]
+normal_strength = 3.0
+rough_base = 0.86
+rough_contrast = 0.12
+
+[tag.precursor]
+# carved bronze: engraved lines darker, like stone, but medium-low roughness
+invert = false
+band_lo = 0.5
+band_hi = 5.0
+extra_bands = [[5.0, 10.0, 0.25]]
+normal_strength = 2.4
+max_slope = 0.5
+rough_base = 0.45
+rough_luma = -0.1
+metallic = 1.0

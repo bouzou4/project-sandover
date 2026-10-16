@@ -1,0 +1,29 @@
+# Paths kept in the private repository and left out of the public export.
+# One glob per line, matched against repository-relative POSIX paths (fnmatch,
+# where * also crosses directory separators). A trailing /** excludes a whole tree.
+# Used by sandover/release/make_public_tree.py.
+
+# Project guide, agent configuration and commit hook
+CLAUDE.md
+.claude/**
+sandover/githooks/**
+
+# Kickoff brief, living status, design documents
+sandover/BRIEF.md
+sandover/kb/STATE.md
+sandover/docs/design/**
+
+# Review hub and preset picker (the asset viewer and the capture rig ship)
+sandover/tools/sandover/hub.py
+sandover/tools/sandover/hubcheck.py
+sandover/tools/sandover/picker.py
+sandover/tools/tests/test_hub.py
+sandover/tools/tests/test_hub_check.py
+sandover/tools/tests/test_picker_logic.py
+sandover/kb/howto/hub.md
+sandover/kb/howto/picker.md
+sandover/kb/decisions/ADR-0005-preset-picker.md
+
+# Console-script entries and Taskfile tasks that call the excluded tools are
+# removed from the exported pyproject.toml and Taskfile.yml by the export script
+# (see REMOVED_ENTRY_POINTS and REMOVED_TASKS there).

@@ -304,3 +304,42 @@ void snd_SetGlobalExcite(u8 value) {
     player->SetGlobalExcite(value);
   }
 }
+
+void snd_SetSpatialMode(s32 mode) {
+  auto m = static_cast<snd::SpatialMode>(mode);
+  snd::g_spatial_mode_request = m;
+  if (player) {
+    player->SetSpatialMode(m);
+  }
+}
+
+s32 snd_GetSpatialMode() {
+  if (player) {
+    return static_cast<s32>(player->GetSpatialMode());
+  }
+  return static_cast<s32>(snd::g_spatial_mode_request);
+}
+
+void snd_SpatialSetNextPosition(s32 x, s32 y, s32 z) {
+  if (player) {
+    player->SetNextSoundPosition({(float)x, (float)y, (float)z});
+  }
+}
+
+void snd_SpatialSetPosition(s32 sound_handle, s32 x, s32 y, s32 z) {
+  if (player) {
+    player->SetSoundPosition(sound_handle, {(float)x, (float)y, (float)z});
+  }
+}
+
+void snd_SpatialSetListener(s32 x, s32 y, s32 z, s32 yaw_deg, bool mirror) {
+  if (player) {
+    player->SetListener({(float)x, (float)y, (float)z}, (float)yaw_deg, mirror);
+  }
+}
+
+void snd_SpatialFlush() {
+  if (player) {
+    player->FlushSpatial();
+  }
+}

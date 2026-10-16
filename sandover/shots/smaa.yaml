@@ -1,0 +1,69 @@
+# Antialiasing round (remaster/smaa): today's MSAA 4x against SMAA 1x and MSAA 2x + SMAA, with
+# no antialiasing as the reference. Every camera is the recorded pose (camera_trans/camera_rot)
+# of an existing frame, named per shot. Arms: one --goal-after-load string each, the play look
+# (reset, reapply, update) then the engine setter, declared inline so the forms compile in a goalc
+# whose type info predates the branch (the `antialias` settings field is not needed):
+#   A:  ... (define-extern pc-set-smaa (function int int none)) (pc-set-smaa 0 0)        MSAA (msaa 4)
+#   B1: ... (pc-set-smaa 0 1000000)  SMAA 1x, scene at 1 sample
+#   B2: ... (pc-set-smaa 0 2000000)  MSAA 2x + SMAA
+#   C:  ... (pc-set-smaa 0 3000000)  no antialiasing, 1 sample
+# The settings field stays msaa, so the per-frame settings update never overrides the setter;
+# every arm sets the mode itself, so arms in one instance do not leak into each other.
+# Output is 1920x1080 so edge differences read without zooming (timings are taken at 4K with
+# sandover-perf, not here). Crops (x, y, w, h at 1920x1080, show at 2x or 4x) are in `crop`.
+schema: 1
+set: smaa
+variants:
+  A: ["(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-smaa (function int int none)) (pc-set-smaa 0 0)"]
+  B1: ["(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-smaa (function int int none)) (pc-set-smaa 0 1000000)"]
+  B2: ["(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-smaa (function int int none)) (pc-set-smaa 0 2000000)"]
+  C: ["(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-smaa (function int int none)) (pc-set-smaa 0 3000000)"]
+defaults:
+  resolution: [1920, 1080]
+  msaa: 4
+  settle_frames: 300
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+  actors: freeze
+shots:
+  # thin geometry against sky: windmill spokes and sail edges, horizon, palm fronds
+  # from shots/vista-fog/scout/mis-off/mis-c-noon.png (+ .json)
+  - name: aa-beach-windmill
+    continue: beach-start
+    hour: 12
+    jak: hide
+    crop: [1020, 280, 480, 270]
+    camera:
+      pos: [-491520.0, 245760.0, -245760.0]
+      rot: [0.999804, 0.0, -0.019798, 0.000783, 0.999217, 0.039557, 0.019783, -0.039565, 0.999021]
+  # rope bridge and palm fronds against the late-afternoon sky
+  # from shore-002/village1-dock-A-today.png (+ .json; that frame had wind and particles on)
+  - name: aa-village1-bridge
+    continue: village1-hut
+    hour: 16
+    crop: [180, 180, 480, 270]
+    camera:
+      pos: [40960.0, 16384.0, 409600.0]
+      rot: [-0.311039, 0.0, 0.950397, -0.057375, 0.998176, -0.018777, -0.948664, -0.06037, -0.310472]
+  # alpha-tested canopy: cut-out leaf holes against the sky
+  # from class-response-001/A/jungle-canopy-noon.png (+ .json)
+  - name: aa-jungle-canopy
+    continue: jungle-start
+    hour: 12
+    crop: [1050, 60, 480, 270]
+    camera:
+      pos: [1004424.8125, 111181.796875, -611527.875]
+      rot: [-0.556792, 0.0, -0.830652, -0.476443, 0.819152, 0.319363, 0.68043, 0.573576, -0.456097]
+  # snow sun glints (on in the play look, pbr.toml glint 1.0): specular sparkle, low sun
+  # from snow-glints-004/B1/snow-grazing-sun.png (+ .json)
+  - name: aa-snow-glints
+    continue: snow-start
+    hour: 7.5
+    jak: hide
+    jak_pos: [4107151.75, 1026399.625, -13540062.0]
+    crop: [1020, 750, 480, 270]
+    camera:
+      pos: [4168316.5, 1033128.5, -13600052.0]
+      rot: [0.982557, 0.0, 0.185962, -0.038664, 0.978148, 0.204285, -0.181898, -0.207912, 0.961086]

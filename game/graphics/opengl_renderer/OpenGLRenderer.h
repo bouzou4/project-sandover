@@ -5,17 +5,34 @@
 
 #include "common/dma/dma_chain_read.h"
 
+#include "game/graphics/opengl_renderer/BloomRenderer.h"
+#include "game/graphics/opengl_renderer/EmissiveLights.h"
+#include "game/graphics/opengl_renderer/ActorShadows.h"
 #include "game/graphics/opengl_renderer/BucketRenderer.h"
 #include "game/graphics/opengl_renderer/CollideMeshRenderer.h"
 #include "game/graphics/opengl_renderer/Fbo.h"
+#include "game/graphics/opengl_renderer/InspectRenderer.h"
+#include "game/graphics/opengl_renderer/PerfTimers.h"
 #include "game/graphics/opengl_renderer/Profiler.h"
 #include "game/graphics/opengl_renderer/Shader.h"
+#include "game/graphics/opengl_renderer/Smaa.h"
+#include "game/graphics/opengl_renderer/SunDisc.h"
+#include "game/graphics/opengl_renderer/Upscaler.h"
+#include "game/graphics/opengl_renderer/SsaoDepth.h"
+#include "game/graphics/opengl_renderer/SsaoRenderer.h"
+#include "game/graphics/opengl_renderer/Swamp.h"
 #include "game/graphics/opengl_renderer/TextureAnimator.h"
+#include "game/graphics/opengl_renderer/VistaRenderer.h"
 #include "game/graphics/opengl_renderer/foreground/Generic2.h"
 #include "game/graphics/opengl_renderer/foreground/Merc2.h"
 #include "game/graphics/opengl_renderer/opengl_utils.h"
 #include "game/tools/filter_menu/filter_menu.h"
 #include "game/tools/subtitle_editor/subtitle_editor.h"
+
+namespace xr {
+struct FrameTargets;
+struct EyeTarget;
+}  // namespace xr
 
 struct RenderOptions {
   bool draw_render_debug_window = false;
@@ -41,6 +58,10 @@ struct RenderOptions {
   int draw_region_height = 0;
   int draw_region_width = 0;
 
+  // display size of the scene when it renders below it (render scale < 1), 0 = game_res
+  int display_w = 0;
+  int display_h = 0;
+
   bool save_screenshot = false;
   bool quick_screenshot = false;
   bool internal_res_screenshot = false;
@@ -54,6 +75,12 @@ struct RenderOptions {
   // when enabled, does a `glFinish()` after each major rendering pass. This blocks until the GPU
   // is done working, making it easier to profile GPU utilization.
   bool gpu_sync = false;
+
+  // OpenXR frame (Jak 1): when set, the stereo path also copies each eye into these images
+  xr::FrameTargets* xr = nullptr;
+  // the chain was already drawn for an earlier display frame: draw it again for a fresh head
+  // pose without advancing anything per game frame (frame_idx, VIF interrupts, wind, shadows)
+  bool xr_repeat = false;
 };
 
 /*!
@@ -77,6 +104,12 @@ class OpenGLRenderer {
  private:
   void setup_frame(const RenderOptions& settings);
   void dispatch_buckets(DmaFollower dma, ScopedProfilerNode& prof, bool sync_after_buckets);
+  void dispatch_buckets_stereo(DmaFollower dma,
+                               ScopedProfilerNode& prof,
+                               bool sync_after_buckets,
+                               xr::FrameTargets* xr);
+  void copy_eye_to_xr(const xr::EyeTarget& target, int src_x, int w, int h);
+  void copy_eye_to_xr_cropped(const xr::FrameTargets& frame, int eye, int src_x, int w, int h);
   void dispatch_buckets_jak1(DmaFollower dma, ScopedProfilerNode& prof, bool sync_after_buckets);
   void dispatch_buckets_jak2(DmaFollower dma, ScopedProfilerNode& prof, bool sync_after_buckets);
   void dispatch_buckets_jak3(DmaFollower dma, ScopedProfilerNode& prof, bool sync_after_buckets);
@@ -85,8 +118,13 @@ class OpenGLRenderer {
                         int brightness_contrast_color,
                         int brightness_contrast_alpha,
                         SharedRenderState* render_state,
-                        ScopedProfilerNode& prof);
+                        ScopedProfilerNode& prof,
+                        bool direct_ok);
   void blit_display(ScopedProfilerNode& prof);
+  void set_tonemap_uniforms(const Shader& shader, bool hdr_out);
+  Fbo* hdr_scene_fbo();
+  void save_hdr_scene(ScopedProfilerNode& prof, const std::string& path, bool window_png);
+  Fbo* hdr_screenshot_source(ScopedProfilerNode& prof);
   void init_bucket_renderers_jak1();
   void init_bucket_renderers_jak2();
   void init_bucket_renderers_jak3();
@@ -128,6 +166,20 @@ class OpenGLRenderer {
   std::array<float, (int)BucketCategory::MAX_CATEGORIES> m_category_times;
   FullScreenDraw m_blackout_renderer;
   CollideMeshRenderer m_collide_renderer;
+  SsaoDepth m_ssao_depth;
+  SsaoDepth m_water_depth;  // opaque scene depth for the ocean shading
+  SsaoRenderer m_ssao;
+  SwampMist m_swamp_mist;
+  SunDisc m_sun_disc;
+  BloomRenderer m_bloom;
+  SmaaRenderer m_smaa;
+  Upscaler m_upscaler;
+  int m_display_w = 0, m_display_h = 0;  // render scale < 1: the size the scene is upscaled to
+  bool m_upscaled = false;               // this frame's scene was upscaled to m_upscaler.display()
+  EmissiveLights m_emissive_lights;
+  InspectRenderer m_inspect;
+  std::unique_ptr<VistaRenderer> m_vista;
+  std::unique_ptr<ActorShadows> m_actor_shadows;  // Jak 1
 
   float m_last_pmode_alp = 1.;
   bool m_enable_fast_blackout_loads = true;
@@ -141,7 +193,20 @@ class OpenGLRenderer {
     } resources;
 
     Fbo* render_fbo = nullptr;  // the selected fbo from the three above to use for rendering
+    bool hdr = false;           // render and resolve buffers are RGBA16F
   } m_fbo_state;
+  Fbo m_hdr_ldr_fbo;                // tonemapped copy for internal-resolution screenshots
+  GpuTimer m_pcrtc_timer{"pcrtc"};  // resolve + tonemap, with the SSAO GPU timing switch
+  std::vector<perf::Group> m_perf_groups;  // per bucket, Jak 1 only
+  Fbo m_stereo_fbo;                 // both eyes side by side, single-sampled
+  bool m_stereo_hdr = false;
+  GLuint m_xr_fbo = 0;  // draw target for copies into OpenXR swapchain images
+  bool m_xr_repeat = false;
+  float m_xr_logged_tan[2] = {0.f, 0.f};
+  // what glq::SavedState copies were queried under (setup_frame invalidates on a change)
+  std::array<s64, 14> m_glq_key{};
+  std::array<u8, sizeof(GfxGlobalSettings)> m_glq_settings{};
+  int m_glq_settings_logs = 0;
 
   GLuint screen_vao = 0;  // vertex array object for a screen-space draw
   GLuint screen_vbo = 0;  // vertex buffer object for a screen-space draw

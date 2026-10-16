@@ -73,6 +73,10 @@ class Voice {
 
   void Stop() { mADSR.Stop(); }
 
+  // Sound handle that started this voice (0: none); the spatial backend routes by it.
+  void SetOwner(u32 owner) { mOwner = owner; }
+  u32 Owner() const { return mOwner; }
+
  private:
   union ADPCMHeader {
     u16 bits;
@@ -84,6 +88,7 @@ class Voice {
   };
 
   AllocationType mAlloc;
+  u32 mOwner{0};
   bool mNoise{false};
   bool mENDX{false};
 

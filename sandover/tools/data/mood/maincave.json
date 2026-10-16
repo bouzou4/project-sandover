@@ -1,0 +1,133 @@
+{
+ "level": "maincave",
+ "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc",
+ "mode": "quick",
+ "fog": [
+  {
+   "fog_color": [
+    0.0,
+    96.0,
+    96.0,
+    128.0
+   ],
+   "fog_dists": [
+    434176.0,
+    1048576.0,
+    255.0,
+    51.0
+   ]
+  },
+  {
+   "fog_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fog_dists": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "fog_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fog_dists": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "fog_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fog_dists": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "fog_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fog_dists": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "fog_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fog_dists": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "fog_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fog_dists": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "fog_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fog_dists": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ ],
+ "quick_slot": {
+  "fog": 0,
+  "sun": 0,
+  "lights": 0
+ },
+ "indirect_binding": false,
+ "indirect_note": null,
+ "tables": {
+  "palette_interp": "*village1-palette-interp-table*",
+  "fog_interp": "*default-interp-table*",
+  "fog": "*maincave-mood-fog-table*"
+ },
+ "palette_interp": null,
+ "fog_interp": null
+}

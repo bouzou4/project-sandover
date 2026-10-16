@@ -14,9 +14,211 @@
 ;;;; methods
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Sandover settings file (sandover.gc)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun sandover-skip-value ((file file-stream))
+  "Skip an unknown key's value, stopping before the ) that closes the key."
+  (let ((depth 0)
+        (in-string? #f))
+    (while #t
+      (let ((c (file-stream-getc file)))
+        (cond
+          ((= c 255) (return 0))
+          (in-string? (if (= c #x22) (set! in-string? #f)))
+          ((= c #x22) (set! in-string? #t))
+          ((= c #x28) (+! depth 1))
+          ((= c #x29)
+           (when (zero? depth)
+             (file-stream-seek file -1 SCE_SEEK_CUR)
+             (return 0))
+           (+! depth -1))))))
+  0)
+
+(defmacro sandover-read-bool (file)
+  `(!= (file-stream-read-symbol ,file) #f))
+
+(defun sandover-read-name ((file file-stream))
+  "A list value as a symbol. Builds before this one wrote them quoted, so quotes are dropped."
+  (file-stream-seek-past-whitespace file)
+  (file-stream-read-word file)
+  (let* ((s *pc-temp-string*)
+         (n (length s)))
+    (when (and (>= n 2) (= (-> s data 0) #x22) (= (-> s data (+ n -1)) #x22))
+      (dotimes (i (+ n -2))
+        (set! (-> s data i) (-> s data (+ i 1))))
+      (set! (-> s data (+ n -2)) 0)))
+  (string->symbol *pc-temp-string*))
+
+(defun sandover-settings-read-key ((obj sandover-settings) (file file-stream))
+  "Read the value of the key in *pc-temp-string*; unknown keys are skipped."
+  (case-str *pc-temp-string*
+    (("ssao?") (set! (-> obj ssao?) (sandover-read-bool file)))
+    (("tile-lights?") (set! (-> obj tile-lights?) (sandover-read-bool file)))
+    (("bloom?") (set! (-> obj bloom?) (sandover-read-bool file)))
+    (("shadows?") (set! (-> obj shadows?) (sandover-read-bool file)))
+    (("materials?") (set! (-> obj pbr?) (sandover-read-bool file)))
+    (("material-look")
+     (case (sandover-read-name file)
+       (('faithful) (set! (-> obj pbr-look) 0))
+       (('bold) (set! (-> obj pbr-look) 1))
+       (('cinematic) (set! (-> obj pbr-look) 2))))
+    (("fur?") (set! (-> obj fur?) (sandover-read-bool file)))
+    (("water?") (set! (-> obj water?) (sandover-read-bool file)))
+    (("neighbours?") (set! (-> obj vista?) (sandover-read-bool file)))
+    (("fp16-target?") (set! (-> obj hdr-target?) (sandover-read-bool file)))
+    (("tonemap")
+     (case (sandover-read-name file)
+       (('clamp) (set! (-> obj tonemap) 0))
+       (('filmic) (set! (-> obj tonemap) 1))
+       (('toon) (set! (-> obj tonemap) 2))))
+    (("hdr-output")
+     (case (sandover-read-name file)
+       (('scrgb) (set! (-> obj hdr-output) 0))
+       (('pq) (set! (-> obj hdr-output) 1))
+       (('off) (set! (-> obj hdr-output) 2))))
+    ;; read as floats: string->int drops the sign of a decimal
+    (("paper-white-nits") (set! (-> obj paper-white) (fmax 80.0 (fmin 400.0 (file-stream-read-float file)))))
+    (("hdr-peak-nits")
+     (let ((v (file-stream-read-float file)))
+       (set! (-> obj hdr-peak) (if (< v 0.0) -1.0 (fmax 400.0 (fmin 10000.0 v))))))
+    (("hdr-black-nits")
+     (let ((v (file-stream-read-float file)))
+       (set! (-> obj hdr-black) (if (< v 0.0) -1.0 (fmin 1.0 v)))))
+    (("antialias")
+     (case (sandover-read-name file)
+       (('msaa) (set! (-> obj antialias) 0))
+       (('smaa) (set! (-> obj antialias) 1))
+       (('msaa2-smaa) (set! (-> obj antialias) 2))
+       (('off) (set! (-> obj antialias) 3))))
+    (("render-scale")
+     (case (file-stream-read-int file)
+       ((100) (set! (-> obj render-scale) 0))
+       ((77) (set! (-> obj render-scale) 1))
+       ((67) (set! (-> obj render-scale) 2))
+       ((50) (set! (-> obj render-scale) 3))))
+    (("upscaler")
+     (case (sandover-read-name file)
+       (('bilinear) (set! (-> obj upscaler) 0))
+       (('fsr) (set! (-> obj upscaler) 1))))
+    (("ssao-quality")
+     (case (sandover-read-name file)
+       (('low) (set! (-> obj ssao-quality) 0))
+       (('medium) (set! (-> obj ssao-quality) 1))
+       (('high) (set! (-> obj ssao-quality) 2))))
+    (("shadow-quality")
+     (case (sandover-read-name file)
+       (('low) (set! (-> obj shadow-quality) 0))
+       (('medium) (set! (-> obj shadow-quality) 1))
+       (('high) (set! (-> obj shadow-quality) 2))))
+    (("smaa?") (set! (-> obj smaa?) (sandover-read-bool file)))
+    (("sun?") (set! (-> obj sun?) (sandover-read-bool file)))
+    (("glint?") (set! (-> obj glint?) (sandover-read-bool file)))
+    (else (sandover-skip-value file)))
+  0)
+
+(defun sandover-settings-read ((obj sandover-settings) (filename string))
+  "Read a sandover.gc file into obj. Missing keys keep their value; unknown keys are skipped,
+   so an older build reads a newer file. Returns #f if the file is missing or malformed."
+  (let ((file (new 'stack 'file-stream filename 'read)))
+    (when (not (file-stream-valid? file))
+      (return #f))
+    (with-settings-scope (file)
+                         (case-str (file-stream-read-word file)
+                           (("sandover")
+                            (let ((version (file-stream-read-int file)))
+                              (if (> version SANDOVER_SETTINGS_VERSION)
+                                (format 0 "[PC] sandover.gc version ~D is newer than ~D, reading known keys~%" version SANDOVER_SETTINGS_VERSION))
+                              (dosettings (file) (sandover-settings-read-key obj file))
+                              ;; version 1 saved scRGB as the untouched default; HDR10 is the default since 2
+                              (if (and (< version 2) (zero? (-> obj hdr-output)))
+                                (set! (-> obj hdr-output) 1))
+                              ;; before 3 the antialias list held the SMAA choice and the sun rode on neighbours;
+                              ;; the material look and tonemap rows are gone, so the picked looks apply
+                              (when (< version 3)
+                                (set! (-> obj smaa?) (or (= (-> obj antialias) 1) (= (-> obj antialias) 2)))
+                                (set! (-> obj sun?) (-> obj vista?))
+                                (set! (-> obj pbr-look) 1)
+                                (set! (-> obj tonemap) 2))))
+                           (else (pc-settings-read-throw-error file "not a sandover settings file"))))
+    (file-stream-close file))
+  #t)
+
+(defun sandover-settings-write ((obj sandover-settings) (filename string))
+  "Write obj as a sandover.gc file."
+  (let ((file (new 'stack 'file-stream filename 'write)))
+    (if (not (file-stream-valid? file)) (return #f))
+    (format file "(sandover ~D~%" SANDOVER_SETTINGS_VERSION)
+    (format file "  (ssao? ~A)~%" (-> obj ssao?))
+    (format file "  (tile-lights? ~A)~%" (-> obj tile-lights?))
+    (format file "  (bloom? ~A)~%" (-> obj bloom?))
+    (format file "  (shadows? ~A)~%" (-> obj shadows?))
+    (format file "  (materials? ~A)~%" (-> obj pbr?))
+    (format file "  (material-look ~A)~%" (case (-> obj pbr-look) ((0) 'faithful) ((2) 'cinematic) (else 'bold)))
+    (format file "  (fur? ~A)~%" (-> obj fur?))
+    (format file "  (water? ~A)~%" (-> obj water?))
+    (format file "  (neighbours? ~A)~%" (-> obj vista?))
+    (format file "  (fp16-target? ~A)~%" (-> obj hdr-target?))
+    (format file "  (tonemap ~A)~%" (case (-> obj tonemap) ((0) 'clamp) ((1) 'filmic) (else 'toon)))
+    (format file "  (hdr-output ~A)~%" (case (-> obj hdr-output) ((1) 'pq) ((2) 'off) (else 'scrgb)))
+    (format file "  (paper-white-nits ~D)~%" (the int (-> obj paper-white)))
+    (format file "  (hdr-peak-nits ~D)~%" (if (< (-> obj hdr-peak) 0.0) -1 (the int (-> obj hdr-peak))))
+    (format file "  (hdr-black-nits ~,,3f)~%" (if (< (-> obj hdr-black) 0.0) -1.0 (-> obj hdr-black)))
+    (format file "  (antialias ~A)~%" (case (-> obj antialias) ((1) 'smaa) ((2) 'msaa2-smaa) ((3) 'off) (else 'msaa)))
+    (format file "  (render-scale ~D)~%" (case (-> obj render-scale) ((1) 77) ((2) 67) ((3) 50) (else 100)))
+    (format file "  (upscaler ~A)~%" (case (-> obj upscaler) ((0) 'bilinear) (else 'fsr)))
+    (format file "  (ssao-quality ~A)~%" (case (-> obj ssao-quality) ((0) 'low) ((1) 'medium) (else 'high)))
+    (format file "  (shadow-quality ~A)~%" (case (-> obj shadow-quality) ((0) 'low) ((1) 'medium) (else 'high)))
+    (format file "  (smaa? ~A)~%" (-> obj smaa?))
+    (format file "  (sun? ~A)~%" (-> obj sun?))
+    (format file "  (glint? ~A)~%" (-> obj glint?))
+    (format file "  )~%")
+    (file-stream-close file))
+  (format 0 "[PC] Sandover settings write: ~A~%" filename)
+  #t)
+
+(define *sandover-settings-loaded?* #f)
+
+(defun sandover-first-boot! ((obj pc-settings-jak1))
+  "No sandover.gc yet: the Sandover defaults, and Sandover's MSAA over one a stock build saved."
+  (set! (-> obj gfx-msaa) PC_DEFAULT_MSAA)
+  (sandover-settings-reset! (-> obj sandover))
+  0)
+
+(defun sandover-settings-load ((obj pc-settings-jak1))
+  "Read sandover.gc from the settings folder; write the defaults if it is missing."
+  (format (clear *pc-temp-string-1*) "~S/sandover.gc" *pc-settings-folder*)
+  (cond
+    ((pc-filepath-exists? *pc-temp-string-1*)
+     (cond
+       ((sandover-settings-read (-> obj sandover) *pc-temp-string-1*)
+        (format 0 "[PC] Sandover settings read: ~S~%" *pc-temp-string-1*))
+       (else
+        (format 0 "[PC] Sandover settings at ~S could not be read, using defaults~%" *pc-temp-string-1*)
+        (sandover-settings-reset! (-> obj sandover)))))
+    (else
+     (sandover-first-boot! obj)
+     ((method-of-type pc-settings commit-to-file) obj)
+     (format (clear *pc-temp-string-1*) "~S/sandover.gc" *pc-settings-folder*)
+     (pc-mkdir-file-path *pc-temp-string-1*)
+     (sandover-settings-write (-> obj sandover) *pc-temp-string-1*)))
+  (set! *sandover-settings-loaded?* #t)
+  0)
+
+(defmethod commit-to-file ((obj pc-settings-jak1))
+  "commits the current settings to the file, then the Sandover settings to sandover.gc"
+  ((method-of-type pc-settings commit-to-file) obj)
+  ;; not before the load: a first boot commits pc-settings.gc before sandover.gc is read
+  (when *sandover-settings-loaded?*
+    (format (clear *pc-temp-string-1*) "~S/sandover.gc" *pc-settings-folder*)
+    (sandover-settings-write (-> obj sandover) *pc-temp-string-1*))
+  (none))
+
 (defmethod initialize ((obj pc-settings-jak1))
   "initial initialize method to be run after allocating"
   ((method-of-type pc-settings initialize) obj)
+  (sandover-settings-load obj)
   (set! (-> *setting-control* default sfx-volume) (-> obj memcard-volume-sfx))
   (set! (-> *setting-control* default music-volume) (-> obj memcard-volume-music))
   (set! (-> *setting-control* default dialog-volume) (-> obj memcard-volume-dialog))
@@ -506,6 +708,181 @@
   (format file "      )~%")
   (format file "    )~%")
   0)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Sandover settings apply
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; defined in drawable.gc, which loads after this file
+(define-extern pc-set-shadows (function int float none))
+;; defined in sparticle-launcher.gc, which loads after this file
+(define-extern pc-set-hide-shafts (function int none))
+(define-extern *sp-hide-light-shafts?* symbol)
+
+;; What the engine was last told, as effective values. Starts at the engine's boot state (every
+;; feature off), so only differences are pushed: an all-off sandover.gc pushes nothing.
+(define *sandover-applied* (new 'static 'sandover-settings))
+
+;; the HDR calibration pattern the engine was last told to draw (pc-set-hdr-output 8)
+(define *sandover-calibration-pattern* 0)
+
+;; set by progress-pc.gc: the pattern for the focused calibration row, 0 when the page is not up
+(define *sandover-calibration-pattern-func* (the-as (function int) #f))
+
+(defun sandover-settings-reapply ()
+  "Forget what was pushed: the next frame pushes every Sandover setting that differs from the boot state."
+  (set! (-> *sandover-applied* ssao?) #f)
+  (set! (-> *sandover-applied* tile-lights?) #f)
+  (set! (-> *sandover-applied* bloom?) #f)
+  (set! (-> *sandover-applied* shadows?) #f)
+  (set! (-> *sandover-applied* pbr?) #f)
+  (set! (-> *sandover-applied* pbr-look) -1)
+  (set! (-> *sandover-applied* fur?) #f)
+  (set! (-> *sandover-applied* water?) #f)
+  (set! (-> *sandover-applied* vista?) #f)
+  (set! (-> *sandover-applied* hdr-target?) #f)
+  (set! (-> *sandover-applied* tonemap) 0)
+  (set! (-> *sandover-applied* hdr-output) 2)
+  (set! (-> *sandover-applied* paper-white) 200.0)
+  (set! (-> *sandover-applied* hdr-peak) -1.0)
+  (set! (-> *sandover-applied* hdr-black) -1.0)
+  (set! *sandover-calibration-pattern* 0)
+  (set! (-> *sandover-applied* antialias) 0)
+  (set! (-> *sandover-applied* render-scale) 0)
+  (set! (-> *sandover-applied* upscaler) 1)
+  (set! (-> *sandover-applied* ssao-quality) 2)
+  (set! (-> *sandover-applied* shadow-quality) 2)
+  (set! (-> *sandover-applied* smaa?) #f)
+  (set! (-> *sandover-applied* sun?) #f)
+  (set! (-> *sandover-applied* glint?) #f)
+  ;; shafts drawn again (boot state); the flag, not pc-set-hide-shafts, which is unbound at load
+  (set! *sp-hide-light-shafts?* #f)
+  ;; shadow map size and taps (shadow option 40) back to the engine default, high
+  (pc-set-shadow-option 40 2000000)
+  ;; effect parameters that are not settings fields: back to the engine defaults (lava rules,
+  ;; including its debug view and clock pin), so a rig shot cannot leak them into the next
+  (pc-set-lava 15 1)
+  ;; glow prop ranking (pc-set-emissive-lights 35-36) and eco shot lights (27-28) back to the
+  ;; engine defaults
+  (pc-set-emissive-lights 37 1)
+  ;; SMAA threshold, luma edges and debug view (pc-set-smaa 1-3) back to the engine defaults
+  (pc-set-smaa 4 1)
+  ;; RCAS sharpness (pc-set-render-scale 2) back to the engine default
+  (pc-set-render-scale 3 1)
+  ;; terrain sun cover strength (shadow option 20) back to the engine default, 1
+  (pc-set-shadow-option 20 1000000)
+  ;; water sun glint strength, roughness and peak (pc-set-water 95-97) back to the engine defaults
+  (pc-set-water 98 1)
+  ;; world sun map options (shadow options 32-38: receivers, map size, cascades, penumbra, range)
+  ;; back to the engine defaults
+  (pc-set-shadow-option 39 1)
+  ;; sun disc size, glare, brightness, fade and HDR mode (pc-set-sun-option 11-18) back to the
+  ;; engine defaults
+  (pc-set-sun-option 19 1)
+  ;; sky bodies style, starburst, wash, glow, moon, stars (pc-set-sun-option 20-28) back to the
+  ;; engine defaults
+  (pc-set-sun-option 29 1)
+  (none))
+
+(sandover-settings-reapply)
+
+(defun sandover-effective! ((dst sandover-settings) (src sandover-settings))
+  "What the engine should run: a list whose parent switch is off falls back to its boot state."
+  (mem-copy! (the-as pointer dst) (the-as pointer src) (size-of sandover-settings))
+  (if (not (-> src pbr?)) (set! (-> dst pbr-look) -1))
+  (if (not (-> src ssao?)) (set! (-> dst ssao-quality) 2))
+  (if (not (-> src shadows?)) (set! (-> dst shadow-quality) 2))
+  ;; antialias 0 follows the SMAA row and the stock msaa setting: modes 1, 2 and 4 by sample count
+  (if (and (zero? (-> src antialias)) (-> src smaa?))
+    (set! (-> dst antialias) (case (-> *pc-settings* gfx-msaa) ((0 1) 1) ((2) 2) (else 4))))
+  (when (not (-> src hdr-target?))
+    (set! (-> dst tonemap) 0)
+    (set! (-> dst hdr-output) 2))
+  (when (= (-> dst hdr-output) 2)
+    (set! (-> dst paper-white) 200.0)
+    (set! (-> dst hdr-peak) -1.0)
+    (set! (-> dst hdr-black) -1.0))
+  dst)
+
+(defun sandover-vista-apply ((on? symbol))
+  "Neighbour levels with unified fog and haze (the forms of `sandover-preset apply vista haze`)."
+  (cond
+    (on?
+     (pc-set-vista-fog "unified" 150 150 800)
+     (pc-set-vista-neighbour-fog "clear" -1 -1 -1)
+     (pc-set-vista-haze 850 200 #x8d8f80 700)
+     (pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)
+     (pc-set-vista-neighbour-haze "misty" 0)
+     (pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)
+     (pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)
+     (pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)
+     (pc-set-vista-neighbour-haze "training" 0)
+     (pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))
+     (pc-set-vista-option 12 1)
+     (pc-set-vista "neighbours"))
+    (else
+     (pc-set-vista "none")
+     (pc-set-vista-option 12 0)
+     (pc-set-vista-haze 0 -1 -1 -1)
+     (pc-set-vista-fog "vanilla" -1 -1 -1)))
+  (none))
+
+(defmacro sandover-changed? (field)
+  `(!= (-> want ,field) (-> old ,field)))
+
+(defun sandover-settings-update ()
+  "Push the Sandover settings that changed since the last push, once per frame (main.gc).
+   Nothing is sent while they match what the engine was last told, so REPL and rig forms stay."
+  (let ((want (sandover-effective! (new 'stack-no-clear 'sandover-settings) (-> *pc-settings* sandover)))
+        (old *sandover-applied*))
+    (when (or (sandover-changed? ssao?) (sandover-changed? ssao-quality))
+      (cond
+        ((-> want ssao?) (pc-set-ssao-preset (- 6 (-> want ssao-quality))) (pc-set-ssao-param 15 1000000))
+        (else (pc-set-ssao-preset -1))))
+    (if (sandover-changed? tile-lights?) (pc-set-emissive-lights 0 (if (-> want tile-lights?) 1000000 0)))
+    (when (sandover-changed? bloom?)
+      (cond
+        ((-> want bloom?) (pc-set-bloom 0 1000000) (pc-set-bloom 4 1000000))
+        (else (pc-set-bloom 0 0))))
+    (when (sandover-changed? shadows?)
+      (cond
+        ((-> want shadows?) (pc-set-shadows 1 1.0) (pc-set-shadow-option 5 300000) (pc-set-shadow-option 30 1000000))
+        (else (pc-set-shadows 0 1.0))))
+    (if (sandover-changed? shadow-quality) (pc-set-shadow-option 40 (* 1000000 (-> want shadow-quality))))
+    (if (and (sandover-changed? pbr-look) (>= (-> want pbr-look) 0))
+      (pc-set-pbr-param 11 (* 1000000 (+ 1 (-> want pbr-look)))))
+    (when (sandover-changed? pbr?)
+      (pc-set-pbr-param 0 (if (-> want pbr?) 1 0))
+      ;; the remaster look drops the fake sun-ray particles (beach grotto, jungle)
+      (pc-set-hide-shafts (if (-> want pbr?) 1 0)))
+    (if (sandover-changed? fur?) (pc-set-fur 0 (if (-> want fur?) 1000000 0)))
+    (if (sandover-changed? water?) (pc-set-water 0 (if (-> want water?) 1000000 0)))
+    (if (sandover-changed? glint?) (pc-set-water 94 (if (-> want glint?) 1000000 0)))
+    (if (sandover-changed? vista?) (sandover-vista-apply (-> want vista?)))
+    (when (sandover-changed? sun?)
+      ;; the disc follows the hour through the clock address the vista switch otherwise sends
+      (if (and (-> want sun?) (not (-> want vista?)))
+        (pc-set-vista-option 5 (the int (&-> *time-of-day-context* time))))
+      (pc-set-sun-option 10 (if (-> want sun?) 1000000 0)))
+    (if (sandover-changed? hdr-target?) (pc-set-hdr-target (-> want hdr-target?)))
+    (if (sandover-changed? tonemap) (pc-set-tonemap 0 (* 1000000 (-> want tonemap))))
+    (if (sandover-changed? paper-white) (pc-set-hdr-output 2 (the int (* 1000000.0 (-> want paper-white)))))
+    ;; GOAL int math is 32-bit: a peak in millionths overflows above 2147 nits, so send thousandths
+    (if (sandover-changed? hdr-peak) (pc-set-hdr-output 9 (the int (* 1000.0 (-> want hdr-peak)))))
+    (if (sandover-changed? hdr-black) (pc-set-hdr-output 4 (the int (* 1000000.0 (-> want hdr-black)))))
+    (when (sandover-changed? hdr-output)
+      (cond
+        ((= (-> want hdr-output) 2) (pc-set-hdr-output 0 0))
+        (else (pc-set-hdr-output 1 (* 1000000 (-> want hdr-output))) (pc-set-hdr-output 0 1000000))))
+    (if (sandover-changed? antialias) (pc-set-smaa 0 (* 1000000 (-> want antialias))))
+    (if (sandover-changed? render-scale) (pc-set-render-scale 0 (sandover-render-scale-millionths (-> want render-scale))))
+    (if (sandover-changed? upscaler) (pc-set-render-scale 1 (* 1000000 (-> want upscaler))))
+    (mem-copy! (the-as pointer old) (the-as pointer want) (size-of sandover-settings)))
+  (let ((pattern (if *sandover-calibration-pattern-func* (*sandover-calibration-pattern-func*) 0)))
+    (when (!= pattern *sandover-calibration-pattern*)
+      (set! *sandover-calibration-pattern* pattern)
+      (pc-set-hdr-output 8 (* 1000000 pattern))))
+  (none))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; PC settings

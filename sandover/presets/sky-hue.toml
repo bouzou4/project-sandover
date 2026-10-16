@@ -1,0 +1,20 @@
+# Sky-hued shadows: in a level with a sky, actor and lamp shadows darken toward the ambient's
+# hue for the mood and hour instead of toward grey (sandover/kb/howto/shadows.md). Rides on the
+# actor shadows (pc-set-shadows), so the boot state stays vanilla. The engine defaults (gfx.h
+# shadow_sky_hue*) are the `moderate` preset, the chosen default;
+# `off` darkens toward grey.
+# Rig: the forms of `sandover-preset apply sky-hue <moderate|off>`.
+#
+# [presets.<name>]
+#   strength  0 grey .. 1 the fitted sun/ambient split (shadow option 31)
+# label/caption: one line each for the compare view
+
+[meta]
+schema = 1
+phase = "sky-hue"
+round = 2
+
+[presets.moderate]
+label = "Sky-hued shadows, moderate"
+caption = "halfway from grey to the sky's colour, same darkness"
+strength = 0.5

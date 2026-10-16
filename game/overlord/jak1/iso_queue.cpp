@@ -17,6 +17,7 @@ namespace jak1 {
 constexpr int N_BUFFERS = 4;
 constexpr int N_STR_BUFFERS = 1;
 constexpr int N_VAG_CMDS = 64;
+static_assert(N_VAG_CMDS <= 64, "vag_cmd_used has one bit per command");
 
 struct IsoBuffer {
   IsoBufferHeader header;
@@ -35,11 +36,29 @@ static IsoStrBuffer* sFreeStrBuffer;
 PriStackEntry gPriStack[N_PRIORITIES];
 
 u32 vag_cmd_cnt;
-u32 vag_cmd_used;
+u64 vag_cmd_used;  // one bit per vag_cmds slot
 u32 max_vag_cmd_cnt;
 VagCommand vag_cmds[N_VAG_CMDS];
 
 static s32 sSema;
+static u64 sVagScanMisses;  // debug: GetVAGCommand passes that found no free slot
+
+static void DumpIsoQueueState() {
+  lg::warn("[IOP watchdog]   vag cmds: cnt {} max {} used-mask 0x{:016x} scan-misses {} iso-mbx-nonempty {}",
+           vag_cmd_cnt, max_vag_cmd_cnt, vag_cmd_used, sVagScanMisses, iop::PeekMbx(iso_mbx));
+  for (int i = 0; i < N_VAG_CMDS; i++) {
+    if ((vag_cmd_used >> i) & 1) {
+      lg::warn("[IOP watchdog]     vag slot {:2} cmd 0x{:x} sound {} vol {}", i, vag_cmds[i].cmd_id,
+               vag_cmds[i].sound_id, vag_cmds[i].volume);
+    }
+  }
+  for (int pri = 0; pri < N_PRIORITIES; pri++) {
+    for (int i = 0; i < gPriStack[pri].n; i++) {
+      lg::warn("[IOP watchdog]   iso queue pri {} {} status {}", pri, gPriStack[pri].names[i],
+               gPriStack[pri].cmds[i] ? gPriStack[pri].cmds[i]->status : -1);
+    }
+  }
+}
 
 void iso_queue_init_globals() {
   memset(sBuffer, 0, sizeof(sBuffer));
@@ -90,6 +109,8 @@ void InitBuffers() {
   params.init_count = 1;
   params.option = 0;
   sSema = CreateSema(&params);
+  sVagScanMisses = 0;
+  StartWatchdogFromEnv(DumpIsoQueueState);
 
   if (sSema < 0) {
     for (;;) {
@@ -340,29 +361,37 @@ VagCommand* GetVAGCommand() {
 
     // try to get something.
     for (s32 i = 0; i < N_VAG_CMDS; i++) {
-      if (!((vag_cmd_used >> (i & 0x1f)) & 1)) {
+      if (!((vag_cmd_used >> i) & 1)) {
         // free!
-        vag_cmd_used |= (1 << (i & 0x1f));
+        vag_cmd_used |= (u64(1) << i);
         vag_cmd_cnt++;
         if (vag_cmd_cnt > max_vag_cmd_cnt) {
           max_vag_cmd_cnt = vag_cmd_cnt;
+          if (max_vag_cmd_cnt >= 8 && WatchdogSeconds()) {
+            lg::warn("[IOP watchdog] vag cmds high-water {}", max_vag_cmd_cnt);
+            if (max_vag_cmd_cnt % 8 == 0) {
+              DumpIsoQueueState();
+            }
+          }
         }
         SignalSema(sSema);
         return &vag_cmds[i];
       }
     }
 
+    sVagScanMisses++;
     SignalSema(sSema);
+    DelayThread(100);
   }
 }
 
 void FreeVAGCommand(VagCommand* cmd) {
   s32 idx = cmd - vag_cmds;
-  if (idx >= 0 && idx < N_VAG_CMDS && ((vag_cmd_used >> (idx & 0x1f)) & 1)) {
+  if (idx >= 0 && idx < N_VAG_CMDS && ((vag_cmd_used >> idx) & 1)) {
     while (WaitSema(sSema)) {
     }
 
-    vag_cmd_used &= ~(1 << (idx & 0x1f));
+    vag_cmd_used &= ~(u64(1) << idx);
     vag_cmd_cnt--;
     SignalSema(sSema);
   } else {

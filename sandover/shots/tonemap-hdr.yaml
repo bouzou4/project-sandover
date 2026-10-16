@@ -1,0 +1,29 @@
+# tonemap revision 2: scenes with real overbright content on the FP16 target (sun disc, lava,
+# lamps and eco at night, glowing precursor metal). Run once per
+# tonemap candidate with --preset tonemap=<name> plus the play effects; see
+# kb/howto/lighting.md section 6 and presets/tonemap.toml.
+# Cameras are ray-checked against the level's background mesh (camera clear of geometry by 1 m
+# or more, sight lines to the targets unblocked; 64 degree horizontal field of view).
+set: tonemap-hdr
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 90
+  camera: from_continue
+  effects: on
+  wind: off
+  particles: on
+  jak: hide
+shots:
+  # 2 m over high ground (25 m) 65 m from the start, along the 18:00 sun azimuth; the sun
+  # disc sits 7 degrees above centre (orbit 0 of sky.gc), its ray clear for 600 m, sand below
+  - {name: beach-dusk-sun, continue: beach-start, hour: 18, camera: {pos: [-505036.8, 109363.2, -469401.6], rot: [-0.9994, 0.0000, 0.0341, 0.0000, 1.0000, 0.0000, -0.0341, 0.0000, -0.9994]}}
+  # 5 m over the ground 20 m from the start, pitched 15 degrees down; the lava plane (y 30 m,
+  # where the fcn-coal emitters sit) fills about half the frame
+  - {name: firecanyon-lava-noon, continue: firecanyon-start, hour: 12, camera: {pos: [-87377.1, 146116.1, -763617.2], rot: [-1.0000, 0.0000, 0.0000, -0.0000, 0.9659, -0.2588, -0.0000, -0.2588, -0.9659]}}
+  # village1 has no eco vent actor; the two blue eco clusters (eco-10, eco-11) 18 m away are
+  # the vent-like glow, with 6 street and hut lamps in frame
+  - {name: village1-night-lamps-eco, continue: village1-hut, hour: 23, camera: {pos: [81920.0, 111153.2, 122880.0], rot: [-0.6428, 0.0000, 0.7660, -0.1330, 0.9848, -0.1116, -0.7544, -0.1736, -0.6330]}}
+  # 7 of the 29 glowing precursor statics (sun-blue, tube rings, circuit pattern) within 60 m
+  # in frame and unoccluded; camera 3 m clear of the walls
+  - {name: sunken-precursor-glow, continue: sunken-start, hour: 12, camera: {pos: [2196671.2, -584867.0, -6721553.0], rot: [0.6428, -0.0000, 0.7660, 0.0000, 1.0000, 0.0000, -0.7660, 0.0000, 0.6428]}}

@@ -188,6 +188,15 @@ float u32_to_sc(u32 in) {
   return (flt - 0.5) * 16.0;
 }
 
+/*!
+ * GS draws assume an 8-bit target that saturates every write; keep that on the FP16 target.
+ * The sky gradient exceeds 1.0 and its cloud layer only darkens it back into range after the clamp.
+ */
+void DirectRenderer::set_saturate(SharedRenderState* render_state, ShaderId shader) {
+  const auto id = render_state->shaders[shader].id();
+  glUniform1i(glGetUniformLocation(id, "saturate_out"), render_state->hdr_target ? 1 : 0);
+}
+
 void DirectRenderer::lookup_textures_again(SharedRenderState* render_state) {
   for (int i = 0; i < TEXTURE_STATE_COUNT; i++) {
     if (m_buffered_tex_state_currently_bound[i]) {
@@ -238,6 +247,7 @@ void DirectRenderer::flush_pending(SharedRenderState* render_state, ScopedProfil
   if (m_debug_state.disable_texture) {
     // a bit of a hack, this forces the non-textured shader always.
     render_state->shaders[ShaderId::DIRECT_BASIC].activate();
+    set_saturate(render_state, ShaderId::DIRECT_BASIC);
     m_blend_state_needs_gl_update = true;
     m_prim_gl_state_needs_gl_update = true;
   }
@@ -286,7 +296,7 @@ void DirectRenderer::flush_pending(SharedRenderState* render_state, ScopedProfil
     }
     int offset = 0;
     while (offset < m_prim_buffer.vert_count) {
-      glDepthMask(GL_TRUE);
+      glDepthMask(m_no_depth_writes ? GL_FALSE : GL_TRUE);
       glUniform1f(m_uniforms.alpha_min, m_double_draw_aref);
       glUniform1f(m_uniforms.alpha_max, 10);
       glDrawArrays(GL_TRIANGLES, offset, n_batch);
@@ -356,6 +366,15 @@ void DirectRenderer::update_gl_prim(SharedRenderState* render_state) {
     }
 
     render_state->shaders[ShaderId::DIRECT_BASIC_TEXTURED].activate();
+    set_saturate(render_state, ShaderId::DIRECT_BASIC_TEXTURED);
+    {
+      auto sg = m_stereo_parallax ? stereo_gs_parallax(*render_state) : math::Vector2f(0.f, 0.f);
+      glUniform2f(glGetUniformLocation(render_state->shaders[ShaderId::DIRECT_BASIC_TEXTURED].id(),
+                                       "stereo_gs"),
+                  sg.x(), sg.y());
+      set_xr_gs_uniforms(render_state->shaders[ShaderId::DIRECT_BASIC_TEXTURED].id(), *render_state,
+                         m_stereo_parallax ? 1 : (m_xr_at_infinity ? 2 : 0));
+    }
     glUniform1f(glGetUniformLocation(render_state->shaders[ShaderId::DIRECT_BASIC_TEXTURED].id(),
                                      "alpha_min"),
                 alpha_min);
@@ -384,6 +403,7 @@ void DirectRenderer::update_gl_prim(SharedRenderState* render_state) {
 
   } else {
     render_state->shaders[ShaderId::DIRECT_BASIC].activate();
+    set_saturate(render_state, ShaderId::DIRECT_BASIC);
   }
 
   if (state.aa_enable) {
@@ -548,7 +568,7 @@ void DirectRenderer::update_gl_test() {
     m_test_state_needs_double_draw = false;
   }
 
-  if (state.depth_writes && !alpha_trick_to_disable) {
+  if (state.depth_writes && !alpha_trick_to_disable && !m_no_depth_writes) {
     glDepthMask(GL_TRUE);
   } else {
     glDepthMask(GL_FALSE);

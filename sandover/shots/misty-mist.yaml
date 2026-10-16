@@ -1,0 +1,144 @@
+# Misty Island sea mist revision 2: a low layer over the sea and shore (base 0 m, scale
+# height 6 m, from 10 m out), thickening with distance, softening the feet of cliffs and pillars
+# while their tops stay clearer. Three cameras, each as C original game (vanilla: no forms), A
+# today (the play look, sea mist off), B1 moderate (`sandover-preset apply misty
+# moderate`, the pick) and B2 strong (`strength` 2); particles and actors live so the designers'
+# fog deck shows. Vanilla first; one instance. Cameras checked offline on the ripped background:
+# - misty-crossing-noon: water.yaml's sea camera at (122, 1.5, 732) m, 1.5 m over the sea, at
+#   noon: a long sight line across the water to the island's south shore and cliffs.
+# - misty-shore-jak: 3.5 m over the beach behind Jak at the misty-start continue, looking
+#   north-west past him along the shore to the sea and a rock pillar (nearest surface 7.4 m).
+# - misty-pillars-dusk: the misty-start continue camera at (49.8, 8.9, 819.9) m turned to look
+#   east across the bay at the rock pillars and bone arches, hour 18.5 (nearest 5.1 m).
+# Each look is the play look minus HDR output, as shore-wet.yaml.
+set: misty-mist
+looks:
+  A: &A  # today (this effect off)
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-ssao-preset 4)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-water 90 120000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 25 0)'
+  B1: &B1  # moderate
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-ssao-preset 4)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-water 90 120000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 26 30000)'
+    - '(pc-set-swamp 27 6000000)'
+    - '(pc-set-swamp 28 10000000)'
+    - '(pc-set-swamp 29 700000)'
+    - '(pc-set-swamp 30 400000)'
+    - '(pc-set-swamp 33 1000000)'
+    - '(pc-set-swamp 25 1000000)'
+  B2: &B2  # strong
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-ssao-preset 4)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-water 90 120000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 26 30000)'
+    - '(pc-set-swamp 27 6000000)'
+    - '(pc-set-swamp 28 10000000)'
+    - '(pc-set-swamp 29 700000)'
+    - '(pc-set-swamp 30 400000)'
+    - '(pc-set-swamp 33 2000000)'
+    - '(pc-set-swamp 25 1000000)'
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 120
+  effects: on
+  wind: on
+  particles: on
+  jak: hide
+shots:
+  - {name: misty-crossing-noon-vanilla, continue: misty-start, hour: 12, actors: live, camera: {pos: [500000.0, 6144.0, 3000000.0], rot: [0.758398, -0.000000, 0.651792, 0.011206, 0.999852, -0.013039, -0.651695, 0.017193, 0.758286]}}
+  - {name: misty-shore-jak-vanilla, continue: misty-start, hour: 12, jak: show, jak_pos: [164249.6, 15073.3, 3390668.8], actors: live, camera: {pos: [135331.8, 29491.2, 3415490.6], rot: [-0.529962, 0.000000, -0.848021, 0.037902, 0.999001, -0.023687, 0.847174, -0.044695, -0.529433]}}
+  - {name: misty-pillars-dusk-vanilla, continue: misty-start, hour: 18.5, actors: live, camera: {pos: [203980.8, 36249.6, 3358310.4], rot: [0.000000, 0.000000, -1.000000, 0.069756, 0.997564, 0.000000, 0.997564, -0.069756, 0.000000]}}
+  - {name: misty-crossing-noon-A-today, continue: misty-start, hour: 12, actors: live, camera: {pos: [500000.0, 6144.0, 3000000.0], rot: [0.758398, -0.000000, 0.651792, 0.011206, 0.999852, -0.013039, -0.651695, 0.017193, 0.758286]}, goals_after_load: *A}
+  - {name: misty-shore-jak-A-today, continue: misty-start, hour: 12, jak: show, jak_pos: [164249.6, 15073.3, 3390668.8], actors: live, camera: {pos: [135331.8, 29491.2, 3415490.6], rot: [-0.529962, 0.000000, -0.848021, 0.037902, 0.999001, -0.023687, 0.847174, -0.044695, -0.529433]}, goals_after_load: *A}
+  - {name: misty-pillars-dusk-A-today, continue: misty-start, hour: 18.5, actors: live, camera: {pos: [203980.8, 36249.6, 3358310.4], rot: [0.000000, 0.000000, -1.000000, 0.069756, 0.997564, 0.000000, 0.997564, -0.069756, 0.000000]}, goals_after_load: *A}
+  - {name: misty-crossing-noon-B1-moderate, continue: misty-start, hour: 12, actors: live, camera: {pos: [500000.0, 6144.0, 3000000.0], rot: [0.758398, -0.000000, 0.651792, 0.011206, 0.999852, -0.013039, -0.651695, 0.017193, 0.758286]}, goals_after_load: *B1}
+  - {name: misty-shore-jak-B1-moderate, continue: misty-start, hour: 12, jak: show, jak_pos: [164249.6, 15073.3, 3390668.8], actors: live, camera: {pos: [135331.8, 29491.2, 3415490.6], rot: [-0.529962, 0.000000, -0.848021, 0.037902, 0.999001, -0.023687, 0.847174, -0.044695, -0.529433]}, goals_after_load: *B1}
+  - {name: misty-pillars-dusk-B1-moderate, continue: misty-start, hour: 18.5, actors: live, camera: {pos: [203980.8, 36249.6, 3358310.4], rot: [0.000000, 0.000000, -1.000000, 0.069756, 0.997564, 0.000000, 0.997564, -0.069756, 0.000000]}, goals_after_load: *B1}
+  - {name: misty-crossing-noon-B2-strong, continue: misty-start, hour: 12, actors: live, camera: {pos: [500000.0, 6144.0, 3000000.0], rot: [0.758398, -0.000000, 0.651792, 0.011206, 0.999852, -0.013039, -0.651695, 0.017193, 0.758286]}, goals_after_load: *B2}
+  - {name: misty-shore-jak-B2-strong, continue: misty-start, hour: 12, jak: show, jak_pos: [164249.6, 15073.3, 3390668.8], actors: live, camera: {pos: [135331.8, 29491.2, 3415490.6], rot: [-0.529962, 0.000000, -0.848021, 0.037902, 0.999001, -0.023687, 0.847174, -0.044695, -0.529433]}, goals_after_load: *B2}
+  - {name: misty-pillars-dusk-B2-strong, continue: misty-start, hour: 18.5, actors: live, camera: {pos: [203980.8, 36249.6, 3358310.4], rot: [0.000000, 0.000000, -1.000000, 0.069756, 0.997564, 0.000000, 0.997564, -0.069756, 0.000000]}, goals_after_load: *B2}

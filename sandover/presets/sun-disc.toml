@@ -1,0 +1,31 @@
+# Sun disc: the sun drawn in the sky at the fitted sun model's direction, occluded by the scene,
+# dimmed and tinted by the fog of a distant object, glowing through the bloom pass
+# (sandover/kb/howto/lighting.md, "Sun disc"). Its own settings switch (sun?), off at boot, so the
+# boot state stays vanilla. The engine defaults (gfx.h sun_disc_*) are the `sun` preset, the chosen
+# default, so play needs no forms; `off` turns the disc off for an A/B.
+# Rig: the forms of `sandover-preset apply sun-disc <sun|off>`.
+#
+# [presets.<name>]
+#   size_deg  angular diameter of the disc (pc-set-sun-option 11)
+#   glare     share of the disc's colour the bloom bright pass takes, 0..1 (12)
+#   core, rim           HDR luminance in paper whites at the centre and the limb (13, 14)
+#   sdr_core, sdr_rim   the same without HDR output (15, 16)
+#   fade      per-frame step of the occlusion fade, 0..1 (17)
+# label/caption: one line each for the compare view
+
+[meta]
+schema = 1
+phase = "sun-disc"
+round = 1
+chosen = "sun"  # the chosen default; the engine defaults match it
+
+[presets.sun]
+label = "Sun disc"
+caption = "2.2 degree disc, white-hot core at the display peak, bloom halo reaching past the disc"
+size_deg = 2.2
+glare = 0.3
+core = 2000.0
+rim = 2.0
+sdr_core = 12.0
+sdr_rim = 1.0
+fade = 0.35

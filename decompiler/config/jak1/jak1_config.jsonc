@@ -40,6 +40,8 @@
   "process_tpages": true,
   // write goal imports for tpages and textures
   "write_tpage_imports": false,
+  // write decompiler_out/jak1/import/texture-levels.json: tpage/name -> levels using it
+  "write_texture_levels": false,
   // unpack game text to assets folder
   "process_game_text": true,
   // unpack game count to assets folder

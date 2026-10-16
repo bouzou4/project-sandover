@@ -1,0 +1,25 @@
+# Temporal stability of the emissive lights (critic run 2026-09-25: lava and precursor orb light
+# flickered while the camera moved). Each shot saves 16 consecutive frames (<name>-fNN.png) while
+# the camera turns (or moves) a little every frame; the sidecar carries the engine's light lists
+# per frame. `sandover-lights flicker <dir>` stitches the strip and reports per-frame light
+# movement and churn, untracked candidates vs the drawn lights. Cameras from the critic run's F9
+# snapshots 0007 (fire canyon lava) and 0009 (village orbs).
+set: light-stable
+defaults:
+  resolution: [1920, 1080]
+  msaa: 4
+  settle_frames: 90
+  effects: on
+  wind: off
+  particles: on
+  jak: hide
+shots:
+  - {name: firecanyon-lava-pan, continue: firecanyon-start, hour: 18.16,
+     camera: {pos: [-83134.766, 148018.516, -723032.25], rot: [-0.97379, 0.0, -0.22746, 0.02614, 0.99337, -0.11191, 0.22595, -0.11492, -0.96734]},
+     pan: {frames: 16, yaw_deg: 1.5}}
+  - {name: firecanyon-lava-walk, continue: firecanyon-start, hour: 18.16,
+     camera: {pos: [-83134.766, 148018.516, -723032.25], rot: [-0.97379, 0.0, -0.22746, 0.02614, 0.99337, -0.11191, 0.22595, -0.11492, -0.96734]},
+     pan: {frames: 16, move_m: [0.046, 0.0, -0.194]}}
+  - {name: village1-orbs-pan, continue: village1-hut, hour: 19.09,
+     camera: {pos: [218575.0, 24512.252, -441739.063], rot: [-0.49052, 0.0, -0.87143, 0.09934, 0.99348, -0.05594, 0.86575, -0.11401, -0.48732]},
+     pan: {frames: 16, yaw_deg: 1.5}}

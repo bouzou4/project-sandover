@@ -1,4 +1,6 @@
 #version 410 core
+SSAO_NORMAL_VERT
+INSPECT_VERT
 
 layout (location = 0) in vec3 position_in;
 layout (location = 1) in vec3 tex_coord_in;
@@ -15,11 +17,41 @@ uniform vec4 cam_trans;
 uniform mat4 pc_camera;
 uniform sampler1D tex_T10; // note, sampled in the vertex shader on purpose.
 
+PBR_BG_VERT
+
 out vec4 fragment_color;
 out vec3 tex_coord;
 out float fogginess;
 
+// actor shadows: receiver position and sun share (global estimate without sidecar data)
+uniform float shadow_share_global;
+WORLD_SHADOW_VERT
+out vec3 shadow_pos;
+out float shadow_share;
+out float shadow_receive;  // 1 - emissive: lit surfaces never get an actor shadow
+
+// unified vista fog: x on, y start (m), z density (1/m), w 1/scale height (1/m)
+uniform vec4 atmo;
+// neighbour-mode haze: x density (1/m), y start (m), z max amount
+uniform vec4 haze;
+out float haze_f;
+out float fog_tw;  // share of the fog layer that takes the neighbour tint
+
+float atmo_fog(float dist_m, float mid_y_m) {
+  float od = atmo.z * max(dist_m - atmo.y, 0.) * exp(-atmo.w * max(mid_y_m, 0.));
+  return (255. - fog_min) * (1. - exp(-od));
+}
+
+// atmo.x 2: fog is max(game, unified + haze); only the excess takes the tint and haze colour
+float atmo_combine(float van, float af, inout float hz, out float tw) {
+  float v = van / 255., te = 1. - (1. - af / 255.) * (1. - hz), a1 = max(v, af / 255.);
+  tw = te > v ? (te - v) / te : 0.;
+  hz = te > v ? max(1. - (1. - te) / max(1. - a1, 1e-4), 0.) : 0.;
+  return a1 * 255.;
+}
+
 void main() {
+  insp_vid = uint(gl_VertexID);
   // old system:
   // - load vf12
   // - itof0 vf12
@@ -43,10 +75,20 @@ void main() {
 
   // do fog!
   fogginess = 255 - clamp(-transformed.w + hvdf_offset.w, fog_min, fog_max);
+  haze_f = 0.;
+  fog_tw = 1.;
+  if (atmo.x > 0.) {
+    vec3 d = (position_in - cam_trans.xyz) * (1. / 4096.);
+    float af = atmo_fog(length(d), 0.5 * (position_in.y + cam_trans.y) * (1. / 4096.));
+    haze_f = haze.z * (1. - exp(-haze.x * max(length(d) - haze.y, 0.)));
+    fogginess = atmo.x > 1.5 ? atmo_combine(fogginess, af, haze_f, fog_tw) : af;
+  }
 
   // scissoring area adjust
   transformed.y *= SCISSOR_ADJUST * HEIGHT_SCALE;
   gl_Position = transformed;
+  ssao_cpos = gl_Position.xyw;
+  ssao_vnrm = vec4(0.0);
 
   // time of day lookup
   // start with the vertex color (only rgb, VIF filled in the 255.)
@@ -59,7 +101,14 @@ void main() {
   if (decal == 1) {
     fragment_color.xyz = vec3(1.0, 1.0, 1.0);
   }
+  pbr_cau = decal == 1 ? vec3(0.0) : 4.0 * rgba_base * pbr_caustic_env(time_of_day_index);
 
   tex_coord = tex_coord_in;
   tex_coord.xy /= 4096;
+  shadow_pos = position_in;
+  // the palette part of the colour (the base colour scales it like a texture)
+  shadow_share = (ws_on & 1) != 0 ? ws_share_est(tod_color.rgb * 2.0) : shadow_share_global;
+  shadow_share1 = shadow_share;
+  shadow_receive = 1.0;
+  pbr_vertex(position_in, cam_trans.xyz, uvec4(0u));
 }

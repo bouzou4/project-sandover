@@ -1,4 +1,6 @@
 #version 410 core
+SSAO_NORMAL_VERT
+INSPECT_VERT
 
 // merc vertex definition
 layout (location = 0) in vec3 position_in;
@@ -21,13 +23,57 @@ uniform vec4 light_ambient;
 uniform vec4 hvdf_offset;
 uniform vec4 fog_constants;
 
+// unified vista fog (vista_atmo_foreground_uniforms): x on, y start (m), z density (1/m),
+// w 1/scale height (1/m); atmo_up: world y of the camera axes
+uniform vec4 atmo;
+uniform vec3 atmo_up;
+uniform vec3 atmo_cam;
+// neighbour-mode haze: x density (1/m), y start (m), z max amount
+uniform vec4 haze;
+out float haze_f;
+
+float atmo_fog(vec3 cpos, float fog_min) {
+  float dist_m = length(cpos) * (1. / 4096.);
+  float mid_y_m = (atmo_cam.y + 0.5 * dot(atmo_up, cpos)) * (1. / 4096.);
+  float od = atmo.z * max(dist_m - atmo.y, 0.) * exp(-atmo.w * max(mid_y_m, 0.));
+  return (255. - fog_min) * (1. - exp(-od));
+}
+
+// atmo.x 2: fog is max(game, unified + haze); only the excess takes the tint and haze colour
+float atmo_combine(float van, float af, inout float hz, out float tw) {
+  float v = van / 255., te = 1. - (1. - af / 255.) * (1. - hz), a1 = max(v, af / 255.);
+  tw = te > v ? (te - v) / te : 0.;
+  hz = te > v ? max(1. - (1. - te) / max(1. - a1, 1e-4), 0.) : 0.;
+  return a1 * 255.;
+}
+
 uniform mat4 perspective_matrix;
+
+// stylized material shading (see Materials.h): camera-space position, normal and key light
+uniform int pbr_on;
+out vec3 pbr_mpos;
+out vec3 pbr_mnrm;
+out vec4 pbr_key;  // xyz toward light 0, w its share of the light
+out vec3 pbr_kcol;
+
+// fur shells (instance i is shell i + 1), off unless fur_on == 1
+uniform int fur_on;
+uniform vec4 fur_shape;  // shells, length (game units), gravity, curl
+uniform vec3 fur_down;   // camera-space gravity direction
+out float fur_h;
 
 // output
 out vec4 vtx_color;
 out vec2 vtx_st;
 
 out float fog;
+
+// actor shadows: camera-space position and normal, the sun part of the light (lights 0 and 1)
+out vec3 shadow_cpos;
+out vec3 shadow_cnrm;
+out vec4 vtx_sun;
+out float vtx_light_lum;
+out vec3 vtx_base;
 
 struct MercMatrixData {
   mat4 X;
@@ -55,7 +101,16 @@ madda.xyzw ACC, vf27, vf25
 maddz.xyzw vf26, vf28, vf25
 ```
 */
+// clip (x, y, w) image of a camera-space direction, following the transform in main()
+vec3 merc_clip_axis(vec4 t) {
+  return vec3((t.x * fog_constants.x + (hvdf_offset.x - 2048.) * t.w) / 256.,
+              -(t.y * fog_constants.x + (hvdf_offset.y - 2048.) * t.w) / 128. * SCISSOR_ADJUST *
+                  HEIGHT_SCALE,
+              t.w);
+}
+
 void main() {
+  insp_vid = uint(gl_VertexID);
   vec4 p = vec4(position_in, 1);
   vec4 vtx_pos = -bones[mats[0]].X * p * weights_in[0];
   vec3 rotated_nrm = bones[mats[0]].R * normal_in * weights_in[0];
@@ -70,9 +125,21 @@ void main() {
     rotated_nrm += bones[mats[2]].R * normal_in * weights_in[2];
   }
 
+  rotated_nrm = normalize(rotated_nrm);
+  fur_h = 0.0;
+  if (fur_on == 1) {
+    fur_h = float(gl_InstanceID + 1) / fur_shape.x;
+    vec3 t1 = normalize(abs(rotated_nrm.y) < 0.9 ? cross(rotated_nrm, vec3(0, 1, 0))
+                                                  : cross(rotated_nrm, vec3(1, 0, 0)));
+    vec3 t2 = cross(rotated_nrm, t1);
+    float a = fract(sin(dot(position_in, vec3(12.9898, 78.233, 37.719))) * 43758.5453) * 6.2832;
+    vec3 off = rotated_nrm * fur_h + fur_down * (fur_shape.z * fur_h * fur_h) +
+               (cos(a) * t1 + sin(a) * t2) * (fur_shape.w * fur_h * fur_h);
+    vtx_pos.xyz += off * fur_shape.y * vtx_pos.w;
+  }
+
   vec4 transformed = perspective_matrix * vtx_pos;
 
-  rotated_nrm = normalize(rotated_nrm);
   vec3 light_intensity = light_dir0_fade.xyz * rotated_nrm.x + light_dir1_fade_en.xyz * rotated_nrm.y + light_dir2 * rotated_nrm.z;
   light_intensity = max(light_intensity, vec3(0, 0, 0));
 
@@ -85,6 +152,13 @@ void main() {
 
   float Q = fog_constants.x / transformed[3];
   fog = 255 - clamp(-transformed.w + hvdf_offset.w, fog_constants.y, fog_constants.z);
+  haze_f = 0.;
+  if (atmo.x > 0.) {
+    float af = atmo_fog(vtx_pos.xyz / vtx_pos.w, fog_constants.y);
+    haze_f = haze.z * (1. - exp(-haze.x * max(length(vtx_pos.xyz / vtx_pos.w) * (1. / 4096.) - haze.y, 0.)));
+    float tw;
+    fog = atmo.x > 1.5 ? atmo_combine(fog, af, haze_f, tw) : af;
+  }
 
   transformed.xyz *= Q;
   transformed.xyz += hvdf_offset.xyz;
@@ -96,8 +170,40 @@ void main() {
   transformed.xyz *= transformed.w;
   transformed.y *= SCISSOR_ADJUST * HEIGHT_SCALE;
   gl_Position = transformed;
+  ssao_cpos = gl_Position.xyw;
+  ssao_vnrm = vec4(0.0);
+  if (ssao_nrm == 2) {
+    mat4 xb = bones[mats[0]].X * weights_in[0];
+    if (weights_in[1] > 0) {
+      xb += bones[mats[1]].X * weights_in[1];
+    }
+    if (weights_in[2] > 0) {
+      xb += bones[mats[2]].X * weights_in[2];
+    }
+    mat4 pxb = perspective_matrix * xb;
+    ssao_vnrm = vec4(ssao_clip_normal(merc_clip_axis(pxb[0]), merc_clip_axis(pxb[1]),
+                                      merc_clip_axis(pxb[2]), normal_in),
+                     1.0);
+  }
 
 
   vtx_color = rgba * light_color;
   vtx_st = st_in;
+  shadow_cpos = vtx_pos.xyz / vtx_pos.w;
+  shadow_cnrm = rotated_nrm;
+  vtx_sun = rgba * (light_intensity.x * light_col0 + light_intensity.y * light_col1);
+  vtx_light_lum = dot(light_color.rgb, vec3(0.299, 0.587, 0.114));
+  vtx_base = rgba.rgb;
+  pbr_mpos = vec3(0.0);
+  pbr_mnrm = vec3(0.0, 0.0, 1.0);
+  pbr_key = vec4(0.0);
+  pbr_kcol = vec3(0.0);
+  if (pbr_on != 0) {
+    pbr_mpos = vtx_pos.xyz;
+    pbr_mnrm = rotated_nrm;
+    float kl = dot(light_col0.rgb, vec3(0.299, 0.587, 0.114));
+    float al = dot(light_ambient.rgb, vec3(0.299, 0.587, 0.114));
+    pbr_key = vec4(light_dir0_fade.x, light_dir1_fade_en.x, light_dir2.x, kl / max(kl + al, 1e-3));
+    pbr_kcol = light_col0.rgb / max(1.0, max(light_col0.r, max(light_col0.g, light_col0.b)));
+  }
 }

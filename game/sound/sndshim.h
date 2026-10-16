@@ -90,3 +90,11 @@ s32 snd_GetSoundUserData(snd::BankHandle block_handle,
 void snd_SetSoundReg(s32 sound_handle, s32 which, u8 val);
 s8 snd_GetSoundGroup(s32 sound_handle);
 void snd_RegisterPluginHandler(snd::PluginHandler handler);
+
+// Spatial audio (OpenAL backend). All are no-ops while the mode is off.
+void snd_SetSpatialMode(s32 mode);
+s32 snd_GetSpatialMode();
+void snd_SpatialSetNextPosition(s32 x, s32 y, s32 z);
+void snd_SpatialSetPosition(s32 sound_handle, s32 x, s32 y, s32 z);
+void snd_SpatialSetListener(s32 x, s32 y, s32 z, s32 yaw_deg, bool mirror);
+void snd_SpatialFlush();

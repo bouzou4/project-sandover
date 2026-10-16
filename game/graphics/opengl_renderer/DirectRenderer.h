@@ -63,6 +63,17 @@ class DirectRenderer : public BucketRenderer {
   }
 
   void set_mipmap(bool en) { m_debug_state.disable_mipmap = !en; }
+  // apply per-eye parallax from GS depth (for world geometry sent as GS primitives)
+  void set_stereo_parallax(bool en) { m_stereo_parallax = en; }
+  // XR head tracking: this renderer's GS geometry sits at infinity (sky), rotate it only
+  void set_xr_at_infinity(bool en) { m_xr_at_infinity = en; }
+  /// Never write depth, whatever the GS state asks (the Jak 1 ocean-far band under water shading).
+  void set_no_depth_writes(bool en) {
+    if (en != m_no_depth_writes) {
+      m_no_depth_writes = en;
+      m_test_state_needs_gl_update = true;
+    }
+  }
   void handle_prim(u64 val, SharedRenderState* render_state, ScopedProfilerNode& prof);
   void handle_ad(const u8* data, SharedRenderState* render_state, ScopedProfilerNode& prof);
   void handle_st_packed(const u8* data);
@@ -112,10 +123,14 @@ class DirectRenderer : public BucketRenderer {
                            bool advance);
 
   void update_gl_prim(SharedRenderState* render_state);
+  void set_saturate(SharedRenderState* render_state, ShaderId shader);
   void update_gl_blend();
   void update_gl_test();
   void update_gl_texture(SharedRenderState* render_state, int unit);
   bool m_offscreen_mode = false;
+  bool m_stereo_parallax = false;
+  bool m_xr_at_infinity = false;
+  bool m_no_depth_writes = false;
 
   struct TestState {
     void from_register(GsTest reg);

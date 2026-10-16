@@ -1,0 +1,28 @@
+# Standard water shots (ocean shading, from revision 2 on). Low cameras just above the sea:
+# (1) the beach-start shoreline in the afternoon, where the foam meets the sand;
+# (2) at sea on the fisherman's boat route to misty island at dusk, looking at misty. The boat
+#     ride itself is a spooled cutscene with its own animated camera (fishermans-boat.gc,
+#     fishermans-boat-ride-to-misty, started when the player boards after the fishing task);
+#     the rig has no hook for it, so this is a fixed camera on the route instead;
+# (3) the village dock at dusk with the fisherman's boat in frame.
+# (4) below: the mid/far seam check; (5) below: a high camera over the sea.
+# Run once per candidate: water off, then each preset (kb/howto/lighting.md section 7).
+set: water
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 300
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - {name: beach-shore-afternoon, continue: beach-start, hour: 15, camera: {pos: [-716800.0, 11468.8, -184320.0], rot: [-0.707107, 0.0, -0.707107, 0.019992, 0.9996, -0.019992, 0.706824, -0.028273, -0.706824]}}
+  - {name: misty-crossing-dusk, continue: misty-start, hour: 18, camera: {pos: [500000.0, 6144.0, 3000000.0], rot: [0.758398, -0.0, 0.651792, 0.011206, 0.999852, -0.013039, -0.651695, 0.017193, 0.758286]}}
+  - {name: village-dock-dusk, continue: village1-hut, hour: 18, camera: {pos: [-10000.0, 4000.0, 470000.0], rot: [-0.848643, 0.0, 0.528966, -0.007893, 0.999889, -0.012663, -0.528907, -0.014922, -0.848549]}}
+  # (4) the seam check: 12 m over open sea on the misty route at dusk, looking into the sun
+  #     over kilometres of water, where the waves used to stop in a flat band
+  - {name: open-sea-seam-dusk, continue: misty-start, hour: 18, camera: {pos: [600000.0, 49152.0, 2000000.0], rot: [-0.848559, 0.0, 0.529101, -0.018476, 0.99939, -0.029631, -0.528779, -0.034919, -0.848041]}}
+  # (5) a high camera: the jungle temple top over the sea at dusk (as landmarks2 temple-top-dusk),
+  #     156 m up, where a ray that disagrees with the projection lifts the water over the land
+  - {name: temple-top-dusk, continue: jungle-start, hour: 18, camera: {pos: [1483980.8, 638976.0, -987545.6], rot: [0.802639, 0.0, 0.596466, -0.052259, 0.996154, 0.070323, -0.594172, -0.087615, 0.799552]}}

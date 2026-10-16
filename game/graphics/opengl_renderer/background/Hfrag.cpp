@@ -2,6 +2,8 @@
 
 #include "common/log/log.h"
 
+#include "game/graphics/opengl_renderer/GlQueries.h"
+
 #include "third-party/imgui/imgui.h"
 
 Hfrag::Hfrag(const std::string& name, int my_id) : BucketRenderer(name, my_id) {
@@ -181,6 +183,7 @@ Hfrag::HfragLevel* Hfrag::get_hfrag_level(const std::string& name,
 }
 
 void Hfrag::unload_hfrag_level(Hfrag::HfragLevel* lev) {
+  glq::invalidate_state();
   ASSERT(lev->in_use);
   // delete OpenGL resources we created.
   glBindTexture(GL_TEXTURE_1D, lev->time_of_day_texture);

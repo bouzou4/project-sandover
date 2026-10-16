@@ -1,0 +1,54 @@
+# The lava rules (glow, field light). Engine side: LavaField.h/.cpp, pbr_common_frag.glsl
+# (lava_glow_mix, lava_under), pbr_bg_frag.glsl (lava_light_add), merc2.frag (characters); GOAL
+# main.gc pc-lava-light-update sends each level's lava light (mood light-group 0 dir2 while it
+# points down). Both ride on the class shading (PBR on), so the boot state stays vanilla. The
+# engine defaults (gfx.h lava_*) are the `strong` preset, the chosen default (2026-10-02); `off` turns
+# both off.
+# Rig: the forms of `sandover-preset apply lava <strong|off>`; captures add
+# (pc-set-lava 14 1000000) to hold the lava clock at its mean. The glow acts only on textures in
+# the `lava` class (materials.csv; candidate: $SANDOVER_DATA/materials/candidates/lava-*).
+#
+# [presets.<name>.glow]   texels of the lava class: molten glows, crust shades as stone
+#   gain     HDR headroom of a fully molten texel: colour x (1 + gain), times the lava clock;
+#            molten bodies are held under the toon tonemap's per-channel clip (kWhiteCap 1.15)
+#   mask     emissive mask of a fully molten texel (bloom, AO exclusion; never a tile light)
+#   key_lo   blackbody chroma key R - max(0.6 G, B) where a texel starts to be molten
+#   key_hi   chroma key where a texel is fully molten
+#   core     yellow-white added to the brightest molten texels (R + G 0.95 .. 1.3): their
+#            centres pass the cap and the tonemap clips them yellow-hot, by design
+#   crust    crust darkening, 0..1
+# [presets.<name>.under]  the lava as an area light below: the background's lava-facing and
+#                         downward sides and the characters take the game's lava light
+#   gain     times the game's lava light (dir2, the characters' vanilla under-light); the added
+#            light is fitted under the white cap, so lit surfaces stay orange
+#            (captures: (pc-set-lava 14 1000000) holds the lava clock at its mean, fades kept)
+#   reach_m  height above the lava where the light has faded out (S-shaped fade from a tenth of
+#            it, so the top shows no edge)
+#   refl     strength in downward reflections (metal, smooth surfaces)
+#   bake     how much of the level's baked lava share is taken off the diffuse light, 0..1
+#   char     the light on characters, times the background's, less vanilla's own dir2
+# caption    one line for the screening grid: what visibly differs, never parameters
+
+[meta]
+schema = 1
+phase = "lava"
+round = 4
+
+[presets.strong]
+label = "Lava light, strong"
+caption = "yellow-hot veins in orange lava; walls, undersides and Jak strongly lit orange from below, fading out a few storeys up"
+
+[presets.strong.glow]
+gain = 2.5
+mask = 1.0
+key_lo = 0.3
+key_hi = 0.55
+core = 1.6
+crust = 0.3
+
+[presets.strong.under]
+gain = 4.5
+reach_m = 22.0
+refl = 1.5
+bake = 0.25
+char = 0.5

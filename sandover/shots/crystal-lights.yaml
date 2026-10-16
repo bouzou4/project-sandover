@@ -1,0 +1,37 @@
+# Light sources that looked like lights but lit nothing (issue #267, kb/findings/2026-09-27-light-inventory.md).
+# Coverage: one shot per emitter class that the game draws as a light (prop_lights.json `vanilla`), with a
+# crate or chest by the light to show actor shadows: ice crystal, glowing cave mushroom, dark eco crystal.
+# No village3 blue mushroom shot (pale in vanilla, no light). No blue cave crystal shot: none of
+# maincave's 24 has a dry, flat, clear spot within 3 m. No enemy shot: no enemy rests within 3 m of a
+# glowing emitter in the entity data (nearest: snow bunnies 4.1-6 m, they hop; mother-spider-1 4.7 m
+# from a cave mushroom, it drops on its thread; gnawers live in pillars); enemies are merc actors and
+# cast through the same path as the chests. Cameras frozen from the probe rounds or planned with the
+# rig projection (80 deg horizontal). The HUD is disabled after each load.
+# Dark eco crystal flash: the stage hook sends dark-crystal-3 the game's own 'attack (as a hit
+# does); the countdown's first flash lights the model (color-mult 1, emissive 1) for 0.1 s (6
+# frames) and the rig pauses 4 frames after the hook, inside it. One instance per hooked shot (the
+# countdown ends in the crystal exploding). maincave-darkcrystal-side-idle is the control: no hook,
+# B must equal A. Jak stands outside the crystal's mesh (a touch also starts the countdown). The
+# dark crystal shots run with actors: live (the crystal carries the enemy mask the freeze holds).
+set: crystal-lights
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 90
+  camera: from_continue
+  effects: on
+  wind: off
+  particles: on
+  jak: show
+  goals_after_load: ["(disable-hud 0)"]
+shots:
+  # snow:prop:snow-crystals:65, crate-980 nearby; Jak 2.7 m from the light; 300 settle frames: the crate was still falling at 90
+  - {name: snow-crystal-crate, continue: snow-by-ice-lake, hour: 12, settle_frames: 300, jak_pos: [3307596.2, 1030909.6, -14203750.7], camera: {pos: [3325070.7, 1044071.0, -14184731.6], rot: [-0.7518, 0.0000, 0.6594, -0.2449, 0.9285, -0.2792, -0.6122, -0.3714, -0.6980]}}
+  # maincave:prop:cv-tallshroom-decal-01:121, crate-3180 nearby; Jak 2.0 m from the light
+  - {name: maincave-tallshroom-crate, continue: maincave-start, hour: 12, settle_frames: 180, jak_pos: [4629258.5, 119448.3, -13061476.2], camera: {pos: [4643881.0, 132753.6, -13084153.9], rot: [0.7771, -0.0000, 0.6293, -0.2337, 0.9285, 0.2886, -0.5843, -0.3714, 0.7216]}}
+  # maincave:dark-crystal-3 in its first countdown flash (attack hook); Jak 3.0 m from it, chest crate-3015 2.6 m from Jak; camera 6 m away, 84 deg off the crystal-Jak axis, so both shadows lie across the frame on the crystal-lit floor
+  - {name: maincave-darkcrystal-side, continue: maincave-to-robocave, hour: 12, actors: live, jak_pos: [4711550.7, 44626.2, -12244035.3], camera: {pos: [4730403.2, 59850.3, -12238733.0], rot: [-0.1736, 0.0000, 0.9848, -0.4404, 0.8944, -0.0777, -0.8808, -0.4472, -0.1553]}, goals_after_load: ["(disable-hud 0)", "(set! *rig-stage-hook* (lambda () (send-event (process-by-ename \"dark-crystal-3\") 'attack) (none)))"]}
+  # control: the same camera, no hook: the crystal idle (dark) must give no light, B = A
+  - {name: maincave-darkcrystal-side-idle, continue: maincave-to-robocave, hour: 12, actors: live, jak_pos: [4711550.7, 44626.2, -12244035.3], camera: {pos: [4730403.2, 59850.3, -12238733.0], rot: [-0.1736, 0.0000, 0.9848, -0.4404, 0.8944, -0.0777, -0.8808, -0.4472, -0.1553]}}
+  # dark-crystal-3 in its first countdown flash (attack hook): 0021's camera and Jak (5.6 m from the crystal: closer, Jak touched it and it exploded during the settle); particles off
+  - {name: maincave-dark-crystal-3-flash, continue: maincave-to-robocave, hour: 12, actors: live, particles: off, jak_pos: [4714544.0, 45075.6, -12254603.0], camera: {pos: [4769205.5, 80964.4, -12304959.0], rot: [0.6401, -0.0000, 0.7683, -0.2014, 0.9650, 0.1678, -0.7414, -0.2621, 0.6177]}, goals_after_load: ["(disable-hud 0)", "(set! *rig-stage-hook* (lambda () (send-event (process-by-ename \"dark-crystal-3\") 'attack) (none)))"]}

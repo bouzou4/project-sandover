@@ -1,0 +1,22 @@
+# parallax close-ups (issue #206): cameras placed from the ripped background geometry and
+# checked by ray casts (the centre ray lands on the target texture at the stated distance, no
+# geometry within 0.4 m of the camera). Run with the class shading on (`pc-set-pbr-param 0 1`),
+# once with `pc-set-pbr-param 22 0` (A, off) and once with 22 1 (B, on).
+# - village1 sage's stone wall (vil1-sages-stonewall-01): 2 m, 40 deg off the normal, eye height.
+# - village1 carved stone (vil1-sculptstone): 1.8 m, 35 deg off the normal, 0.5 m up, looking up.
+#   Stands in for the oracle, whose base is precursor metal and beach rock (not masonry).
+# - jungle stonehenge pillar top (cmn-precursor-stonehengetop, `parallax = yes`): 1.5 m above
+#   the paving, 30 deg grazing. The temple top itself is precursor metal plating.
+set: parallax-close
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 60
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - {name: village1-stonewall-close, continue: village1-hut, hour: 12, camera: {pos: [-430498.2, 44583.9, 324637.4], rot: [-0.918293, 0.0, 0.395902, 0.018426, 0.998916, 0.042738, -0.395473, 0.046541, -0.917298]}}
+  - {name: village1-sculptstone-low, continue: village1-hut, hour: 12, jak: hide, camera: {pos: [-535742.1, 48744.2, -73807.3], rot: [-0.586854, 0.0, 0.809693, 0.186379, 0.973147, 0.135085, -0.78795, 0.230184, -0.571095]}}
+  - {name: jungle-stonehenge-floor-graze, continue: jungle-start, hour: 12, camera: {pos: [1475994.4, 215486.5, -1118074.9], rot: [0.0, 0.0, 1.0, -0.5, 0.866025, 0.0, -0.866025, -0.5, 0.0]}}

@@ -1,0 +1,50 @@
+# Sun disc: the sun in the sky at the fitted sun model's direction (sandover/kb/howto/lighting.md,
+# "Sun disc"). pc-set-sun-option 10 (on/off) and 11-19; rides on the vista switch.
+# Arms (run A and B with --play-look --wait-vista and the variant as --goal-after-load; add
+# (pc-set-sun-option 18 1000000) to B so the EXR holds the HDR values):
+#   C original: no forms, no play look (vanilla)
+#   A: the play look with the disc off
+#   B: the play look (presets/sun-disc.toml sun, the engine default)
+# Cameras are those of existing frames (paths per shot) at a new hour; the sun position comes
+# from the gk log line SUN-DISC (px from the top left).
+schema: 1
+set: sun-disc
+variants:
+  A: "(pc-set-sun-option 10 0)"
+  B: "(pc-set-sun-option 19 1) (pc-set-sun-option 11 2200000) (pc-set-sun-option 12 300000) (pc-set-sun-option 13 2000000000) (pc-set-sun-option 14 2000000) (pc-set-sun-option 15 12000000) (pc-set-sun-option 16 1000000) (pc-set-sun-option 17 350000) (pc-set-sun-option 10 1000000)"
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  effects: on
+  wind: off
+  particles: off
+  jak: hide
+  actors: freeze
+shots:
+  # render-scale-001/A/aa-beach-windmill (beach over the village and the sea, noon):
+  # at 7.0 h the sun is 11 degrees up over the sea, just above the island's lookout post
+  - name: beach-windmill-sunrise
+    continue: beach-start
+    hour: 7.0
+    settle_frames: 300
+    camera:
+      pos: [-491520.0, 245760.0, -245760.0]
+      rot: [0.999804, 0.0, -0.019798, 0.000783, 0.999217, 0.039557, 0.019783, -0.039565, 0.999021]
+  # class-response-003/A/village1-palm-whole (16.5 h): at 17.75 h the low sun
+  # (10 degrees up) stands at the edge of the top frond, partly covered
+  - name: village1-palm-sunset
+    continue: village1-hut
+    hour: 17.75
+    settle_frames: 300
+    camera:
+      pos: [-780740.125, 214715.09375, 880475.0]
+      rot: [-0.991205, 0.0, 0.132333, -0.012636, 0.995431, -0.094643, -0.131728, -0.095483, -0.986677]
+  # vanilla-001/raw/0001-A (village1, open sky toward the sea, 13.49 h): at noon the
+  # sun is about 71 degrees up, above the top of the frame: no disc expected, B must equal A
+  - name: village1-sky-noon
+    continue: village1-hut
+    hour: 12.0
+    settle_frames: 120
+    camera:
+      pos: [-417669.9375, 88881.171875, 651142.75]
+      rot: [-0.994129, 0.0, 0.108206, -0.016, 0.989008, -0.146994, -0.107017, -0.147862, -0.983201]

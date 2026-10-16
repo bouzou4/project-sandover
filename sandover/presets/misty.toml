@@ -1,0 +1,36 @@
+# Misty Island sea mist: the swamp mist pass with Misty's row. An exponential height layer
+# based at the sea (0 m, scale height 6 m) from 10 m out: it hangs over the water and the shore,
+# thickens with distance and softens the bases of cliffs, rocks and the silo while their tops
+# stay clearer. Colour is the live mood fog lifted toward white, with the swamp's forward glow
+# toward the sun. It draws after the near ocean, stops each ray at the sea plane and mists the
+# sky only in a band a few degrees over the horizon. Only adds density, so fog stays at least the
+# original's. `strength` scales the density and the cap's optical depth. The engine defaults (gfx.h misty_mist*) are
+# `moderate`; `off` turns it off for an A/B. Needs SSAO on (it reads SSAO's depth copy), so the
+# boot state stays vanilla. Engine side: Swamp.cpp (kMistRows), swamp_mist.frag.
+#
+# [presets.<name>.mist]
+#   density   at the sea surface (1/m), at strength 1
+#   height_m  scale height (m)
+#   start_m   no mist nearer than this (m)
+#   max       largest mist opacity at strength 1, 0..1 (1 - (1 - max)^strength)
+#   bright    colour: the fog colour lifted toward white by this much, 0..1
+#   strength  scales density and cap
+# caption     one line for the screening grid: what visibly differs, never parameters
+
+[meta]
+schema = 1
+phase = "misty"
+round = 2
+chosen = "moderate"  # the chosen default; the engine defaults match it
+
+[presets.moderate]
+label = "Sea mist, moderate"
+caption = "a pale low layer over the sea and shore; cliff feet soften, tops stay clear"
+
+[presets.moderate.mist]
+density = 0.03
+height_m = 6.0
+start_m = 10.0
+max = 0.7
+bright = 0.4
+strength = 1.0

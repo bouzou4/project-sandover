@@ -1,0 +1,17 @@
+# fur shell spike (issue #170): Daxter close on Jak's shoulder, a babak (lurker) at
+# misty-start, and the village1-hut continue camera as the wide shot. Cameras are look-at
+# orbits around actor positions printed by a stage hook. Run once per fur preset with the
+# real look on (SSAO deep, bloom, actor shadows); see kb/findings/2026-09-24-fur-spike.md.
+set: fur
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 120
+  effects: off
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - { name: daxter-close, continue: village1-hut, hour: 12, camera: {"pos": [-638860.06, 151696.73, 763846.62], "rot": [1.0, 0.0, -0.0, 0.0, 0.99123, 0.13216, 0.0, -0.13216, 0.99123]} }
+  - { name: lurker-babak, continue: misty-start, hour: 12, camera: {"pos": [-19173.19, 70854.9, 3565676.25], "rot": [0.0, -0.0, 1.0, -0.13216, 0.99123, 0.0, -0.99123, -0.13216, 0.0]} }
+  - { name: village1-wide, continue: village1-hut, hour: 12, camera: from_continue }

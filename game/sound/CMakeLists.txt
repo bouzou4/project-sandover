@@ -10,6 +10,7 @@ set(SOUND_SOURCES
   989snd/plugin.cpp
   989snd/loader.cpp
   989snd/vagvoice.cpp
+  989snd/spatial.cpp
   989snd/lfo.cpp
   989snd/util.cpp
   common/synth.cpp
@@ -22,6 +23,15 @@ set(SOUND_SOURCES
 add_library(sound STATIC ${SOUND_SOURCES})
 set_target_properties(sound PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(sound PRIVATE fmt cubeb common)
+if(WIN32)
+    target_link_libraries(sound PUBLIC OpenAL ole32)
+    target_compile_definitions(sound PRIVATE SANDOVER_SPATIAL_AUDIO)
+
+    # capture harness: known source at fixed positions, rendered per mode to WAV
+    add_executable(spatial_probe 989snd/spatial_probe.cpp)
+    target_link_libraries(spatial_probe PRIVATE sound common fmt OpenAL ole32)
+    target_compile_definitions(spatial_probe PRIVATE SANDOVER_SPATIAL_AUDIO)
+endif()
 
 add_executable(sndplay 989snd/sndplay.cpp)
 if(WIN32)

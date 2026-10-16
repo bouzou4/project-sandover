@@ -1,0 +1,120 @@
+# Swamp confirmation round (#261): B water + C wet + D mist were chosen together. Three swamp water cameras, vanilla first, then A current master look (swamp
+# off) and B the combined swamp look, one instance (--parallel 1). play-0017 is the maintainer's frame
+# (runs/20260926-1011-play/0017, swamp 14.82 h); dock1 is the swamp-dock1 continue camera; pond-se
+# is 3 m over the water at (543, -2000) m looking south-west over water toward the trees (picked
+# offline from swamp-background.glb: open water within 40 m, nothing within 8 m in front).
+# Each look is the 0017 session's toggles (the play look, minus HDR output) followed by
+# `sandover-preset apply swamp <off|swamp>`. Toggles persist within an instance, so the vanilla
+# shots (no forms; the rig boots all off, and the swamp look needs PBR and SSAO) come first. dock1
+# leads each look so the first vista load's long hold never lands on the play-0017 shot, where Jak
+# is placed. Particles on: the rain is particles.
+set: swamp-directions
+looks:
+  A: &A  # off
+    - '(pc-set-ssao-preset 4)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 0 0)'
+    - '(pc-set-swamp 5 0)'
+    - '(pc-set-swamp 9 0)'
+  B: &B  # swamp (water + wet + mist)
+    - '(pc-set-ssao-preset 4)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 1 500000)'
+    - '(pc-set-swamp 2 1000000)'
+    - '(pc-set-swamp 3 1000000)'
+    - '(pc-set-swamp 4 2000000)'
+    - '(pc-set-swamp 0 1000000)'
+    - '(pc-set-swamp 6 500000)'
+    - '(pc-set-swamp 7 1000000)'
+    - '(pc-set-swamp 8 500000)'
+    - '(pc-set-swamp 5 1000000)'
+    - '(pc-set-swamp 10 50000)'
+    - '(pc-set-swamp 11 2500000)'
+    - '(pc-set-swamp 12 3000000)'
+    - '(pc-set-swamp 13 800000)'
+    - '(pc-set-swamp 14 1000000)'
+    - '(pc-set-swamp 15 350000)'
+    - '(pc-set-swamp 9 1000000)'
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 120
+  hour: 14.819
+  effects: on
+  wind: on
+  particles: on
+  jak: show
+shots:
+  - {name: dock1-vanilla, continue: swamp-dock1, camera: from_continue}
+  - {name: play-0017-vanilla, continue: swamp-start, jak_pos: [1696286.875, -2047.967, -7691331.500],
+     camera: {pos: [1676599.500, 19045.945, -7644066.000], rot: [-0.924486, -0.000000, -0.381216, 0.046114, 0.992657, -0.111832, 0.378417, -0.120966, -0.917697]}}
+  - {name: pond-se-vanilla, continue: swamp-start,
+     camera: {pos: [2224296.2, 12288.0, -8193260.0], rot: [-0.707107, 0.0, -0.707107, 0.147016, 0.978148, -0.147016, 0.691655, -0.207912, -0.691655]}}
+  - {name: dock1-A-off, continue: swamp-dock1, camera: from_continue,
+     goals_after_load: *A, wait_vista: true}
+  - {name: play-0017-A-off, continue: swamp-start, jak_pos: [1696286.875, -2047.967, -7691331.500],
+     camera: {pos: [1676599.500, 19045.945, -7644066.000], rot: [-0.924486, -0.000000, -0.381216, 0.046114, 0.992657, -0.111832, 0.378417, -0.120966, -0.917697]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: pond-se-A-off, continue: swamp-start,
+     camera: {pos: [2224296.2, 12288.0, -8193260.0], rot: [-0.707107, 0.0, -0.707107, 0.147016, 0.978148, -0.147016, 0.691655, -0.207912, -0.691655]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: dock1-B-swamp, continue: swamp-dock1, camera: from_continue,
+     goals_after_load: *B, wait_vista: true}
+  - {name: play-0017-B-swamp, continue: swamp-start, jak_pos: [1696286.875, -2047.967, -7691331.500],
+     camera: {pos: [1676599.500, 19045.945, -7644066.000], rot: [-0.924486, -0.000000, -0.381216, 0.046114, 0.992657, -0.111832, 0.378417, -0.120966, -0.917697]},
+     goals_after_load: *B, wait_vista: true}
+  - {name: pond-se-B-swamp, continue: swamp-start,
+     camera: {pos: [2224296.2, 12288.0, -8193260.0], rot: [-0.707107, 0.0, -0.707107, 0.147016, 0.978148, -0.147016, 0.691655, -0.207912, -0.691655]},
+     goals_after_load: *B, wait_vista: true}

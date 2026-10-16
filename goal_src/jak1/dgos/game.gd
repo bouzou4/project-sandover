@@ -243,6 +243,7 @@
   "ambient.o"
   "assert.o"
   "generic-obs.o"
+  "vista-landmarks.o" ;; added
   "target-util.o"
   "target-part.o"
   "collide-reaction-target.o"
@@ -261,6 +262,7 @@
   "prototype.o"
   "main-collide.o"
   "video.o"
+  "bug-report.o" ;; added
   "main.o"
   "collide-cache.o"
   "relocate.o"

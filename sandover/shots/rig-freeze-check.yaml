@@ -1,0 +1,17 @@
+# Rig actor freeze check: the canopy-shade dense-path spot, 5 m from jungle logtrap-4 (the
+# swinging spiked log), vanilla look. Run it twice, settle 60 and 120, and compare the runs:
+# the freeze shot must match itself (log held at settle frame 20 in both), the live one must not.
+set: rig-freeze-check
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 60
+  effects: off
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - {name: dense-path-freeze, continue: jungle-start, hour: 12, actors: freeze, jak_pos: [1611305.4, 99519.0, -1401416.1],
+     camera: {pos: [1648020.2, 114004.4, -1398102.2], rot: [-0.089897, 0.0, 0.995951, 0.034758, 0.999391, 0.003137, -0.995344, 0.034899, -0.089842]}}
+  - {name: dense-path-live, continue: jungle-start, hour: 12, actors: live, jak_pos: [1611305.4, 99519.0, -1401416.1],
+     camera: {pos: [1648020.2, 114004.4, -1398102.2], rot: [-0.089897, 0.0, 0.995951, 0.034758, 0.999391, 0.003137, -0.995344, 0.034899, -0.089842]}}

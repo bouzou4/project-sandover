@@ -1,0 +1,26 @@
+# Water sun glint: the sun reflected in the ocean and in inland water as a GGX lobe on the wave
+# normals (water_sun_glint.glsl), Fresnel-weighted, in linear light, hazed by the fog like the
+# water under it, shadowed by the world sun map, none once the sun model has no day sun. The
+# settings page's glint row (`glint?`) switches it; off at boot. The engine defaults
+# (gfx.h water_sun_glint*) are `glint`.
+# Rig: the forms of `sandover-preset apply water-glint <glint|off>` (pc-set-water 94-97).
+#
+# [presets.<name>]
+#   strength  sun radiance scale of the glint (pc-set-water 95)
+#   rough     GGX alpha of the surface between the wave normals (96); the waves the renderer
+#             fades out with distance add their slope variance on top
+#   peak      soft cap of the glint's linear luminance, 1 = SDR white (97)
+# label/caption: one line each for the compare view
+
+[meta]
+schema = 1
+phase = "water-glint"
+round = 4
+
+[presets.glint]
+label = "Sun glint"
+caption = "the sun's reflection sparkles on the waves, shaded where land blocks the sun"
+strength = 6.0
+rough = 0.08
+peak = 40.0
+

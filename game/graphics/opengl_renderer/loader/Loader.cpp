@@ -7,12 +7,16 @@
 #include "common/util/Timer.h"
 #include "common/util/compress.h"
 
+#include "game/graphics/opengl_renderer/GlQueries.h"
+#include "game/graphics/opengl_renderer/LavaField.h"
+#include "game/graphics/opengl_renderer/LevelHeightfield.h"
+#include "game/graphics/opengl_renderer/Materials.h"
 #include "game/graphics/opengl_renderer/loader/LoaderStages.h"
 
 #include "third-party/imgui/imgui.h"
 
 Loader::Loader(const fs::path& base_path, int max_levels)
-    : m_base_path(base_path), m_max_levels(max_levels) {
+    : m_base_path(base_path), m_max_levels(max_levels), m_default_max_levels(max_levels) {
   m_loader_thread = std::thread(&Loader::loader_thread, this);
   m_loader_stages = make_loader_stages();
 }
@@ -33,6 +37,16 @@ Loader::~Loader() {
  *
  * This is safe to call from the graphics thread
  */
+std::string Loader::name_of(const LevelData* level) {
+  std::unique_lock<std::mutex> lk(m_loader_mutex);
+  for (const auto& [name, data] : m_loaded_tfrag3_levels) {
+    if (data.get() == level) {
+      return name;
+    }
+  }
+  return "";
+}
+
 const LevelData* Loader::get_tfrag3_level(const std::string& level_name) {
   std::unique_lock<std::mutex> lk(m_loader_mutex);
   const auto& existing = m_loaded_tfrag3_levels.find(level_name);
@@ -288,11 +302,39 @@ void Loader::loader_thread() {
           "------------> Load from file: {:.3f}s, import {:.3f}s, decomp {:.3f}s unpack {:.3f}s\n",
           disk_load_time, import_time, decomp_time, unpack_timer.getSeconds());
 
+      std::unique_ptr<UnbakeSidecar> unbake;
+      if (m_load_unbake) {
+        unbake = unbake_load(unbake_path(m_base_path, lev), *result, lev);
+      }
+      std::vector<u8> tex_class;
+      std::shared_ptr<PbrLevelMaps> pbr_maps;
+      std::unique_ptr<CanopyMap> canopy;
+      std::unique_ptr<CanopyVolMap> canopy_vol;
+      std::shared_ptr<lava_field::Prepared> lava;
+      if (m_load_unbake) {
+        tex_class = pbr_classify_level(*result, lev);
+        pbr_maps = pbr_maps_create(*result, lev);
+        canopy = canopy_load(lev);
+        canopy_vol = canopy_vol_load(lev);
+        lava = lava_field::prepare(*result, lev);
+      }
+      std::unique_ptr<LevelHeightfield> heightfield;
+      if (m_load_unbake && heightfield_level_has_sky(lev)) {
+        heightfield = heightfield_build(result->collision, lev);
+      }
+
       // grab the lock again
       lk.lock();
       // move this level to "initializing" state.
       m_initializing_tfrag3_levels[lev] = std::make_unique<LevelData>();  // reset load state
       m_initializing_tfrag3_levels[lev]->level = std::move(result);
+      m_initializing_tfrag3_levels[lev]->unbake = std::move(unbake);
+      m_initializing_tfrag3_levels[lev]->tex_class = std::move(tex_class);
+      m_initializing_tfrag3_levels[lev]->pbr_maps = std::move(pbr_maps);
+      m_initializing_tfrag3_levels[lev]->canopy = std::move(canopy);
+      m_initializing_tfrag3_levels[lev]->canopy_vol = std::move(canopy_vol);
+      m_initializing_tfrag3_levels[lev]->lava = std::move(lava);
+      m_initializing_tfrag3_levels[lev]->heightfield = std::move(heightfield);
       m_level_to_load = "";
       m_file_load_done_cv.notify_all();
     }
@@ -327,6 +369,13 @@ const tfrag3::Level& Loader::load_common(TexturePool& tex_pool, const std::strin
     done = mls.run(tim, input);
   }
   return *m_common_level.level;
+}
+
+void Loader::classify_common() {
+  if (m_common_level.level) {
+    m_common_level.tex_class = pbr_classify_level(*m_common_level.level, "GAME");
+    m_common_level.pbr_maps = pbr_maps_create(*m_common_level.level, "GAME");
+  }
 }
 
 bool Loader::upload_textures(Timer& timer, LevelData& data, TexturePool& texture_pool) {
@@ -573,9 +622,16 @@ void Loader::update(TexturePool& texture_pool) {
             m_garbage_buffers.push_back(tfrag_buff);
           }
         }
+        for (auto buf : lev->tfrag_index_data) {
+          m_garbage_buffers.push_back(buf);
+        }
 
         m_garbage_buffers.push_back(lev->hfrag_indices);
         m_garbage_buffers.push_back(lev->hfrag_indices);
+        if (lev->unbake) {
+          unbake_release(*lev->unbake, m_garbage_buffers, m_garbage_textures);
+        }
+        pbr_maps_release(lev->pbr_maps.get(), m_garbage_textures);
 
         m_garbage_buffers.push_back(lev->collide_vertices);
         m_garbage_buffers.push_back(lev->merc_vertices);
@@ -606,6 +662,7 @@ void Loader::update(TexturePool& texture_pool) {
     }
 
     if (!did_gpu_stuff && !m_garbage_textures.empty()) {
+      glq::invalidate_state();
       for (int i = 0; i < 20 && !m_garbage_textures.empty(); i++) {
         glDeleteTextures(1, &m_garbage_textures.back());
         m_garbage_textures.pop_back();
@@ -631,6 +688,7 @@ std::optional<MercRef> Loader::get_merc_model(const char* model_name) {
 
 void Loader::unload_level_data(const std::string& name, LevelData& lev, TexturePool& tex_pool) {
   fmt::print("force reload: unloading {}\n", name);
+  glq::invalidate_state();
   {
     std::unique_lock lk(tex_pool.mutex());
     for (size_t i = 0; i < lev.level->textures.size(); i++) {
@@ -657,8 +715,22 @@ void Loader::unload_level_data(const std::string& name, LevelData& lev, TextureP
       glDeleteBuffers(1, &buf);
     }
   }
+  for (auto& buf : lev.tfrag_index_data) {
+    glDeleteBuffers(1, &buf);
+  }
   for (auto& buf : lev.shrub_vertex_data) {
     glDeleteBuffers(1, &buf);
+  }
+  if (lev.unbake) {
+    std::vector<GLuint> bufs, texs;
+    unbake_release(*lev.unbake, bufs, texs);
+    glDeleteBuffers(bufs.size(), bufs.data());
+    glDeleteTextures(texs.size(), texs.data());
+  }
+  {
+    std::vector<GLuint> texs;
+    pbr_maps_release(lev.pbr_maps.get(), texs);
+    glDeleteTextures(texs.size(), texs.data());
   }
   glDeleteBuffers(1, &lev.hfrag_indices);
   glDeleteBuffers(1, &lev.hfrag_vertices);
@@ -694,6 +766,7 @@ void Loader::do_reload_level(const std::string& name, TexturePool& texture_pool)
 
 void Loader::do_reload_common(TexturePool& tex_pool) {
   fmt::print("loader: force reloading common level\n");
+  glq::invalidate_state();
   {
     std::unique_lock lk(tex_pool.mutex());
     for (size_t i = 0;
@@ -708,6 +781,11 @@ void Loader::do_reload_common(TexturePool& tex_pool) {
   for (auto tex : m_common_level.textures) {
     glDeleteTextures(1, &tex);
   }
+  {
+    std::vector<GLuint> texs;
+    pbr_maps_release(m_common_level.pbr_maps.get(), texs);
+    glDeleteTextures(texs.size(), texs.data());
+  }
   for (auto& model : m_common_level.level->merc_data.models) {
     auto it = m_all_merc_models.find(model.name);
     if (it == m_all_merc_models.end())
@@ -719,10 +797,14 @@ void Loader::do_reload_common(TexturePool& tex_pool) {
   }
   m_common_level = LevelData{};
   load_common(tex_pool, "GAME");
+  if (m_load_unbake) {
+    classify_common();
+  }
 }
 
 void Loader::do_reload(TexturePool& texture_pool) {
   fmt::print("loader: force reloading all levels\n");
+  glq::invalidate_state();
   for (auto& [name, lev] : m_loaded_tfrag3_levels) {
     unload_level_data(name, *lev, texture_pool);
   }

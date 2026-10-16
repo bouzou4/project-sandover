@@ -1,0 +1,36 @@
+# Fog density against the game's own fog: far geometry at noon, night and misty, whose fog ends
+# at 180 m. Run as A (option 13 off) / B fix / C vanilla; the finalboss, village1 day and beach
+# frames come from play snapshots (from-snapshot 0028, 0001, 0004).
+# Measure with `python -m sandover.vista.fog_model measure A.png B.png C.png --level L --hour H`.
+schema: 1
+set: fog-vanilla
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 600
+  effects: 'off'
+  wind: 'off'
+  particles: 'off'
+  jak: hide
+shots:
+- name: village1-high-noon
+  continue: village1-hut
+  hour: 12
+  camera:
+    pos: [-491520.0, 1843200.0, 409600.0]
+    rot: [-0.978371, 0.0, -0.206856, 0.041902, 0.979268, -0.198186, 0.202567, -0.202567, -0.958088]
+- name: village1-high-night
+  continue: village1-hut
+  hour: 22
+  camera:
+    pos: [-491520.0, 1843200.0, 409600.0]
+    rot: [-0.978371, 0.0, -0.206856, 0.041902, 0.979268, -0.198186, 0.202567, -0.202567, -0.958088]
+- name: jungle-temple-noon
+  continue: jungle-start
+  hour: 12
+  camera:
+    pos: [1411072.0, 675840.0, -889241.6]
+    rot: [0.802639, 0.0, 0.596466, -0.052259, 0.996154, 0.070323, -0.594172, -0.087615, 0.799552]
+- name: misty-start-noon
+  continue: misty-start
+  hour: 12

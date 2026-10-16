@@ -19,7 +19,9 @@
 #include "common/versions/versions.h"
 
 #include "game/common/game_common_types.h"
+#include "graphics/gfx.h"
 #include "graphics/gfx_test.h"
+#include "sound/989snd/spatial.h"
 
 #include "third-party/CLI11.hpp"
 
@@ -100,6 +102,7 @@ int main(int argc, char** argv) {
   bool disable_save_location_override = false;
   std::string profile_until_event = "";
   std::string gpu_test = "";
+  std::string audio_spatial = "off";
   std::string gpu_test_out_path = "";
   int port_number = -1;
   fs::path project_path_override;
@@ -109,11 +112,15 @@ int main(int argc, char** argv) {
   app.add_flag("--version", show_version, "Display the built revision");
   app.add_option("-g,--game", game_name, "The game name: 'jak1' or 'jak2'");
   app.add_flag("-v,--verbose", verbose_logging, "Enable verbose logging on stdout");
-  app.add_flag(
+  app.add_option(
       "--port", port_number,
       "Specify port number for listener connection (default is 8112 for Jak 1 and 8113 for Jak 2)");
   app.add_flag("--no-avx2", disable_avx2, "Disable AVX2 for testing");
   app.add_flag("--no-display", disable_display, "Disable video display");
+  app.add_flag("--xr", Gfx::g_global_settings.xr_enable,
+               "Jak 1: submit stereo frames to the active OpenXR runtime");
+  app.add_option("--audio-spatial", audio_spatial,
+                 "Jak 1 positional sound output: off, binaural, surround or objects");
   app.add_flag("--profile", enable_profiling, "Enables profiling immediately from startup");
   app.add_flag("--portable", enable_portable,
                "Save settings and saves relative to the game's executable, takes precedence over "
@@ -137,6 +144,14 @@ int main(int argc, char** argv) {
   define_common_cli_arguments(app);
   app.allow_extras();
   CLI11_PARSE(app, argc, argv);
+
+  if (auto mode = snd::SpatialModeFromName(audio_spatial)) {
+    if (game_name == "jak1") {
+      snd::g_spatial_mode_request = *mode;
+    }
+  } else {
+    lg::error("--audio-spatial: unknown mode '{}'", audio_spatial);
+  }
 
   // Log the version the game is compiled against so we don't have to guess
   lg::info("Compiled Version: {}", build_revision());

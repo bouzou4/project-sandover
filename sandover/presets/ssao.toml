@@ -1,0 +1,173 @@
+# SSAO presets: `deep` is the chosen default and the play look; the others stay
+# only because the engine's built-in table and `(pc-set-ssao-preset n)` index them in this order.
+# This file is the source of truth: the engine's built-in table is generated from it
+# (`sandover-preset gen-header ssao`) and rig captures
+# apply it directly (`sandover-capture run ... --preset ssao=<name>`).
+# `off` is the toggle state, not a preset. Parameters are internal and never shown.
+#
+# radius          world-space AO radius, metres (4096 game units per metre)
+# intensity       composite strength on background pixels: mix(1, ao, intensity)
+# bias            SAO bias, metres; suppresses AO in shallow creases
+# blur_radius     bilateral blur taps per side, half-res pixels (0 disables the blur)
+# blur_sharpness  depth edge stop of the blur; higher keeps edges crisper
+# merc_weight     strength multiplier on character pixels (pris buckets 48-56)
+# luma_floor      u8 luminance below which a pixel gets no AO (applied in cave levels)
+# cave_scale      strength multiplier while a fixed-slot cave level is loaded
+# taps            SAO spiral taps per pixel
+# crease_angle    optional, degrees; occlusion from samples below this elevation fades out (0 = off)
+# crease_floor    optional, weight left on samples at or below half that angle
+# caption         one line for the screening grid: what visibly differs, never parameters
+
+[meta]
+schema = 1
+phase = "ssao"
+chosen = "deep"
+round = 3
+pick_set = "auto-v0"
+
+[space.radius]
+min = 0.1
+max = 1.5
+scale = "log"
+
+[space.intensity]
+min = 0.1
+max = 1.0
+scale = "linear"
+
+[space.merc_weight]
+min = 0.5
+max = 3.0
+scale = "linear"
+
+[space.blur_sharpness]
+min = 0.25
+max = 4.0
+scale = "log"
+
+[presets.faithful]
+role = "anchor"
+label = "Faithful"
+caption = "barely-there darkening in the deepest creases"
+# placeholder until the anchor is auto-tuned against vanilla
+radius = 0.2
+intensity = 0.25
+bias = 0.02
+blur_radius = 4
+blur_sharpness = 1.0
+merc_weight = 1.0
+luma_floor = 4
+cave_scale = 0.5
+taps = 12
+
+[presets.contact]
+role = "candidate"
+label = "Contact"
+caption = "tight, crisp contact shadows at feet and seams only"
+radius = 0.35
+intensity = 0.6
+bias = 0.015
+blur_radius = 3
+blur_sharpness = 2.0
+merc_weight = 1.5
+luma_floor = 4
+cave_scale = 0.5
+taps = 12
+
+[presets.soft]
+role = "candidate"
+label = "Soft"
+caption = "wide, faint shading that fills corners and under ledges"
+radius = 1.25
+intensity = 0.35
+bias = 0.03
+blur_radius = 6
+blur_sharpness = 0.5
+merc_weight = 1.0
+luma_floor = 4
+cave_scale = 0.5
+taps = 12
+
+[presets.grounded]
+role = "candidate"
+label = "Grounded"
+caption = "light on scenery, strongest on and around characters"
+radius = 0.5
+intensity = 0.4
+bias = 0.02
+blur_radius = 4
+blur_sharpness = 1.0
+merc_weight = 2.5
+luma_floor = 4
+cave_scale = 0.5
+taps = 12
+
+[presets.deep]
+role = "candidate"
+label = "Deep"
+caption = "heavy, stylised shading on everything"
+radius = 0.8
+intensity = 0.9
+bias = 0.02
+blur_radius = 4
+blur_sharpness = 1.0
+merc_weight = 1.5
+luma_floor = 4
+cave_scale = 0.5
+taps = 16
+
+# Quality tiers of deep for the settings menu (ssao-quality medium and low): the same look with
+# fewer spiral taps. Indices 5 and 6 of the engine table; high is deep (4).
+[presets.deep-medium]
+role = "quality"
+label = "Deep (medium)"
+caption = "deep with 10 taps"
+radius = 0.8
+intensity = 0.9
+bias = 0.02
+blur_radius = 4
+blur_sharpness = 1.0
+merc_weight = 1.5
+luma_floor = 4
+cave_scale = 0.5
+taps = 10
+
+[presets.deep-low]
+role = "quality"
+label = "Deep (low)"
+caption = "deep with 6 taps"
+radius = 0.8
+intensity = 0.9
+bias = 0.02
+blur_radius = 4
+blur_sharpness = 1.0
+merc_weight = 1.5
+luma_floor = 4
+cave_scale = 0.5
+taps = 6
+
+[anchor]
+objective = "min_flip_vs_vanilla"
+tuned_on = ""
+
+[[rounds]]
+round = 1
+shown = ["faithful", "contact", "soft", "grounded", "deep"]
+picked = "deep"
+generator = "seed"
+
+[[rounds]]
+round = 2
+shown = ["deep", "deep-crease", "deep-bias", "deep-wide", "deep-shallow"]
+picked = ""
+generator = "refine"
+# No pick recorded. Feedback: the crease threshold made the facet lines "slightly better,
+# still there". Revision 3 removes them at the source instead: real surface normals.
+
+[[rounds]]
+round = 3
+shown = ["deep"]
+picked = "deep"
+generator = "human-direct"
+# deep on real normals (normal target on, crease angle 0), judged from the before/after on
+# the two reported shots; the maintainer approved it directly and skipped the comparison.

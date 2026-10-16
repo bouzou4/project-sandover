@@ -1,0 +1,17 @@
+# material response: the precursor oracle (bronze metal), the jungle temple top (carved
+# stone, metal, foliage) and the village1 square (huts: wood, cloth, stone), all at noon. Run
+# once per look: shading off, then `pc-set-pbr-param 11 n` with n = 1 faithful, 2 bold,
+# 3 cinematic; see kb/findings/2026-09-25-material-response.md.
+set: material-response
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 60
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - {name: village1-oracle-noon, continue: village1-hut, hour: 12, camera: {pos: [270336.0, 135168.0, 16384.0], rot: [0.571064, 0.0, -0.820905, 0.275944, 0.94181, 0.191961, 0.773137, -0.336146, 0.537834]}}
+  - {name: jungle-temple-top-noon, continue: jungle-start, hour: 12, camera: {pos: [1462272.0, 462848.0, -974848.0], rot: [-0.7674, 0.0, -0.6411, 0.134, 0.9779, -0.1604, 0.627, -0.209, -0.7505]}}
+  - {name: village1-square-noon, continue: village1-hut, hour: 12, camera: {pos: [-470800.0, 110000.0, 432700.0], rot: [-0.8947, 0.0, -0.4464, 0.1082, 0.9701, -0.2169, 0.4331, -0.2424, -0.868]}}

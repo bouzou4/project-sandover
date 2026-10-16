@@ -16,6 +16,7 @@
 #include "common/common_types.h"
 
 #include "../common/synth.h"
+#include "game/sound/989snd/spatial.h"
 #include "game/sound/989snd/vagvoice.h"
 
 #include "third-party/cubeb/cubeb/include/cubeb/cubeb.h"
@@ -70,12 +71,23 @@ class Player {
                        char* sound_name,
                        SFXUserData* dst);
 
+  /// Switches the output between cubeb (off) and the OpenAL spatial backend.
+  void SetSpatialMode(SpatialMode mode);
+  SpatialMode GetSpatialMode();
+  /// Position for the next PlaySound; it is spatialized if the backend has a free source.
+  void SetNextSoundPosition(const SpatialVec& pos);
+  void SetSoundPosition(u32 sound_handle, const SpatialVec& pos);
+  void SetListener(const SpatialVec& pos, float yaw_deg, bool mirror);
+  /// Pushes pending spatial changes to OpenAL; call without holding any sound lock.
+  void FlushSpatial();
+
  private:
   std::recursive_mutex mTickLock;  // TODO does not need to recursive with some light restructuring
   IdAllocator mHandleAllocator;
   std::map<u32, std::unique_ptr<SoundHandler>> mHandlers;
 
   void Tick(s16Output* stream, int samples);
+  void SpatialTick(SpatialOutput& out);
 
 #ifdef _WIN32
   bool m_coinitialized = false;
@@ -85,6 +97,12 @@ class Player {
   Synth mSynth;
   VoiceManager mVmanager;
   s32 mTick{0};
+
+  std::mutex mSpatialSwap;  // held while the backend is replaced or flushed, never by the mixer
+  std::unique_ptr<SpatialOutput> mSpatial;
+  std::optional<SpatialVec> mPendingPos;
+  int mSpatialHtick{200};
+  bool mCubebRunning{false};
 
   cubeb* mCtx{nullptr};
   cubeb_stream* mStream{nullptr};

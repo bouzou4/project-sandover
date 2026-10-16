@@ -203,12 +203,17 @@ void* RPC_Player(unsigned int /*fno*/, void* data, int size) {
           }
           s32 vol = GetVolume(sound);
           s32 pan = GetPan(sound);
+          if (sound->params.fo_curve != 0) {
+            snd_SpatialSetNextPosition(sound->params.trans.x, sound->params.trans.y,
+                                       sound->params.trans.z);
+          }
           s32 handle = snd_PlaySoundVolPanPMPB(bank->bank_handle, index, vol, pan,
                                                sound->params.pitch_mod, sound->params.bend);
           sound->sound_handle = handle;
           if (sound->sound_handle) {
             sound->id = cmd->play.sound_id;
           }
+          snd_SpatialFlush();
         } break;
         case Jak1SoundCommand::PAUSE_SOUND: {
           Sound* sound = LookupSound(cmd->sound_id.sound_id);

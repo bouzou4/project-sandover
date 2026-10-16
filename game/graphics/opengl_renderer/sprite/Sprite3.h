@@ -43,7 +43,7 @@ class Sprite3 : public BucketRenderer {
                                  GameVersion version,
                                  SharedRenderState* render_state,
                                  ScopedProfilerNode& prof);
-  void render_3d(DmaFollower& dma);
+  void render_3d(DmaFollower& dma, SharedRenderState* render_state);
   void render_2d_group0(DmaFollower& dma,
                         SharedRenderState* render_state,
                         ScopedProfilerNode& prof);

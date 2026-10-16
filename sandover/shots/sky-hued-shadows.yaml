@@ -1,0 +1,68 @@
+# Sky-hued shadows: in a level with a sky, actor shadows and lamp shadows (SSAO stays grey)
+# darken toward the ambient's hue for the mood and hour (the sidecar's fitted sun and ambient
+# colours) instead of toward grey. Shadow options 30 (on/off) and 31 (strength).
+# Arms, each ONE --goal-after-load string (the settings reapply only marks; the update pushes):
+#   C original: no forms (vanilla)
+#   A today:  "(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-shadow-option 30 0)"
+#   B1:       "(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-shadow-option 30 1000000) (pc-set-shadow-option 31 500000)"
+#   B2:       "(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-shadow-option 30 1000000) (pc-set-shadow-option 31 1000000)"
+# Cameras are those of existing frames ($SANDOVER_DATA paths per shot). beach-whole-dawn keeps
+# the frame's camera and moves the hour; Jak's spot was ray-tested against the beach background
+# mesh for the 7.0 h fitted sun (11 degrees up, from behind the camera): unblocked.
+schema: 1
+set: sky-hued-shadows
+variants:
+  A: "(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-shadow-option 30 0)"
+  B1: "(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-shadow-option 30 1000000) (pc-set-shadow-option 31 500000)"
+  B2: "(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-shadow-option 30 1000000) (pc-set-shadow-option 31 1000000)"
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  effects: on
+  jak: show
+shots:
+  # snow-glints-003/A/snow-0004-glints: Jak's shadow on sunlit snow, 14.54 h
+  - name: snow-0004-shadow
+    continue: snow-start
+    hour: 14.542
+    settle_frames: 300
+    wind: off
+    particles: off
+    jak_pos: [4107151.75, 1026399.625, -13540062.0]
+    camera:
+      pos: [4148895.75, 1044947.1875, -13536141.0]
+      rot: [0.014056, -0.0000003, 0.999901, -0.141349, 0.989958, 0.001987, -0.98986, -0.141363, 0.013915]
+  # wet-pbr-004/beach-whole-A-picked at 7.0 h: low dawn sun, long shadow on sand
+  - name: beach-whole-dawn
+    continue: beach-start
+    hour: 7.0
+    settle_frames: 120
+    wind: on
+    particles: on
+    jak_pos: [-603285.938, 1371.31, -797224.062]
+    camera:
+      pos: [-568795.625, 22465.25, -759387.875]
+      rot: [-0.738013, 0.0, 0.674787, -0.082014, 0.992586, -0.089699, -0.669784, -0.121541, -0.732542]
+  # the same frame at its own hour (13.58 h): warm ground under a near-white midday sky
+  - name: beach-whole-midday
+    continue: beach-start
+    hour: 13.576
+    settle_frames: 120
+    wind: on
+    particles: on
+    jak_pos: [-603285.938, 1371.31, -797224.062]
+    camera:
+      pos: [-568795.625, 22465.25, -759387.875]
+      rot: [-0.738013, 0.0, 0.674787, -0.082014, 0.992586, -0.089699, -0.669784, -0.121541, -0.732542]
+  # control, highlights-001/maincave-mushrooms-jak-A: no sky, lamp shadows and AO;
+  # B must equal A
+  - name: maincave-control
+    continue: maincave-start
+    hour: 12.0
+    settle_frames: 180
+    wind: on
+    particles: on
+    jak_pos: [4629258.5, 119448.3, -13061476.2]
+    camera:
+      pos: [4643881.0, 132753.59375, -13084154.0]
+      rot: [0.7771, -0.0, 0.6293, -0.2337, 0.9285, 0.2886, -0.5843, -0.3714, 0.7216]

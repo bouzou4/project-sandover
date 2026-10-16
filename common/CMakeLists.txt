@@ -81,6 +81,7 @@ add_library(common
         util/DgoReader.cpp
         util/DgoWriter.cpp
         util/dialogs.cpp
+        util/exr.cpp
         util/diff.cpp
         util/FileUtil.cpp
         util/font/dbs/font_db_jak1.cpp

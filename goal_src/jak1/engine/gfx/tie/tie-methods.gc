@@ -230,6 +230,9 @@
     (login (-> this data s5-0)))
   this)
 
+;; og:preserve-this capture mode: when set, the renderer restarts every wind spring from rest
+(define *pc-wind-reset* #f)
+
 (defun add-pc-wind-data ((dma-buf dma-buffer))
   ;; packet to send 84 qw's
   (let ((packet (the-as dma-packet (-> dma-buf base))))
@@ -238,7 +241,7 @@
     (set! (-> packet vif1) (new 'static 'vif-tag :cmd (vif-cmd pc-port)))
     (set! (-> dma-buf base) (the pointer (&+ packet 16))))
   (quad-copy! (-> dma-buf base) (the pointer (&- (the pointer *wind-work*) 4)) 84)
-  (set! (-> (the (pointer uint32) (-> dma-buf base)) 0) (if (paused?) 1 0))
+  (set! (-> (the (pointer uint32) (-> dma-buf base)) 0) (cond (*pc-wind-reset* 2) ((paused?) 1) (else 0)))
   (&+! (-> dma-buf base) (* 16 84)))
 
 (defun draw-drawable-tree-instance-tie ((arg0 drawable-tree-instance-tie) (arg1 level))

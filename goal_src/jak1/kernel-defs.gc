@@ -568,6 +568,197 @@
 
 (define-extern pc-set-collision-mode (function pc-collision-mode none))
 
+(define-extern pc-set-ssao-debug (function symbol none))
+
+(define-extern pc-set-ssao-depth-capture (function symbol none))
+
+;; 0: capture point (0 opaque background, 1 after pris), 1: msaa mode, 2: gpu timing, 3: msaa probe
+(define-extern pc-set-ssao-option (function int int none))
+;; SSAO on with built-in preset n (order of sandover/presets/ssao.toml); n < 0: off
+(define-extern pc-set-ssao-preset (function int none))
+
+;; SSAO parameter in millionths. 0 enable, 1 radius m, 2 intensity, 3 bias m, 4 blur radius,
+;; 5 blur sharpness, 6 merc weight, 7 luma floor, 8 cave scale, 9 taps, 10 view, 11 gpu timing,
+;; 12 crease angle deg, 13 crease floor, 14 normal target (0: normals from depth),
+;; 15 emissive mask (0/1), 16 emissive ramp start, 17 emissive ramp end
+(define-extern pc-set-ssao-param (function int int none))
+
+;; FP16 main target with a tonemap in the final pass (#t on, #f off)
+(define-extern pc-set-hdr-target (function symbol none))
+;; Tonemap option in millionths. 0 mode (0 clamp, 1 filmic, 2 toon), 1 exposure, 2 filmic knee,
+;; 3 paper white nits (reserved for HDR output), 4 toon knee, 5 toon range, 6 white start,
+;; 7 white full (max channel where toon and the bloom hue clip start / finish whitening),
+;; 8 halo start, 9 halo full (toon: max channel where a halo starts / finishes the per-channel clip)
+(define-extern pc-set-tonemap (function int int none))
+;; HDR swapchain output (Windows), values in millionths. 0 enable (implies the FP16 target),
+;; 1 format (0 scRGB, 1 PQ), 2 paper white nits, 3 peak nits, 4 black nits (negative = from the
+;; display profile), 5 saturation, 6 knee (0 paper white, 1 peak), 7 switch Windows HDR on (0/1, opt-in),
+;; 8 calibration pattern (0 none, 1 peak, 2 paper white, 3 black; not saved), 9 peak nits in
+;; thousandths (GOAL int and float/int math is 32-bit, so a peak in millionths overflows above 2147)
+(define-extern pc-set-hdr-output (function int int none))
+;; HDR output state in thousandths: 0 presenting HDR (1000/0), 1 display peak nits, 2 display black
+;; nits (negative until the display was queried), 3 effective peak, 4 effective black, 5 peak setting,
+;; 6 Windows' SDR content brightness (the desktop's white; negative if unknown)
+(define-extern pc-get-hdr-output (function int int))
+
+;; Bloom from the emissive mask, values in millionths. 0 enable, 1 strength, 2 radius (half-res
+;; pixels), 3 threshold (0..1), 4 hue-preserving clip (0 off, else on; default on)
+(define-extern pc-set-bloom (function int int none))
+;; Antialiasing, values in millionths. 0 mode (0 MSAA at the msaa setting, 1 SMAA 1x with the scene
+;; at 1 sample, 2 MSAA 2x + SMAA 1x, 3 off: 1 sample, no SMAA, 4 MSAA at the msaa setting + SMAA 1x),
+;; 1 SMAA edge threshold (default 0.1),
+;; 2 luma edges instead of colour (0/1), 3 debug view (0 off, 1 edges, 2 blend weights),
+;; 4 reset 1-3 to the defaults
+(define-extern pc-set-smaa (function int int none))
+;; Render scale (Jak 1), values in millionths. 0 scale of the display size (0.25..1; 1 = off),
+;; 1 upscaler (0 bilinear, 1 FidelityFX FSR 1: EASU + RCAS), 2 RCAS sharpness in stops (0 sharpest),
+;; 3 reset 2 to the default
+(define-extern pc-set-render-scale (function int int none))
+;; Bug reports (game/graphics/bug_report.h): request one (0 key, 1 menu, 2 REPL); poll each frame
+;; (bit 0: capture now, bit 1: saved, bit 2: failed); save sends the sandover-bug-state
+(define-extern pc-bug-report-request (function int none))
+(define-extern pc-bug-report-poll (function int))
+(define-extern pc-bug-report-save (function pointer none))
+;; Frame profiler: log PERF-GPU/PERF-CPU/PERF-END lines every N frames; 0 = off
+(define-extern pc-set-perf-timing (function int none))
+;; Frame-cost optimizations, a 32-bit mask (default all on): four bits per area, 0-3 tile lights,
+;; 4-7 SSAO, 8-11 vista, 12-15 water, 16-19 present/post/bloom, 20-23 geometry/CPU, 24-27 present
+;; extras, 28-31 renderer core
+(define-extern pc-set-perf-opt (function int none))
+;; Fur shells on merc draws whose texture has the `fur` tag, values in millionths. 0 enable,
+;; 1 shell count, 2 length m, 3 density (strands per UV unit), 4 gravity, 5 curl (fractions of the
+;; length), 6 root darkening, 7 view (1 shells in flat colour)
+(define-extern pc-set-fur (function int int none))
+;; Ocean shading (near and mid ocean), values in millionths. 0 enable, 1 ripple-normal scale,
+;; 2 sun glint intensity, 3 glint exponent, 4 fresnel toward the horizon colour, 5 crest sparkle,
+;; 6 view, 7 wave amplitude scale, 8 subdivision, 9 full-amplitude range (m), 10 crest foam,
+;; 11 crest Jacobian threshold, 12 shore foam, 13 shore band (m), 14 shallow colour,
+;; 15 shallow depth (m), 16 subsurface tint, 17 crest light, 18 absorption per m,
+;; 19 zero-amplitude range (m); 20 + 5 * wave +
+;; field for the five Gerstner waves (0 direction degrees, 1 amplitude m, 2 wavelength m,
+;; 3 speed m/s, 4 steepness); 45 sky reflection, 46 reflection haze distance (m),
+;; 47 wave amplitude noise, 48 wave phase noise (turns), 49 noise cell (m),
+;; 50 opaque depth (m), 51/52 shore fade near/far (m);
+;; 60 + 5 * wave + field for the lake wave set
+(define-extern pc-set-water (function int int none))
+
+;; Swamp look (swamp level only), values in millionths. 0 water surface, 1 murk,
+;; 2 reflection, 3 rain ripples, 4 glint; 5 wet surfaces, 6 wet darkening, 7 water film,
+;; 8 puddles; 9 ground mist, 10 density (1/m), 11 scale height (m), 12 start (m), 13 max,
+;; 14 sun glow, 15 brightness
+(define-extern pc-set-swamp (function int int none))
+
+;; Lava rules (LavaField.h), values in millionths. 0 glow, 1 glow gain, 2 glow mask, 3 key from,
+;; 4 key full; 5 field light, 6 field gain, 7 reach (m), 8 reflection, 9 bake-share cut, 10 view,
+;; 11 glow core, 12 crust darkening, 13 character gain, 14 pin the lava clock, 15 all to defaults
+(define-extern pc-set-lava (function int int none))
+;; A level's lava light, each frame (main.gc pc-lava-light-update): level name, level and the
+;; lava clock's factor in millionths, colour packed 10 bits per channel (0..1000)
+(define-extern pc-lava-light (function string int int int none))
+
+;; Emissive tile lights (needs SSAO on), values in millionths. 0 enable, 1 intensity, 2 radius
+;; (metres), 3 falloff exponent, 4 tile threshold; world lights: 5 count, 6 strong, 7 weak,
+;; 8 arc, 9 particle intensity, 10 radius scale, 11 radius max (metres), 12 lamp intensity;
+;; 27 eco shot lights on/off, 28 their strength
+(define-extern pc-set-emissive-lights (function int int none))
+
+;; Inland water (water-anim actors, InlandWater.h), values in millionths. 0 clear water,
+;; 1 absorption length (m), 2 reflection, 3 reflection cap, 4 glint; 5 mud, 6 mud darkening,
+;; 7 mud reflection cap, 8 mud roughness, 9 mud glint; 10 debug view (1: depth factor as grey),
+;; 11 picked mode (1: no shading, only the envmap layer dropped on sky levels)
+(define-extern pc-set-inland-water (function int int none))
+
+;; World light state, once per frame (main.gc pc-world-lights-update): begin with the hour
+;; (returns the query count, 0 when off), query i -> aid | gate << 32, set i to 0..1000
+(define-extern pc-world-lights-begin (function int int))
+(define-extern pc-world-lights-query (function int uint))
+(define-extern pc-world-lights-set (function int int none))
+
+;; Eco shots and blasts, once per frame while not paused (main.gc pc-eco-lights-update): begin
+;; (0 when off: send nothing), push group-name, position (game units), size (game units) x 1024 +
+;; level (0..1000), id; end. At most four arguments (the Windows GOAL to C call)
+(define-extern pc-eco-lights-begin (function int))
+;; 1 when the engine has a colour for the particle group named so (GOAL caches the answer)
+(define-extern pc-eco-lights-known (function string int))
+(define-extern pc-eco-lights-push (function string pointer int int none))
+(define-extern pc-eco-lights-end (function none))
+
+;; Particle launches (sparticle-launcher.gc spawn): group name, origin, the launching entity's aid
+;; (0: none), the launcher's quaternion (0: none); end once per frame, 1 while paused
+(define-extern pc-launch-lights-push (function string pointer int pointer none))
+(define-extern pc-launch-lights-end (function int none))
+
+;; Click-to-inspect ID target and panel (0 off, 1 on); Ctrl + left click on the game view
+(define-extern pc-set-inspect (function int none))
+
+;; Scripted inspect click at a view position in millionths (0..1 from the top left), result in the
+;; log; queued, one per frame (up to 16). Verdict: 0 none, 1 emissive, 2 not emissive, 3 clear.
+(define-extern pc-inspect-pick (function int int int none))
+
+;; Moving sun (per-vertex sidecar), values in millionths. 0 enable, 1 mode (0 identity,
+;; 1 follow the arc, 2 direction, 3 arc position), 2 arc offset deg, 3 night (0 fitted moon,
+;; 1 table moon, 2 ambient only), 4 strength, 5 view, 6 arc position (0..4 = day slots)
+(define-extern pc-set-sun-option (function int int none))
+;; What the sky bodies drew in the viewer level last frame: 1 the sun, 2 the stars (0 sun switch off)
+(define-extern pc-get-sky-bodies (function int))
+(define-extern pc-set-pbr-param (function int int none))
+;; Sun direction for mode 2 (toward the light), components in millionths
+(define-extern pc-set-sun-dir (function int int int none))
+
+;; Actor shadow maps, values in millionths. 0 setting (0 off: vanilla stencil shadow, 1 on: sun
+;; and lamp maps, every actor casts), 1 strength, 2 view (1 occlusion, 2 light share, 3 map coordinates), 3 range m, 4 lamp
+;; intensity scale, 5 landing disc under the player (strength, 0 = off, default 0.3), 6 caster
+;; reach m (casters higher than this above the receiver cast nothing, default 8), 40 quality
+;; (0 low, 1 medium, 2 high: map size and PCF taps, default 2).
+;; Use pc-set-shadows (drawable.gc), which also widens actor culling for off-screen casters.
+(define-extern pc-set-shadow-option (function int int none))
+
+(define-extern pc-set-stereo (function symbol none))
+
+;; 0: IPD in micrometres, 1: world scale in 1/10000ths (10000 = 1:1), 2: swap eyes (0/1)
+(define-extern pc-set-stereo-option (function int int none))
+
+;; OpenXR: submit the stereo eyes to the active runtime; the window keeps the side-by-side mirror
+(define-extern pc-set-xr (function symbol none))
+
+;; OpenXR: take the current head pose as the seated reference (same as the F6 key)
+(define-extern pc-set-xr-recentre (function none))
+
+;; positional sound output: "off" (stereo, vanilla), "binaural", "surround" or "objects"
+(define-extern pc-set-audio-spatial (function string none))
+
+;; vista debug mode: draw this level's background from the current camera ("" or "none": off);
+;; "neighbours" keeps every level adjacent to the loaded ones resident and draws them
+(define-extern pc-set-vista (function string none))
+
+;; comma-separated substrings of tfrag texture / tie proto names to hide in the main levels
+(define-extern pc-set-vista-hide (function string none))
+
+;; 0: hide stand-ins (0/1), 1: fog mode (0 own far fog, 1 main fog), 2: fog end in metres,
+;; 3: draw shrub (0/1), 4: gpu timing (0/1), 5: address of *time-of-day-context* time,
+;; 6: neighbour mood hour x 100 (-1: live), 7: neighbours' own mood (0/1), 8: neighbour alpha
+;; trees (0/1), 9: hide med-res actors (0/1), 10: hide stand-ins inside neighbours (0/1),
+;; 11: landmark actors of loaded but undisplayed levels (0/1, see vista-landmarks.gc),
+;; 12: also load the levels the viewer's stand-ins depict (0/1)
+(define-extern pc-set-vista-option (function int int none))
+
+;; vista fog policy: "vanilla", "push_out" (a: fog end m), "own" (a: fog end m) or "unified"
+;; (a: start m, b: density in 0.001/km, c: scale height m); negative keeps the current value
+(define-extern pc-set-vista-fog (function string int int int none))
+
+;; #t while neighbour mode is on with landmark actors enabled (option 11)
+(define-extern pc-vista-landmarks? (function symbol))
+
+;; unified fog override for one neighbour level: density scale x 1000, fog tint #xRRGGBB (#x80 = 1.0)
+;; and fog cap (0-1) x 1000; negative keeps the default; level "clear" drops every override
+(define-extern pc-set-vista-neighbour-fog (function string int int int none))
+(define-extern pc-set-vista-haze (function int int int int none))
+(define-extern pc-set-vista-neighbour-haze (function string int none))
+;; #t while the loader keeps this level resident as a neighbour the game has not loaded
+(define-extern pc-vista-neighbour? (function string symbol))
+;; the level the player is in, every frame; neighbour mode draws only from outdoor levels
+(define-extern pc-set-vista-viewer (function string none))
+
 (define-extern pc-discord-rpc-update (function discord-info none))
 
 (define-extern pc-discord-rpc-set (function int none))

@@ -69,6 +69,67 @@
    )
   :pack-me)
 
+;; Sandover enhancement settings, saved to sandover.gc next to pc-settings.gc (never into it:
+;; an unmodified OpenGOAL resets every setting on an unknown key). See sandover/kb/howto/settings.md.
+(defconstant SANDOVER_SETTINGS_VERSION 3)
+
+(deftype sandover-settings (structure)
+  ((ssao?        symbol)
+   (tile-lights? symbol)
+   (bloom?       symbol)
+   (shadows?     symbol)
+   (pbr?         symbol)
+   (pbr-look     int32) ;; 0 faithful, 1 bold, 2 cinematic (-1 in the applied copy: untouched)
+   (fur?         symbol)
+   (water?       symbol)
+   (vista?       symbol)
+   (hdr-target?  symbol)
+   (tonemap      int32) ;; 0 clamp, 1 filmic, 2 toon
+   (hdr-output   int32) ;; 0 scrgb, 1 pq, 2 off
+   (paper-white  float) ;; nits, 80..400
+   (hdr-peak     float) ;; nits, 400..10000; negative = what the display reports
+   (hdr-black    float) ;; nits, 0..1; negative = what the display reports
+   (antialias    int32) ;; 0 follow smaa? and the msaa setting; 1 smaa, 2 msaa 2x + smaa, 3 off
+   (render-scale int32) ;; 0..3 = 100, 77, 67, 50 percent of the display size
+   (upscaler     int32) ;; 0 bilinear, 1 fsr (FidelityFX FSR 1)
+   (ssao-quality int32) ;; 0 low, 1 medium, 2 high (ssao preset 6, 5, 4)
+   (shadow-quality int32) ;; 0 low, 1 medium, 2 high (shadow option 40)
+   (smaa?        symbol) ;; SMAA 1x on top of the msaa setting
+   (sun?         symbol) ;; the sun disc in the sky
+   (glint?       symbol)) ;; the sun glint on the ocean and inland water
+  :pack-me)
+
+(defmacro sandover-render-scale-millionths (idx)
+  "100%, 1/1.3, 2/3 and 1/2 of the display size (FSR 1's native, ultra quality, quality, performance)"
+  `(case ,idx ((1) 769231) ((2) 666667) ((3) 500000) (else 1000000)))
+
+(defun sandover-settings-reset! ((obj sandover-settings))
+  "Defaults: the play build's look, everything on."
+  (set! (-> obj ssao?) #t)
+  (set! (-> obj tile-lights?) #t)
+  (set! (-> obj bloom?) #t)
+  (set! (-> obj shadows?) #t)
+  (set! (-> obj pbr?) #t)
+  (set! (-> obj pbr-look) 1)
+  (set! (-> obj fur?) #t)
+  (set! (-> obj water?) #t)
+  (set! (-> obj vista?) #t)
+  (set! (-> obj hdr-target?) #t)
+  (set! (-> obj tonemap) 2)
+  (set! (-> obj hdr-output) 1)
+  (set! (-> obj paper-white) 200.0)
+  (set! (-> obj hdr-peak) -1.0)
+  (set! (-> obj hdr-black) -1.0)
+  (set! (-> obj antialias) 0)
+  (set! (-> obj render-scale) 0)
+  (set! (-> obj upscaler) 1)
+  (set! (-> obj ssao-quality) 2)
+  (set! (-> obj shadow-quality) 2)
+  (set! (-> obj smaa?) #t)
+  (set! (-> obj sun?) #t)
+  (set! (-> obj glint?) #t)
+  obj)
+
 ;; The Jak 1 version of the pc-settings object.
 (deftype pc-settings-jak1 (pc-settings)
   ((cheats              pc-cheats)
@@ -81,7 +142,8 @@
    (extra-hud?          symbol) ;; extra hud elements.
    (secrets             pc-game-secrets :inline) ;; hidden goodies and additional secrets!
    (scenes-seen         uint8 PC_SPOOL_LOG_LENGTH) ;; cutscenes that have been seen, by spool-anim (maybe use 8-char name or bits instead?)
-   (memcard-play-hints? symbol)))
+   (memcard-play-hints? symbol)
+   (sandover            sandover-settings :inline)))
 
 (define *pc-settings* (the pc-settings-jak1 #f))
 
@@ -163,6 +225,7 @@
   (set! (-> obj secrets hud-counters?) #t)
   (set! (-> obj secrets hud-watch?) #f)
   (set! (-> obj secrets watch-12hr?) #f)
+  (sandover-settings-reset! (-> obj sandover))
   0)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

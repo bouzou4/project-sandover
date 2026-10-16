@@ -29,6 +29,7 @@ std::function<void()> vsync_callback;
 GfxGlobalSettings g_global_settings;
 game_settings::DebugSettings g_debug_settings;
 SplashScreen g_splash;
+HdrPresentState g_hdr_present;
 
 const GfxRendererModule* GetRenderer(GfxPipeline pipeline) {
   switch (pipeline) {

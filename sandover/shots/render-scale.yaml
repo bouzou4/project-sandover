@@ -1,0 +1,71 @@
+# Render scale round (remaster/render-scale): the scene below the output size, upscaled before
+# the HUD text. Output 1920x1080 (edge differences read without zooming); frame times are measured
+# at 4K output with `sandover-perf --set scale` (and `--set aa`), not from these frames. Same four
+# cameras as smaa.yaml, each from an existing frame named per shot. Arms (one --goal-after-load
+# string each, the play look first; the bin must be render-scale with its project root):
+#   A:  native, MSAA 4x (today)
+#   B:  native, SMAA
+#   C:  67% (1280x720), SMAA, bilinear
+#   D:  67%, SMAA, FSR 1 (EASU + RCAS, sharpness 0.25 stops)
+#   E:  50% (960x540), SMAA, FSR 1
+# Each arm sets the engine directly through inline define-extern'd setters (pc-set-smaa 0 mode,
+# pc-set-render-scale 0 scale / 1 upscaler), so the forms compile in a goalc whose type info
+# predates the branch, and arms in one instance never leak into each other.
+# Crops (x, y, w, h at 1920x1080; show at 2x or 4x) are in `crop`.
+schema: 1
+set: render-scale
+variants:
+  A: ["(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-smaa (function int int none)) (define-extern pc-set-render-scale (function int int none)) (pc-set-smaa 0 0) (pc-set-render-scale 0 1000000) (pc-set-render-scale 1 1000000)"]
+  B: ["(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-smaa (function int int none)) (define-extern pc-set-render-scale (function int int none)) (pc-set-smaa 0 1000000) (pc-set-render-scale 0 1000000) (pc-set-render-scale 1 1000000)"]
+  C: ["(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-smaa (function int int none)) (define-extern pc-set-render-scale (function int int none)) (pc-set-smaa 0 1000000) (pc-set-render-scale 0 666667) (pc-set-render-scale 1 0)"]
+  D: ["(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-smaa (function int int none)) (define-extern pc-set-render-scale (function int int none)) (pc-set-smaa 0 1000000) (pc-set-render-scale 0 666667) (pc-set-render-scale 1 1000000)"]
+  E: ["(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-smaa (function int int none)) (define-extern pc-set-render-scale (function int int none)) (pc-set-smaa 0 1000000) (pc-set-render-scale 0 500000) (pc-set-render-scale 1 1000000)"]
+defaults:
+  resolution: [1920, 1080]
+  msaa: 4
+  settle_frames: 300
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+  actors: freeze
+shots:
+  # thin geometry against sky: windmill spokes and sail edges, horizon, palm fronds
+  # from shots/vista-fog/scout/mis-off/mis-c-noon.png (+ .json)
+  - name: aa-beach-windmill
+    continue: beach-start
+    hour: 12
+    jak: hide
+    crop: [1020, 280, 480, 270]
+    camera:
+      pos: [-491520.0, 245760.0, -245760.0]
+      rot: [0.999804, 0.0, -0.019798, 0.000783, 0.999217, 0.039557, 0.019783, -0.039565, 0.999021]
+  # rope bridge and palm fronds against the late-afternoon sky
+  # from shore-002/village1-dock-A-today.png (+ .json; that frame had wind and particles on)
+  - name: aa-village1-bridge
+    continue: village1-hut
+    hour: 16
+    crop: [180, 180, 480, 270]
+    camera:
+      pos: [40960.0, 16384.0, 409600.0]
+      rot: [-0.311039, 0.0, 0.950397, -0.057375, 0.998176, -0.018777, -0.948664, -0.06037, -0.310472]
+  # alpha-tested canopy: cut-out leaf holes against the sky
+  # from class-response-001/A/jungle-canopy-noon.png (+ .json)
+  - name: aa-jungle-canopy
+    continue: jungle-start
+    hour: 12
+    crop: [1050, 60, 480, 270]
+    camera:
+      pos: [1004424.8125, 111181.796875, -611527.875]
+      rot: [-0.556792, 0.0, -0.830652, -0.476443, 0.819152, 0.319363, 0.68043, 0.573576, -0.456097]
+  # snow sun glints (on in the play look, pbr.toml glint 1.0): specular sparkle, low sun
+  # from snow-glints-004/B1/snow-grazing-sun.png (+ .json)
+  - name: aa-snow-glints
+    continue: snow-start
+    hour: 7.5
+    jak: hide
+    jak_pos: [4107151.75, 1026399.625, -13540062.0]
+    crop: [1020, 750, 480, 270]
+    camera:
+      pos: [4168316.5, 1033128.5, -13600052.0]
+      rot: [0.982557, 0.0, 0.185962, -0.038664, 0.978148, 0.204285, -0.181898, -0.207912, 0.961086]

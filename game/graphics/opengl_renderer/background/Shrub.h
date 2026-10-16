@@ -9,6 +9,10 @@
 #include "game/graphics/opengl_renderer/background/background_common.h"
 #include "game/graphics/pipelines/opengl.h"
 
+struct UnbakeSidecar;
+
+struct PbrLevelMaps;
+
 class Shrub : public BucketRenderer {
  public:
   Shrub(const std::string& name, int my_id);
@@ -43,6 +47,16 @@ class Shrub : public BucketRenderer {
     const u32* index_data = nullptr;
     std::vector<bool> proto_vis_mask;
     std::unordered_map<std::string, std::vector<u32>> proto_name_to_idx;
+    // frustum-cull chunks: runs of whole strips in draw order, built on first use
+    const tfrag3::ShrubTree* src = nullptr;
+    struct Chunk {
+      math::Vector4f bsphere;
+      u32 first_index, num_indices;
+      float max_strip;  // largest strip (instance) extent in the chunk
+    };
+    std::vector<Chunk> chunks;
+    std::vector<std::pair<u32, u32>> draw_chunks;  // per draw: first chunk, count
+    std::vector<u8> chunk_vis;
 
     struct {
       u32 draws = 0;
@@ -60,9 +74,17 @@ class Shrub : public BucketRenderer {
     GLuint decal;
   } m_uniforms;
 
+  void build_chunks(Tree& tree);
+  /// Multidraw lists holding only the frustum-visible chunks; returns false if not usable.
+  bool make_culled_multidraws(Tree& tree,
+                              const TfragRenderSettings& settings,
+                              const SharedRenderState* render_state);
   std::vector<Tree> m_trees;
   std::string m_level_name;
   const std::vector<GLuint>* m_textures;
+  const UnbakeSidecar* m_unbake = nullptr;
+  const std::vector<u8>* m_tex_class = nullptr;
+  PbrLevelMaps* m_pbr_maps = nullptr;
   u64 m_load_id = -1;
 
   std::vector<math::Vector<u8, 4>> m_color_result;

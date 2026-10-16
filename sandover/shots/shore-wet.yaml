@@ -1,0 +1,132 @@
+# Wet shoreline round, revision 3: porous surfaces wet in a band above the sea, in the sea
+# levels but the swamp. Five cameras, each as C original game (vanilla: no look forms, the rig
+# boots all off), A today (the play look, shore off) and B the wet shore (the play look plus
+# `sandover-preset apply shore shore`). Vanilla first because toggles persist within an instance;
+# one instance (--parallel 1).
+# Same waves in every arm: the game's ocean takes its wave heights from integral-frame-counter
+# (draw-ocean, ocean-interp-wave), which the rig sets to a different epoch per shot, so every
+# shot's stage hook moves all game clocks to 100000 s (rig-set-clock) 4 frames before the shot;
+# A and B also pin the Sandover wave clock at 120 s (pc-set-water 90). Wind restarts from
+# rig-reseed at the same point of every sequence, so it matches between arms.
+# Cameras (picked offline from the level background glbs, first ray hit checked):
+# - beach-shore: the water.yaml camera, 15 h.
+# - beach-inland: on the sand 2.6 m up at (-350, 5, -500) m looking north-west at low sand
+#   (y 0.7-1.0 m) around (-365, 0.7, -466) m, 20-40 m from any geometry below sea level: the
+#   predicted misfire (damp-looking sand away from the water).
+# - training-shore: 3 m over the shallows at (-1260, 3, 1120) m looking south-west at the sand.
+# - village1-pier: 2.5 m over open water at (-24, 2.5, 95) m (swell crests stay under ~1 m),
+#   looking south-west past the pier planks at (-29, 1.5, 88) m to the waterline sand 30 m out.
+# - village2-rockfoot: 4 m over the water at (330, 4, -1560) m looking north-west at the rock
+#   wall's foot at the waterline (305.6, 0.1, -1535) m.
+# Each look is the play look minus HDR output, as swamp-directions.yaml.
+set: shore-wet
+looks:
+  A: &A  # today (shore off)
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-ssao-preset 4)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-water 90 120000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 16 0)'
+  B: &B  # wet shore
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-ssao-preset 4)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-water 90 120000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 17 1000000)'
+    - '(pc-set-swamp 18 720000)'
+    - '(pc-set-swamp 19 500000)'
+    - '(pc-set-swamp 20 2000000)'
+    - '(pc-set-swamp 16 1000000)'
+  C: &C  # original game: the clock pin only
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 120
+  effects: on
+  wind: on
+  particles: on
+  jak: show
+shots:
+  - {name: beach-shore-vanilla, continue: beach-start, hour: 15, camera: {pos: [-716800.0, 11468.8, -184320.0], rot: [-0.707107, 0.0, -0.707107, 0.019992, 0.9996, -0.019992, 0.706824, -0.028273, -0.706824]},
+     goals_after_load: *C}
+  - {name: beach-inland-vanilla, continue: beach-start, hour: 15, camera: {pos: [-1433600.0, 20480.0, -2048000.0], rot: [0.909474, -0.0, 0.41576, -0.044045, 0.994373, 0.096349, -0.41342, -0.105939, 0.904357]},
+     goals_after_load: *C}
+  - {name: training-shore-vanilla, continue: training-start, hour: 12, camera: {pos: [-5160960.0, 12288.0, 4587520.0], rot: [-0.811534, 0.0, 0.584305, -0.04914, 0.996457, -0.06825, -0.582235, -0.084101, -0.808659]},
+     goals_after_load: *C}
+  - {name: village1-pier-vanilla, continue: village1-hut, hour: 15, camera: {pos: [-98304.0, 10240.0, 389120.0], rot: [-0.640184, 0.0, 0.768221, -0.097564, 0.991903, -0.081304, -0.762001, -0.127, -0.635001]},
+     goals_after_load: *C}
+  - {name: village2-rockfoot-vanilla, continue: village2-start, hour: 12.652, camera: {pos: [1351680.0, 16384.0, -6389760.0], rot: [0.71451, -0.0, 0.699625, -0.076603, 0.993988, 0.078233, -0.695418, -0.109491, 0.710215]},
+     goals_after_load: *C}
+  - {name: beach-shore-A-today, continue: beach-start, hour: 15, camera: {pos: [-716800.0, 11468.8, -184320.0], rot: [-0.707107, 0.0, -0.707107, 0.019992, 0.9996, -0.019992, 0.706824, -0.028273, -0.706824]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: beach-inland-A-today, continue: beach-start, hour: 15, camera: {pos: [-1433600.0, 20480.0, -2048000.0], rot: [0.909474, -0.0, 0.41576, -0.044045, 0.994373, 0.096349, -0.41342, -0.105939, 0.904357]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: training-shore-A-today, continue: training-start, hour: 12, camera: {pos: [-5160960.0, 12288.0, 4587520.0], rot: [-0.811534, 0.0, 0.584305, -0.04914, 0.996457, -0.06825, -0.582235, -0.084101, -0.808659]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: village1-pier-A-today, continue: village1-hut, hour: 15, camera: {pos: [-98304.0, 10240.0, 389120.0], rot: [-0.640184, 0.0, 0.768221, -0.097564, 0.991903, -0.081304, -0.762001, -0.127, -0.635001]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: village2-rockfoot-A-today, continue: village2-start, hour: 12.652, camera: {pos: [1351680.0, 16384.0, -6389760.0], rot: [0.71451, -0.0, 0.699625, -0.076603, 0.993988, 0.078233, -0.695418, -0.109491, 0.710215]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: beach-shore-B-shore, continue: beach-start, hour: 15, camera: {pos: [-716800.0, 11468.8, -184320.0], rot: [-0.707107, 0.0, -0.707107, 0.019992, 0.9996, -0.019992, 0.706824, -0.028273, -0.706824]},
+     goals_after_load: *B, wait_vista: true}
+  - {name: beach-inland-B-shore, continue: beach-start, hour: 15, camera: {pos: [-1433600.0, 20480.0, -2048000.0], rot: [0.909474, -0.0, 0.41576, -0.044045, 0.994373, 0.096349, -0.41342, -0.105939, 0.904357]},
+     goals_after_load: *B, wait_vista: true}
+  - {name: training-shore-B-shore, continue: training-start, hour: 12, camera: {pos: [-5160960.0, 12288.0, 4587520.0], rot: [-0.811534, 0.0, 0.584305, -0.04914, 0.996457, -0.06825, -0.582235, -0.084101, -0.808659]},
+     goals_after_load: *B, wait_vista: true}
+  - {name: village1-pier-B-shore, continue: village1-hut, hour: 15, camera: {pos: [-98304.0, 10240.0, 389120.0], rot: [-0.640184, 0.0, 0.768221, -0.097564, 0.991903, -0.081304, -0.762001, -0.127, -0.635001]},
+     goals_after_load: *B, wait_vista: true}
+  - {name: village2-rockfoot-B-shore, continue: village2-start, hour: 12.652, camera: {pos: [1351680.0, 16384.0, -6389760.0], rot: [0.71451, -0.0, 0.699625, -0.076603, 0.993988, 0.078233, -0.695418, -0.109491, 0.710215]},
+     goals_after_load: *B, wait_vista: true}

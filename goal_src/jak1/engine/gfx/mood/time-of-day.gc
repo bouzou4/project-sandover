@@ -20,11 +20,14 @@
 (defbehavior time-of-day-update time-of-day-proc ()
   "Update the particles and sky tng renderer for time-of-day effects"
   (time-of-day-effect)
+  ;; Sandover: the sky bodies' own sun and stars replace these particles (the green sun stays)
+  (let ((owned (pc-get-sky-bodies)))
   ;; spawn or kill stars, if needed.
   (cond
     ;; should have stars in the sky
     ((and (or (>= (-> self hour) 19) (>= 5 (-> self hour)))
-          (and (< 45.0 (-> *time-of-day-context* num-stars)) (-> *time-of-day-context* sky))) ;; sky + stars desired
+          (and (< 45.0 (-> *time-of-day-context* num-stars)) (-> *time-of-day-context* sky)) ;; sky + stars desired
+          (zero? (logand owned 2)))
      ;; see if we need more
      (when (and *dproc* (< (-> self star-count) (the int (-> *time-of-day-context* num-stars))))
        (spawn (-> self stars) (math-camera-pos))
@@ -42,11 +45,12 @@
      0))
   ;; spawn or kill sun, if needed
   (cond
-    ((and (>= (-> self time-of-day) 6.25) (< (-> self time-of-day) 18.75) (!= (-> *time-of-day-context* sun-fade) 0.0))
+    ((and (>= (-> self time-of-day) 6.25) (< (-> self time-of-day) 18.75) (!= (-> *time-of-day-context* sun-fade) 0.0)
+          (zero? (logand owned 1)))
      (when (and *dproc* (zero? (-> self sun-count)))
        (spawn (-> self sun) (math-camera-pos))
        (+! (-> self sun-count) 1)))
-    ((> (-> self sun-count) 0) (kill-and-free-particles (-> self sun)) (set! (-> self sun-count) 0) 0))
+    ((> (-> self sun-count) 0) (kill-and-free-particles (-> self sun)) (set! (-> self sun-count) 0) 0)))
   ;; spawn or kill green sun, if needed
   (cond
     ((and (or (>= (-> self time-of-day) 21.75) (>= 10.25 (-> self time-of-day)))

@@ -1,0 +1,594 @@
+;; Runtime helpers for the capture rig, sent to the game through goalc's nREPL.
+;; Needs the game's type info in the compiler, i.e. (mi) earlier in the same goalc session.
+;; Every step is counted in frames inside the game, so shots do not depend on nREPL latency.
+
+;; Declared but never defined in Jak 1 (kernel-defs.gc); layout matches ScreenShotSettings.
+(deftype screen-shot-settings (structure)
+  ((width  int32)
+   (height int32)
+   (msaa   int32)
+   (name   uint8 244)))
+
+(define *rig-shot* (new 'global 'screen-shot-settings))
+(define *rig-shot-stem* 0)  ;; length of the shot's own file stem
+
+(defun rig-shot-setup ((w int) (h int) (msaa int) (name string))
+  "Register screenshot size, MSAA and file stem (no extension) with the renderer."
+  (set! (-> *rig-shot* width) w)
+  (set! (-> *rig-shot* height) h)
+  (set! (-> *rig-shot* msaa) msaa)
+  (let ((n (min (length name) 243)))
+    (dotimes (i n)
+      (set! (-> *rig-shot* name i) (-> name data i)))
+    (set! (-> *rig-shot* name n) 0)
+    (set! *rig-shot-stem* n))
+  (pc-register-screen-shot-settings *rig-shot*)
+  (format 0 "RIG:SHOTCFG ~D ~D ~D ~A~%" w h msaa name)
+  (none))
+
+(defun rig-shot-suffix ((suffix string))
+  "Register the shot's stem followed by SUFFIX (replacing any earlier suffix)."
+  (let ((n *rig-shot-stem*))
+    (set! (-> *rig-shot* name n) 0)
+    (dotimes (i (min (length suffix) (- 243 n)))
+      (set! (-> *rig-shot* name (+ n i)) (-> suffix data i))
+      (set! (-> *rig-shot* name (+ n i 1)) 0)))
+  (pc-register-screen-shot-settings *rig-shot*)
+  (none))
+
+;; Paused-frame A/B (capture run --ab-mask): *rig-ab* on, mask A, then mask B, then mask A again
+;; (A2: the shot's own floor, catching state that still moves while paused). Symbol values are
+;; 32 bits, so a mask above #x7fffffff reads back negative; pc-set-perf-opt keeps the low 32 bits.
+;; Both frames are rendered from the same paused game state, RIG_AB_SETTLE frames after the mask
+;; is set, so frame-to-frame state (tile-light hysteresis and fades) settles on the still image.
+(define-extern pc-set-perf-opt (function int none))
+(define *rig-ab* #f)
+(define *rig-ab-mask* -1)
+(define *rig-ab-a* -1)
+(defconstant RIG_AB_SETTLE 48)
+
+;; Per-shot options, filled by rig-shot before the sequence starts.
+(deftype rig-opts (structure)
+  ((cont        string)
+   (hour        float)
+   (cam-mode    symbol)
+   (cam-trans   vector :inline)
+   (cam-rot     matrix :inline)
+   (hide-jak    symbol)
+   (wind        symbol)
+   (effects     symbol)
+   (particles   symbol)
+   (settle      int32)
+   (epoch       time-frame)
+   (jak-move    symbol)
+   (jak-trans   vector :inline)
+   (pan-frames  int32)
+   (actors      symbol)))
+
+(define *rig-opts* (new 'global 'rig-opts))
+(define *rig-start-time* (the time-frame 0))
+(define *rig-busy* #f)
+(define *rig-wind-scales* (the-as (array uint8) #f))
+;; pan burst cameras: per frame pos (3) then the three inverse-rotation rows (9)
+(defconstant RIG_PAN_MAX 32)
+;; frames after the rig re-fixes a camera the game had moved, before the pause
+(defconstant RIG_CAM_SETTLE 30)
+(define *rig-pan* (new 'global 'boxed-array float (* RIG_PAN_MAX 12)))
+;; optional (function none) run once actors have spawned, e.g. to remove some for an experiment
+(define *rig-stage-hook* (the-as (function none) #f))
+;; #t before rig-shot: the shot stops after RIG:READY and the camera fix (printing RIG:HOLD)
+;; until it is set back to #f, so forms can be sent to the loaded level first
+(define *rig-hold* #f)
+;; actors 'freeze: groups held by the rig's process-mask setting (target-death's set plus crates
+;; and ambients); Jak, Daxter, cameras, collectables and ungrouped actors (water) keep running
+(define *rig-freeze-mask* (process-mask enemy platform projectile death crate ambient))
+;; settle frames the respawned actors run before actors 'freeze holds them
+(defconstant RIG_FREEZE_INIT 20)
+(define *rig-frozen* #f)
+(define *rig-jak-invuln* #f)
+
+(defun rig-exempt-spawners ()
+  "Part spawners carry the ambient bit: clear it while frozen so emitters keep launching,
+set it back (part-spawner's init always sets it) when released."
+  (iterate-process-tree
+    *active-pool*
+    (lambda ((p process))
+      (when (type-type? (-> p type) part-spawner)
+        (if *rig-frozen*
+            (logclear! (-> p mask) (process-mask ambient))
+            (logior! (-> p mask) (process-mask ambient))))
+      (none))
+    *null-kernel-context*)
+  (none))
+
+(defun rig-protect-jak ()
+  "While frozen, Jak is invulnerable (the debug menu's flag), so a held hazard touching him
+cannot hurt him or bring up the HUD."
+  (when (and *target* *rig-frozen*)
+    (logior! (-> *target* state-flags) (state-flags invulnerable)))
+  (none))
+
+(defun rig-freeze ((on symbol))
+  "Hold (ON #t) or release the actor groups in *rig-freeze-mask*. The setting belongs to the
+calling process (the rig sequence), so it also goes if that process dies."
+  (cond
+    (on
+      (set! *rig-jak-invuln* (if (and *target* (logtest? (-> *target* state-flags) (state-flags invulnerable))) #t #f))
+      (set! *rig-frozen* #t)
+      (set-setting! 'process-mask 'set 0.0 *rig-freeze-mask*)
+      ;; no births or kills while held: a newborn actor would never pose
+      (set! *spawn-actors* #f))
+    (else
+      (set! *rig-frozen* #f)
+      (remove-setting! 'process-mask)
+      (set! *spawn-actors* #t)
+      (if (and *target* (not *rig-jak-invuln*))
+          (logclear! (-> *target* state-flags) (state-flags invulnerable)))))
+  (apply-settings *setting-control*)
+  (rig-exempt-spawners)
+  (rig-protect-jak)
+  (none))
+
+;; #f (default): end every cutscene as it starts; #t (capture --cutscenes): let them play
+(define *rig-cutscenes* #f)
+;; cutscenes ended during the current shot, and whether an unknown one was reported
+(define *rig-cuts* 0)
+(define *rig-cut-other* #f)
+
+(defun rig-state-name ((p process))
+  (if (-> p state) (-> p state name) 'none))
+
+(defun rig-end-cutscenes ()
+  "End the cutscenes that are playing: an NPC movie (process-taskable) the way the PC skip
+button does (its query answers 'no), a pov-camera movie through its abort path."
+  (let ((found #f))
+    (iterate-process-tree
+      *active-pool*
+      (lambda ((p process))
+        (cond
+          ((type-type? (-> p type) process-taskable)
+           (let ((pt (the process-taskable p))
+                 (st (rig-state-name p)))
+             (when (and (or (= st 'play-anim) (= st 'play-accept) (= st 'play-reject))
+                        (= (-> pt query decision) 'undecided))
+               (set! (-> pt query decision) 'no)
+               (+! *rig-cuts* 1)
+               (format 0 "RIG:CUTSCENE ~A taskable ~A ~A~%" (-> *rig-opts* cont) (-> pt name) st))))
+          ((type-type? (-> p type) pov-camera)
+           (let ((pv (the pov-camera p)))
+             (when (and (= (rig-state-name p) 'pov-camera-playing)
+                        (not (logtest? (-> pv flags) (pov-camera-flag allow-abort))))
+               (logior! (-> pv flags) (pov-camera-flag notify-of-abort allow-abort))
+               (send-event pv 'abort)
+               (+! *rig-cuts* 1)
+               (format 0 "RIG:CUTSCENE ~A pov-camera ~A~%" (-> *rig-opts* cont)
+                       (if (= (-> pv anim-name type) string) (-> pv anim-name) (-> pv name)))))))
+        (none))
+      *null-kernel-context*)
+    ;; a movie no rule above ends (camera-tracker scripts, racer and blimp rides): report it once
+    (when (and (movie?) (zero? *rig-cuts*) (not *rig-cut-other*))
+      (set! *rig-cut-other* #t)
+      (format 0 "RIG:CUTSCENE ~A other~%" (-> *rig-opts* cont))))
+  (none))
+
+(defun rig-cutscene-watch ((parent process))
+  "Child of the shot's sequence: every frame, unless the shot allows cutscenes, end any that
+started. Runs through movies (no movie bit) and dies with the sequence."
+  (set! *rig-cuts* 0)
+  (set! *rig-cut-other* #f)
+  (process-spawn-function process
+    (lambda :behavior process ()
+      (logclear! (-> self mask) (process-mask pause menu progress movie))
+      (loop
+        (when (not *rig-cutscenes*)
+          (set! (-> *pc-settings* skip-movies?) #t)
+          (rig-end-cutscenes))
+        (suspend)))
+    :to parent)
+  (none))
+
+(defun rig-mode ((on symbol))
+  "Deterministic capture mode: fixed game-time step per frame, no pause banner, no sha."
+  (set! *fixed-frame-step* on)
+  (set! *display-sha* (not on))
+  (set! *cheat-mode* (if on 'camera #f))
+  (format 0 "RIG:MODE ~A~%" on)
+  (none))
+
+(defun rig-ready? ((cont string))
+  "True once the Jak spawned by our start stands at CONT, past the blackout, with no movie."
+  (and *target*
+       (> *rig-start-time* 0)
+       (= (-> *target* next-state name) 'target-stance)
+       (>= (-> *target* state-time) *rig-start-time*)
+       (string= (-> *game-info* current-continue name) cont)
+       (not (movie?))
+       (> (current-time) (-> *game-info* blackout-time))))
+
+(defun rig-set-clock ((t time-frame))
+  "Move every game clock to T (like a save load does), keeping timers relative to it."
+  (let* ((d (- t (current-time)))
+         (disp *display*)
+         (gi *game-info*)
+         (frames (/ d 5)))
+    (+! (-> disp base-frame-counter) d)
+    (+! (-> disp game-frame-counter) d)
+    (+! (-> disp part-frame-counter) d)
+    (+! (-> disp real-frame-counter) d)
+    (+! (-> disp integral-frame-counter) frames)
+    (+! (-> disp real-integral-frame-counter) frames)
+    (set! (-> disp old-base-frame-counter) (+ (-> disp base-frame-counter) -1))
+    (set! (-> disp old-game-frame-counter) (+ (-> disp game-frame-counter) -1))
+    (set! (-> disp old-part-frame-counter) (+ (-> disp part-frame-counter) -1))
+    (set! (-> disp old-real-frame-counter) (+ (-> disp real-frame-counter) -1))
+    (set! (-> disp old-integral-frame-counter) (+ (-> disp integral-frame-counter) -1))
+    (set! (-> disp old-real-integral-frame-counter) (+ (-> disp real-integral-frame-counter) -1))
+    (if (nonzero? (-> gi blackout-time)) (+! (-> gi blackout-time) d))
+    (if (nonzero? (-> gi letterbox-time)) (+! (-> gi letterbox-time) d))
+    (if (nonzero? (-> gi hint-play-time)) (+! (-> gi hint-play-time) d))
+    (if (nonzero? (-> gi display-text-time)) (+! (-> gi display-text-time) d))
+    (when *target*
+      (+! (-> *target* state-time) d)
+      (let ((sk (-> *target* sidekick)))
+        (if sk (+! (-> sk 0 state-time) d))))
+    (+! *rig-start-time* d))
+  (none))
+
+(defun rig-reseed ()
+  "Reset random generators, wind forcing, particle clock, cloud scroll and actor pause distance."
+  (rand-vu-init 1.0)
+  (set! (-> *random-generator* seed) #x666edd1e)
+  (set! (-> *wind-work* wind-time) (the-as uint 0))
+  (set! (-> *wind-work* wind-normal w) 0.0)
+  (dotimes (i 64)
+    (vector-reset! (-> *wind-work* wind-array i))
+    (set! (-> *wind-work* wind-force i) 0.0))
+  (set! *particle-300hz-timer* 0)
+  (set! (-> *ACTOR-bank* pause-dist) (-> *ACTOR-bank* birth-dist))
+  (let ((sky *sky-tng-data*))
+    (set! (-> sky off-s-0) (the-as uint 0))
+    (set! (-> sky off-t-0) (the-as uint 0))
+    (set! (-> sky off-s-1) (the-as uint 0))
+    (set! (-> sky off-t-1) (the-as uint 0)))
+  (none))
+
+(defun rig-reset-ripples ()
+  "Restart the water ripple phases of every live actor (they accumulate from level load)."
+  (iterate-process-tree
+    *active-pool*
+    (lambda ((p process))
+      (when (type-type? (-> p type) process-drawable)
+        (let ((pd (the process-drawable p)))
+          (when (and (nonzero? (-> pd draw)) (-> pd draw) (nonzero? (-> pd draw ripple)) (-> pd draw ripple))
+            (let ((w (-> pd draw ripple waveform)))
+              (when w
+                (dotimes (i (-> w count))
+                  (set! (-> w wave i offs) 0.0))
+                (set! (-> w frame-save) (the-as uint (-> *display* integral-frame-counter))))))))
+      (none))
+    *null-kernel-context*)
+  (none))
+
+(defun rig-reset-effect-weights ()
+  "Zero every palette slot weight of the loaded levels' moods. The hour table rewrites the sun
+slots each frame; with effects off, effect slots (flames, caustics...) then stay at zero."
+  (dotimes (i (-> *level* length))
+    (let ((lev (-> *level* level i)))
+      (when (and (= (-> lev status) 'active) (nonzero? (-> lev mood)) (-> lev mood))
+        (dotimes (k 8)
+          (set! (-> lev mood times k w) 0.0)))))
+  (none))
+
+(defun rig-camera ()
+  "Fix the camera at the continue point's camera, or at the explicit one in *rig-opts*."
+  (let ((o *rig-opts*))
+    (when (= (-> o cam-mode) 'continue)
+      (let ((cp (get-continue-by-name *game-info* (-> o cont)))
+            (m (-> o cam-rot)))
+        (set! (-> o cam-trans quad) (-> cp camera-trans quad))
+        (matrix-identity! m)
+        (set! (-> m vector 0 x) (-> cp camera-rot 0))
+        (set! (-> m vector 0 y) (-> cp camera-rot 1))
+        (set! (-> m vector 0 z) (-> cp camera-rot 2))
+        (set! (-> m vector 1 x) (-> cp camera-rot 3))
+        (set! (-> m vector 1 y) (-> cp camera-rot 4))
+        (set! (-> m vector 1 z) (-> cp camera-rot 5))
+        (set! (-> m vector 2 x) (-> cp camera-rot 6))
+        (set! (-> m vector 2 y) (-> cp camera-rot 7))
+        (set! (-> m vector 2 z) (-> cp camera-rot 8))))
+    (if (!= (-> o cam-mode) 'follow)
+        (debug-set-camera-pos-rot! (-> o cam-trans) (-> o cam-rot))))
+  (none))
+
+(defun rig-stage ()
+  "Time of day, effects, wind, HUD, Jak visibility for the current shot."
+  (let ((o *rig-opts*))
+    (set-time-of-day (-> o hour))
+    (set! (-> *time-of-day-proc* 0 time-ratio) 0.0)
+    (set! *time-of-day-effects* (-> o effects))
+    (if (not (-> o effects)) (rig-reset-effect-weights))
+    (when (not *rig-wind-scales*)
+      (set! *rig-wind-scales* (new 'global 'boxed-array uint8 (-> *wind-scales* length)))
+      (dotimes (i (-> *wind-scales* length))
+        (set! (-> *rig-wind-scales* i) (-> *wind-scales* i))))
+    (dotimes (i (-> *wind-scales* length))
+      (set! (-> *wind-scales* i) (if (-> o wind) (-> *rig-wind-scales* i) 0)))
+    (hide-hud-quick)
+    (if (-> o hide-jak) (send-event *target* 'draw #f)))
+  (none))
+
+;; One log line is built here and printed with a single format call: each (format 0 ...) is a
+;; separate write, and render-thread log lines landed between the pieces of a camera line.
+(define *rig-line* (new 'global 'string 512 (the string #f)))
+
+(defun rig-print-bits ((dst string) (trans vector) (rot matrix))
+  "Append TRANS and the 3x3 of ROT (row-major) to DST as raw float bits, one leading space each."
+  (dotimes (k 3)
+    (format dst " ~X" (the-as uint32 (-> trans data k))))
+  (dotimes (r 3)
+    (dotimes (k 3)
+      (format dst " ~X" (the-as uint32 (-> rot vector r data k)))))
+  (none))
+
+(defun rig-print-camera ()
+  "Print RIG:CAMERA, the *math-camera* trans and inv-camera-rot, then RIG:CAMREQ, the camera
+the shot asked for (*rig-opts*), both as raw float bits."
+  (clear *rig-line*)
+  (format *rig-line* "RIG:CAMERA")
+  (rig-print-bits *rig-line* (-> *math-camera* trans) (-> *math-camera* inv-camera-rot))
+  (format 0 "~A~%" *rig-line*)
+  (clear *rig-line*)
+  (format *rig-line* "RIG:CAMREQ")
+  (rig-print-bits *rig-line* (-> *rig-opts* cam-trans) (-> *rig-opts* cam-rot))
+  (format 0 "~A~%" *rig-line*)
+  (none))
+
+(defun rig-camera-off? ()
+  "True when *math-camera* is more than 1 cm (41 units) or 0.0005 in a rotation element away
+from the camera in *rig-opts*."
+  (let ((c *math-camera*)
+        (o *rig-opts*)
+        (off #f))
+    (if (< 41.0 (vector-vector-distance (-> c trans) (-> o cam-trans)))
+        (set! off #t))
+    (dotimes (r 3)
+      (dotimes (k 3)
+        (if (< 0.0005 (fabs (- (-> c inv-camera-rot vector r data k) (-> o cam-rot vector r data k))))
+            (set! off #t))))
+    off))
+
+(defun rig-print-camera-fix ()
+  "Print RIG:CAMFIX: the camera master's region entity, its first slave's state and the
+camera it drew (raw float bits), before the rig puts its own camera back."
+  (clear *rig-line*)
+  (let ((cm *camera*))
+    (format *rig-line* "RIG:CAMFIX ~A region=~A state=~A slaves=~D" (-> *rig-opts* cont)
+            (if (and cm (-> cm cam-entity)) (res-lump-struct (-> cm cam-entity) 'name structure) "none")
+            (if (and cm (> (-> cm num-slaves) 0)) (-> cm slave 0 0 next-state name) 'none)
+            (if cm (-> cm num-slaves) 0)))
+  (rig-print-bits *rig-line* (-> *math-camera* trans) (-> *math-camera* inv-camera-rot))
+  (format 0 "~A~%" *rig-line*)
+  (none))
+
+(defun rig-set-pan-frames ((n int))
+  "Next shot: a burst of N consecutive frames (after settling) with the camera at pan cameras 1..N+4."
+  (set! (-> *rig-opts* pan-frames) (min n (- RIG_PAN_MAX 5)))
+  (none))
+
+(defun rig-set-pan-pos ((i int) (x float) (y float) (z float))
+  "Pan camera I position (game units)."
+  (let ((b (* i 12)))
+    (set! (-> *rig-pan* b) x)
+    (set! (-> *rig-pan* (+ b 1)) y)
+    (set! (-> *rig-pan* (+ b 2)) z))
+  (none))
+
+(defun rig-set-pan-row ((i int) (row int) (a float) (b float) (c float))
+  "Row ROW of pan camera I's inverse rotation (as rig-set-camera-row)."
+  (let ((k (+ (* i 12) 3 (* row 3))))
+    (set! (-> *rig-pan* k) a)
+    (set! (-> *rig-pan* (+ k 1)) b)
+    (set! (-> *rig-pan* (+ k 2)) c))
+  (none))
+
+(defun rig-pan-camera ((i int))
+  "Fix the camera at pan camera I."
+  (let ((o *rig-opts*)
+        (b (* i 12)))
+    (set-vector! (-> o cam-trans) (-> *rig-pan* b) (-> *rig-pan* (+ b 1)) (-> *rig-pan* (+ b 2)) 1.0)
+    (matrix-identity! (-> o cam-rot))
+    (dotimes (r 3)
+      (let ((k (+ b 3 (* r 3))))
+        (set-vector! (-> o cam-rot vector r)
+                     (-> *rig-pan* k) (-> *rig-pan* (+ k 1)) (-> *rig-pan* (+ k 2)) 0.0)))
+    (debug-set-camera-pos-rot! (-> o cam-trans) (-> o cam-rot)))
+  (none))
+
+(defun rig-sequence ()
+  "Spawn the in-game process that stages and shoots the shot described by *rig-opts*."
+  (set! *rig-busy* #t)
+  (process-spawn-function process
+    (lambda :behavior process ()
+      (logclear! (-> self mask) (process-mask pause menu progress))
+      (let ((o *rig-opts*))
+        ;; a sequence that died while frozen: its setting went with it, release the rest
+        (if *rig-frozen* (rig-freeze #f))
+        (rig-cutscene-watch self)
+        (rig-set-clock (-> o epoch))
+        (rig-reseed)
+        (set! *rig-start-time* (current-time))
+        (start 'play (get-continue-by-name *game-info* (-> o cont)))
+        (format 0 "RIG:START ~A~%" (-> o cont))
+        (until (rig-ready? (-> o cont))
+          ;; an ended movie may have moved the continue (citadel's sage intro sets citadel-elevator)
+          (if (and (> *rig-cuts* 0) (not (movie?)) *target*
+                   (not (string= (-> *game-info* current-continue name) (-> o cont))))
+              (set-continue! *game-info* (-> o cont)))
+          (suspend))
+        (format 0 "RIG:READY ~A load=~D cuts=~D~%" (-> o cont) (- (current-time) *rig-start-time*) *rig-cuts*)
+        ;; fix the camera, clear actors and particles, then give every run the same clock,
+        ;; seeds and births
+        (rig-camera)
+        (if (-> o jak-move)
+            (move-to-point! (-> *target* control) (-> o jak-trans)))
+        (when *rig-hold*
+          (format 0 "RIG:HOLD ~A~%" (-> o cont))
+          (while *rig-hold*
+            (suspend))
+          (format 0 "RIG:RELEASED ~A~%" (-> o cont)))
+        ;; after the hold: a region camera may have taken over while Jak moved or landed
+        (rig-camera)
+        (forall-particles sparticle-kill-it #t #t)
+        (reset-actors 'life)
+        (set! *spawn-actors* #f)
+        (dotimes (i 2)
+          (suspend))
+        (rig-set-clock (+ (-> o epoch) (seconds 600)))
+        (rig-reseed)
+        (set! *particles-flag* (-> o particles))
+        ;; the kill took the sky particles: time-of-day spawns its sun, green sun and stars again
+        (let ((tod (-> *time-of-day-proc* 0)))
+          (set! (-> tod sun-count) 0)
+          (set! (-> tod green-sun-count) 0)
+          (set! (-> tod star-count) 0))
+        (set! *spawn-actors* #t)
+        (rig-stage)
+        (set! *pc-wind-reset* #t)
+        (suspend)
+        (set! *pc-wind-reset* #f)
+        (dotimes (i 10)
+          (suspend))
+        (rig-reset-ripples)
+        ;; actors 'freeze: hold the actor groups once they have posed and landed
+        (let ((init (min (-> o settle) RIG_FREEZE_INIT)))
+          (dotimes (i (-> o settle))
+            (when (and (= i init) (= (-> o actors) 'freeze))
+              (rig-freeze #t)
+              (format 0 "RIG:ACTORS freeze after=~D~%" i))
+            (rig-protect-jak)
+            (suspend))
+          (when (and (= (-> o actors) 'freeze) (not *rig-frozen*))
+            (rig-freeze #t)
+            (format 0 "RIG:ACTORS freeze after=~D~%" init)))
+        (when *rig-stage-hook*
+          (*rig-stage-hook*)
+          (dotimes (i 4)
+            (suspend)))
+        ;; Jak's move or landing sent the camera master into a camera region: fix it again
+        (when (and (!= (-> o cam-mode) 'follow) (rig-camera-off?))
+          (rig-print-camera-fix)
+          (rig-camera)
+          (dotimes (i RIG_CAM_SETTLE)
+            (suspend)))
+        ;; pan burst: the camera steps every frame; the renderer saves N consecutive frames
+        (when (> (-> o pan-frames) 0)
+          (rig-pan-camera 0)
+          (dotimes (i 2)
+            (suspend))
+          (pc-set-emissive-lights 17 (* (-> o pan-frames) 1000000))
+          (format 0 "RIG:PAN ~D~%" (-> o pan-frames))
+          (dotimes (i (+ (-> o pan-frames) 4))
+            (rig-pan-camera (+ i 1))
+            (suspend))
+          (format 0 "RIG:PANDONE~%"))
+        (when *rig-frozen*
+          (rig-protect-jak)
+          (hide-hud-quick))
+        ;; an open progress menu is already paused; 'pause would send it away before the shot
+        (if (not *progress-process*) (set-master-mode 'pause))
+        (dotimes (i 4)
+          (suspend))
+        (rig-print-camera)
+        (format 0 "RIG:STAGED t=~D hour=~D ~D rng=~X ~X pt=~D~%" (current-time)
+                (-> *time-of-day-proc* 0 hour) (-> *time-of-day-proc* 0 minute)
+                *_vu-reg-R_* (-> *random-generator* seed) *particle-300hz-timer*)
+        (when *rig-ab*
+          (pc-set-perf-opt *rig-ab-a*)
+          (dotimes (i RIG_AB_SETTLE)
+            (suspend)))
+        (pc-screen-shot)
+        (dotimes (i 4)
+          (suspend))
+        ;; A/B: the same paused frame again with perf-opt mask B, saved as <name>--ab-b
+        (when *rig-ab*
+          (pc-set-perf-opt *rig-ab-mask*)
+          (rig-shot-suffix "--ab-b")
+          (dotimes (i RIG_AB_SETTLE)
+            (suspend))
+          (pc-screen-shot)
+          (dotimes (i 4)
+            (suspend))
+          (pc-set-perf-opt *rig-ab-a*)
+          (rig-shot-suffix "--ab-a2")
+          (dotimes (i RIG_AB_SETTLE)
+            (suspend))
+          (pc-screen-shot)
+          (dotimes (i 4)
+            (suspend))
+          (format 0 "RIG:ABDONE ~A~%" (-> o cont)))
+        (format 0 "RIG:SHOT ~A cuts=~D~%" (-> o cont) *rig-cuts*)
+        (when *rig-frozen*
+          (rig-freeze #f)
+          (format 0 "RIG:ACTORS live~%"))
+        (if (not *progress-process*) (set-master-mode 'game))
+        (set! *particles-flag* #t)
+        (set! *rig-busy* #f))))
+  (none))
+
+(defun rig-set-options ((hide-jak symbol) (wind symbol) (effects symbol) (particles symbol))
+  "Options for the next rig-shot: hide Jak, foliage wind, time-of-day effects, particles.
+Clears a Jak position and a cutscene allowance set for the previous shot."
+  (let ((o *rig-opts*))
+    (set! (-> o hide-jak) hide-jak)
+    (set! (-> o wind) wind)
+    (set! (-> o effects) effects)
+    (set! (-> o particles) particles)
+    (set! (-> o jak-move) #f)
+    (set! (-> o pan-frames) 0)
+    (set! (-> o actors) 'live))
+  (set! *rig-cutscenes* #f)
+  (none))
+
+(defun rig-set-actors ((mode symbol))
+  "Next shot: 'live (actors run through the shot) or 'freeze (held after RIG_FREEZE_INIT
+settle frames, Jak invulnerable). Call after rig-set-options."
+  (set! (-> *rig-opts* actors) (if (= mode 'freeze) 'freeze 'live))
+  (none))
+
+(defun rig-set-cutscenes ((allow symbol))
+  "Next shot: ALLOW #t lets cutscenes play, #f (the default) ends each as it starts. Call
+after rig-set-options."
+  (set! *rig-cutscenes* allow)
+  (none))
+
+(defun rig-set-jak-pos ((x float) (y float) (z float))
+  "Move Jak to X Y Z (game units) once the next shot is ready; he lands while it settles."
+  (set-vector! (-> *rig-opts* jak-trans) x y z 1.0)
+  (set! (-> *rig-opts* jak-move) #t)
+  (none))
+
+(defun rig-shot ((cont string) (hour float) (cam-mode symbol) (settle int) (epoch int))
+  "Fill *rig-opts* and run one shot. CAM-MODE is 'continue, 'explicit (set cam-trans and
+cam-rot first with rig-set-camera-pos/-row) or 'follow. EPOCH is the game clock at start, in ticks."
+  (let ((o *rig-opts*))
+    (set! (-> o cont) cont)
+    (set! (-> o hour) hour)
+    (set! (-> o cam-mode) cam-mode)
+    (set! (-> o settle) settle)
+    (set! (-> o epoch) (the time-frame epoch)))
+  (rig-sequence)
+  (format 0 "RIG:SEQUENCE ~A~%" cont)
+  (none))
+
+(defun rig-set-camera-pos ((x float) (y float) (z float))
+  "Explicit camera position (game units) for the next shot; rows follow with rig-set-camera-row."
+  (set-vector! (-> *rig-opts* cam-trans) x y z 1.0)
+  (matrix-identity! (-> *rig-opts* cam-rot))
+  (none))
+
+(defun rig-set-camera-row ((row int) (a float) (b float) (c float))
+  "Row ROW (0-2) of the explicit camera's inverse rotation (as continue-point camera-rot)."
+  (set-vector! (-> *rig-opts* cam-rot vector row) a b c 0.0)
+  (none))
+
+(format 0 "RIG:LOADED~%")

@@ -1,0 +1,25 @@
+# World light list (issue #191 phase 2): spots where the baked lighting is dark but an emitter is
+# clearly there. Picked by `sandover-lights spots` (score = light the world list adds / baked
+# light on the geometry within the light's radius), best per kind on distinct levels; cameras
+# 3-5 m from the lit patch with the emitter just outside the frame (64 degree horizontal field of
+# view). The temple top keeps the power cell 18 degrees outside. Tile lights on in both runs;
+# world count 0 vs 16. See kb/findings/2026-09-25-world-light-list.md.
+set: world-lights
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 90
+  camera: from_continue
+  effects: on
+  wind: off
+  particles: on
+  jak: hide
+shots:
+  # darkcave:cavecrystal-5 (cavecrystal): score 0.83, added 0.096 over baked 0.065 on 546 vertices
+  - {name: darkcave-crystal-cavecrystal-5, continue: darkcave-start, hour: 12, camera: {pos: [3511344.3, 227299.1, -11914360.4], rot: [-0.3679, 0.0000, -0.9299, 0.1933, 0.9781, -0.0765, 0.9096, -0.2079, -0.3598]}}
+  # village1:static:21 (vil-lamp): score 0.30, added 0.148 over baked 0.439 on 318 vertices
+  - {name: village1-lamp-static-21, continue: village1-hut, hour: 23, camera: {pos: [-392789.0, 105702.6, 619364.1], rot: [-0.9989, 0.0000, -0.0458, 0.0095, 0.9781, -0.2077, 0.0448, -0.2079, -0.9771]}}
+  # snow:snow-bumper-71 (snow-bumper): score 0.23, added 0.076 over baked 0.285 on 497 vertices
+  - {name: snow-entity-snow-bumper-71, continue: snow-pass-to-fort, hour: 23, camera: {pos: [3930400.2, 1031545.7, -13775953.8], rot: [-0.6453, 0.0000, 0.7639, -0.3228, 0.9063, -0.2727, -0.6923, -0.4226, -0.5849]}}
+  # the tower-top power cell 10.7 m away, 50 degrees off the view axis
+  - {name: jungle-top-cell-offscreen-night, continue: jungle-start, hour: 23, camera: {pos: [1462272.0, 462848.0, -974848.0], rot: [0.0327, 0.0, -0.9994, 0.2089, 0.9779, 0.0068, 0.9774, -0.209, 0.032]}}

@@ -115,6 +115,7 @@ struct Config {
   bool disassemble_data = false;
   bool process_tpages = false;
   bool write_tpage_imports = false;
+  bool write_texture_levels = false;
   bool process_game_text = false;
   bool process_game_count = false;
   bool process_art_groups = false;

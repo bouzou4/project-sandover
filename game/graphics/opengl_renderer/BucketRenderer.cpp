@@ -1,5 +1,10 @@
 #include "BucketRenderer.h"
 
+#include <cmath>
+#include <utility>
+
+#include "game/graphics/pipelines/opengl.h"
+
 #include "fmt/format.h"
 #include "third-party/imgui/imgui.h"
 
@@ -93,6 +98,165 @@ void PrintRenderer::render(DmaFollower& dma,
     transfers++;
   }
   printf("transfers: %d\n\n", transfers);
+}
+
+FrameCamera frame_camera(const SharedRenderState& s) {
+  if (s.eye.active && s.game_camera.valid) {
+    const auto& g = s.game_camera;
+    return {g.matrix, g.rot, g.persp, &g.pos, &g.hvdf_off, &g.fog};
+  }
+  return {s.camera_matrix, s.camera_rot,       s.camera_persp,
+          &s.camera_pos,   &s.camera_hvdf_off, &s.camera_fog};
+}
+
+void eye_camera_to_clip(math::Vector4f p[4], const EyeView& e) {
+  float rt[3];
+  for (int j = 0; j < 3; j++) {
+    rt[j] = e.rot[j][0] * e.t[0] + e.rot[j][1] * e.t[1] + e.rot[j][2] * e.t[2];
+  }
+  math::Vector4f out[4];
+  for (int i = 0; i < 3; i++) {
+    out[i] = p[0] * e.rot[0][i] + p[1] * e.rot[1][i] + p[2] * e.rot[2][i];
+  }
+  out[3] = p[3] - p[0] * rt[0] - p[1] * rt[1] - p[2] * rt[2];
+  for (int i = 0; i < 4; i++) {
+    out[i].x() *= e.fov_x;
+    out[i].y() *= e.fov_y;
+    p[i] = out[i];
+  }
+}
+
+namespace {
+bool invert4(const math::Vector4f m[4], double out[4][4]) {
+  double a[4][8];
+  for (int r = 0; r < 4; r++) {
+    for (int c = 0; c < 4; c++) {
+      a[r][c] = m[r][c];
+      a[r][c + 4] = r == c ? 1. : 0.;
+    }
+  }
+  for (int c = 0; c < 4; c++) {
+    int piv = c;
+    for (int r = c + 1; r < 4; r++) {
+      if (std::abs(a[r][c]) > std::abs(a[piv][c])) {
+        piv = r;
+      }
+    }
+    if (std::abs(a[piv][c]) < 1e-30) {
+      return false;
+    }
+    if (piv != c) {
+      for (int k = 0; k < 8; k++) {
+        std::swap(a[c][k], a[piv][k]);
+      }
+    }
+    const double d = a[c][c];
+    for (int k = 0; k < 8; k++) {
+      a[c][k] /= d;
+    }
+    for (int r = 0; r < 4; r++) {
+      if (r != c) {
+        const double f = a[r][c];
+        for (int k = 0; k < 8; k++) {
+          a[r][k] -= f * a[c][k];
+        }
+      }
+    }
+  }
+  for (int r = 0; r < 4; r++) {
+    for (int c = 0; c < 4; c++) {
+      out[r][c] = a[r][c + 4];
+    }
+  }
+  return true;
+}
+}  // namespace
+
+bool eye_world_to_clip(math::Vector4f m[4], const math::Vector4f persp[4], const EyeView& e) {
+  double inv[4][4];
+  if (!invert4(persp, inv)) {
+    return false;
+  }
+  math::Vector4f q[4];
+  for (int i = 0; i < 4; i++) {
+    q[i] = persp[i];
+  }
+  eye_camera_to_clip(q, e);
+  // E = persp^-1 * (D * persp * S); m' = m * E
+  double ex[4][4];
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      double acc = 0;
+      for (int k = 0; k < 4; k++) {
+        acc += inv[i][k] * q[k][j];
+      }
+      ex[i][j] = acc;
+    }
+  }
+  math::Vector4f out[4];
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      double acc = 0;
+      for (int k = 0; k < 4; k++) {
+        acc += (double)m[i][k] * ex[k][j];
+      }
+      out[i][j] = (float)acc;
+    }
+  }
+  for (int i = 0; i < 4; i++) {
+    m[i] = out[i];
+  }
+  return true;
+}
+
+void eye_world_to_camera(math::Vector4f m[4], const EyeView& e) {
+  for (int i = 0; i < 4; i++) {
+    float v[3] = {m[i].x(), m[i].y(), m[i].z()};
+    if (i == 3) {
+      for (int k = 0; k < 3; k++) {
+        v[k] -= e.t[k];
+      }
+    }
+    for (int j = 0; j < 3; j++) {
+      m[i][j] = e.rot[j][0] * v[0] + e.rot[j][1] * v[1] + e.rot[j][2] * v[2];
+    }
+  }
+}
+
+void set_xr_gs_uniforms(u32 program, const SharedRenderState& s, int mode) {
+  const auto& g = s.game_camera;
+  const auto& p = g.persp;
+  const bool on = mode != 0 && s.eye.active && g.valid && p[2][3] != 0.f && p[0][0] != 0.f &&
+                  p[1][1] != 0.f && p[3][2] != 0.f && g.fog.x() != 0.f;
+  glUniform1i(glGetUniformLocation(program, "xr_gs_on"), on ? mode : 0);
+  if (!on) {
+    return;
+  }
+  const auto& e = s.eye;
+  const float fog = g.fog.x();
+  float rt[3];
+  for (int j = 0; j < 3; j++) {
+    rt[j] = e.rot[j][0] * e.t[0] + e.rot[j][1] * e.t[1] + e.rot[j][2] * e.t[2];
+  }
+  glUniformMatrix3fv(glGetUniformLocation(program, "xr_gs_rot"), 1, GL_TRUE, &e.rot[0][0]);
+  glUniform3f(glGetUniformLocation(program, "xr_gs_rt"), rt[0], rt[1], rt[2]);
+  // GS = offset + a * (camera x / z, y / z, 1 / z)
+  glUniform3f(glGetUniformLocation(program, "xr_gs_off"), g.hvdf_off.x(), g.hvdf_off.y(),
+              g.hvdf_off.z() + fog * p[2][2] / p[2][3]);
+  glUniform3f(glGetUniformLocation(program, "xr_gs_a"), fog * p[0][0] / p[2][3],
+              fog * p[1][1] / p[2][3], fog * p[3][2] / p[2][3]);
+  glUniform2f(glGetUniformLocation(program, "xr_gs_fov"), e.fov_x, e.fov_y);
+}
+
+math::Vector2f stereo_gs_parallax(const SharedRenderState& state) {
+  const auto& p = state.camera_persp;
+  if (state.stereo_eye_x == 0.f || p[3][2] == 0.f || p[2][3] == 0.f) {
+    return math::Vector2f(0.f, 0.f);
+  }
+  // camera-space x shift e moves GS x by -pxx * e * (z_gs - z0) / m32
+  const float z0 = state.camera_hvdf_off.z() + state.camera_fog.x() * p[2][2] / p[2][3];
+  const float k = -p[0][0] * state.stereo_eye_x * 16777216.f / (p[3][2] * 4096.f);
+  return math::Vector2f(k, z0 / 16777216.f);
 }
 
 void SharedRenderState::reset() {

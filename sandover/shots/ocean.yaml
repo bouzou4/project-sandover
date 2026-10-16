@@ -1,0 +1,15 @@
+# ocean shading: beach-start at noon (the pbr-maps camera) and the forbidden jungle temple
+# top at dusk toward misty island (the landmarks2 camera, low sun over the sea). Run once with
+# the water toggle off and once on, the real look on; see kb/findings/2026-09-25-water.md.
+set: ocean
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 300
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - {name: beach-start-noon, continue: beach-start, hour: 12, camera: from_continue}
+  - {name: temple-top-dusk, continue: jungle-start, hour: 18, jak: hide, camera: {pos: [1483980.8, 638976.0, -987545.6], rot: [0.802639, 0.0, 0.596466, -0.052259, 0.996154, 0.070323, -0.594172, -0.087615, 0.799552]}}

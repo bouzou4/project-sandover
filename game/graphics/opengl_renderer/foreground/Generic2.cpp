@@ -50,6 +50,46 @@ void Generic2::draw_debug_window() {
  * generic renderer. This renderer is expected to follow the chain until it reaches "next_bucket"
  * and then return.
  */
+void Generic2::render_shadow(DmaFollower& dma,
+                             SharedRenderState* render_state,
+                             const std::vector<ShadowView>& views) {
+  process_dma_jak1(dma, render_state->next_bucket);
+  if (m_next_free_vert == 0) {
+    return;
+  }
+  setup_draws(true, true);
+  glBindVertexArray(m_ogl.vao);
+  glBindBuffer(GL_ARRAY_BUFFER, m_ogl.vertex_buffer);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ogl.index_buffer);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_next_free_idx * sizeof(u32), m_indices.data(),
+               GL_STREAM_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, m_next_free_vert * sizeof(Vertex), m_verts.data(), GL_STREAM_DRAW);
+  const GLboolean restart = glIsEnabled(GL_PRIMITIVE_RESTART);
+  glEnable(GL_PRIMITIVE_RESTART);
+  glPrimitiveRestartIndex(UINT32_MAX);
+  auto& sh = render_state->shaders[ShaderId::GENERIC_SHADOW];
+  sh.activate();
+  glDepthFunc(GL_LESS);
+  const GLint mtx = glGetUniformLocation(sh.id(), "shadow_matrix");
+  for (const auto& view : views) {
+    glBindFramebuffer(GL_FRAMEBUFFER, view.fbo);
+    glViewport(0, 0, view.size, view.size);
+    glUniformMatrix4fv(mtx, 1, GL_FALSE, view.cam_to_clip);
+    for (u32 i = 0; i < m_next_free_bucket; i++) {
+      const auto& bucket = m_buckets[i];
+      const auto& first = m_adgifs[bucket.start];
+      if (first.uses_hud || !first.mode.get_depth_write_enable()) {
+        continue;
+      }
+      glDrawElements(GL_TRIANGLE_STRIP, bucket.idx_count, GL_UNSIGNED_INT,
+                     (void*)(sizeof(u32) * bucket.idx_idx));
+    }
+  }
+  if (!restart) {
+    glDisable(GL_PRIMITIVE_RESTART);
+  }
+}
+
 void Generic2::render_in_mode(DmaFollower& dma,
                               SharedRenderState* render_state,
                               ScopedProfilerNode& prof,

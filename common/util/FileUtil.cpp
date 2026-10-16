@@ -213,6 +213,23 @@ bool setup_project_path(std::optional<fs::path> project_path_override, bool skip
     return true;
   }
 
+  // Project root override for tools that have no --proj-path flag.
+  const auto env_project_path = get_env("OPENGOAL_PROJ_PATH");
+  if (!env_project_path.empty()) {
+    const fs::path env_path(env_project_path);
+    if (fs::exists(env_path) && fs::is_directory(env_path)) {
+      g_file_path_info.path_to_data_folder = fs::absolute(env_path);
+      g_file_path_info.initialized = true;
+      if (!skip_logs) {
+        lg::debug("Using project path from OPENGOAL_PROJ_PATH: {}",
+                  g_file_path_info.path_to_data_folder.string());
+      }
+      return true;
+    }
+    lg::warn("OPENGOAL_PROJ_PATH is set to '{}', which is not a directory - ignoring it.",
+             env_project_path);
+  }
+
   auto data_path = try_get_data_dir(skip_logs);
   if (data_path) {
     g_file_path_info.path_to_data_folder = *data_path;
@@ -241,6 +258,10 @@ void override_user_config_dir(fs::path user_config_dir_override,
                               bool use_overridden_config_dir_for_saves) {
   g_file_path_info.user_config_dir_override = user_config_dir_override;
   g_file_path_info.use_overridden_config_dir_for_saves = use_overridden_config_dir_for_saves;
+}
+
+fs::path get_user_config_dir_override() {
+  return g_file_path_info.user_config_dir_override;
 }
 
 fs::path get_jak_project_dir() {

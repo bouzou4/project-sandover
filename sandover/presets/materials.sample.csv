@@ -1,0 +1,21 @@
+combo_id,tpage,name,class,confidence,judge_agreement,source,envmap_swatch,has_alpha,levels,reviewed,note
+0x0589000f,citadel-vis-pris,assis-glasses,metal,0.450,agree,judge,False,False,,False,glasses frame
+0x01cf0047,common,bch-palm,foliage,0.850,agree,judge,False,True,,False,palm tree
+0x051a0035,darkcave-vis-tfrag,cv-prestatue-stone-01lt,stone,0.725,agree,judge,False,False,,False,"prestatue stone, light grey"
+0x051a002b,darkcave-vis-tfrag,cv-trapdoor-top-64-lod,wood,0.825,agree,judge,False,False,,False,wood door lod
+0x05c80000,demo-vis-tfrag,bch-plantflower-01,foliage,0.750,agree,judge,False,False,,False,"plant flower, cactus-like green"
+0x058b0006,finalboss-vis-tfrag,dkecobomb-circle,special,0.575,agree,judge,False,True,,False,eco bomb effect circle
+0x0463000a,firecanyon-vis-alpha,firecanyon-sky-00,special,0.825,agree,judge,False,False,,False,sky gradient
+0x03560004,firecanyon-vis-shrub,fcn-grass-burntplant,foliage,0.650,agree,judge,False,True,,False,burnt plant
+0x032f0014,firecanyon-vis-tfrag,fcn-stonehengetop,stone,0.650,agree,judge,False,True,,False,stone carving
+0x02090053,misty-vis-pris,gen-precursor-tube-script,metal,0.450,agree,judge,False,True,,False,precursor script metal
+0x0209004d,misty-vis-pris,mis-teeterwood,wood,0.800,agree,judge,False,False,,False,wood grain
+0x02090047,misty-vis-pris,racer-bottom-propball-noalpha,metal,0.500,agree,judge,False,False,,False,propball panel outline
+0x02040032,misty-vis-tfrag,mis-quicksand-temp,stone,0.525,agree,judge,False,True,,False,quicksand swirl
+0x05240007,robocave-vis-alpha,vil1-sky-06,special,0.875,agree,judge,False,False,,False,sky gradient
+0x039e001d,rolling-vis-pris,racer-gauges,metal,0.300,disagree,judge,False,False,,False,a: metal 0.60 (racer gauge dials) | b: special 0.50 (racer dashboard gauges)
+0x039e0034,rolling-vis-pris,robber-skintan,organic,0.425,agree,judge,True,False,,False,solid cream skin
+0x034a0026,snow-vis-pris,icecube-ice-01,organic,0.250,disagree,judge,False,True,,False,a: special 0.45 (translucent icy creature body) | b: organic 0.50 (icecube character ice skin)
+0x01900031,village1-vis-pris,farmer-hat,wood,0.700,agree,judge,False,False,,False,woven straw hat
+0x01900077,village1-vis-pris,mentordiapers,organic,0.500,agree,judge,False,False,,False,cloth/diaper smooth
+0x039a0008,village2-vis-pris,assis-glove,organic,0.600,agree,judge,False,False,,False,cloth glove

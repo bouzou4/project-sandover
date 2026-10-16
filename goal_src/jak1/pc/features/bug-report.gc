@@ -1,0 +1,88 @@
+;;-*-Lisp-*-
+(in-package goal)
+
+;; Sandover bug reports (game/graphics/bug_report.h, sandover/kb/howto/bug-report.md): F7, the
+;; Sandover page's SAVE BUG REPORT row or (sandover-bug-report) save the frame and the game state.
+
+;; Must match bug_report::GoalState. data: 0-2 Jak position, 3-6 Jak quaternion, 7-9 camera
+;; position, 10-18 camera inv-rot rows, 19 fov, 20 hour, 21-28 mood slot weights.
+(deftype sandover-bug-state (structure)
+  ((data     float 32)
+   (level    string)
+   (continue string)))
+
+;; frames still to wait, with no menu up, before a request from the menu fires
+(define *sandover-bug-armed* 0)
+
+;; frames left to show the result line, and whether the last report failed
+(define *sandover-bug-message* 0)
+
+(define *sandover-bug-failed?* #f)
+
+(defun sandover-bug-report ()
+  "Save a bug report of the next frame (REPL and rig; F7 does the same)."
+  (pc-bug-report-request 2)
+  (none))
+
+(defun sandover-bug-report-from-menu ()
+  "The menu row: the report is taken once the menu has been closed for a moment."
+  (set! *sandover-bug-armed* 20)
+  (none))
+
+(defun sandover-bug-capture ()
+  "Send the game state of this frame to the engine."
+  (let ((st (new 'stack-no-clear 'sandover-bug-state))
+        (lev (if (and *target* (-> *target* current-level))
+                 (-> *target* current-level)
+                 (level-get-target-inside *level*)))
+        (c *math-camera*))
+    (dotimes (k 32)
+      (set! (-> st data k) 0.0))
+    (when *target*
+      (let ((p (target-pos 0)))
+        (dotimes (k 3)
+          (set! (-> st data k) (-> p data k))))
+      (let ((q (-> *target* root quat)))
+        (dotimes (k 4)
+          (set! (-> st data (+ 3 k)) (-> q data k)))))
+    (dotimes (k 3)
+      (set! (-> st data (+ 7 k)) (-> c trans data k)))
+    (dotimes (r 3)
+      (dotimes (k 3)
+        (set! (-> st data (+ 10 (* 3 r) k)) (-> c inv-camera-rot vector r data k))))
+    (set! (-> st data 19) (-> c fov))
+    (set! (-> st data 20) (-> *time-of-day-context* time))
+    (dotimes (k 8)
+      (set! (-> st data (+ 21 k))
+            (if (and lev (nonzero? (-> lev mood)) (-> lev mood)) (-> lev mood times k w) 0.0)))
+    (set! (-> st level) (if lev (symbol->string (-> lev name)) "none"))
+    (set! (-> st continue)
+          (if (-> *game-info* current-continue) (-> *game-info* current-continue name) "none"))
+    ;; the settings in effect, which differ from sandover.gc while a menu row is previewed
+    (format (clear *pc-temp-string-1*) "~S/sandover-report.gc" *pc-settings-folder*)
+    (sandover-settings-write (-> *pc-settings* sandover) *pc-temp-string-1*)
+    (pc-bug-report-save (the-as pointer st)))
+  (none))
+
+(defun sandover-bug-report-update ()
+  "Once per frame (main.gc): fire an armed menu request, capture on request, show the result."
+  (when (> *sandover-bug-armed* 0)
+    (if *progress-process*
+      (set! *sandover-bug-armed* 20)
+      (+! *sandover-bug-armed* -1))
+    (if (zero? *sandover-bug-armed*) (pc-bug-report-request 1)))
+  (let ((ev (pc-bug-report-poll)))
+    (if (logtest? ev 1) (sandover-bug-capture))
+    (when (logtest? ev 6)
+      (set! *sandover-bug-failed?* (logtest? ev 4))
+      (set! *sandover-bug-message* 240)))
+  (when (> *sandover-bug-message* 0)
+    (+! *sandover-bug-message* -1)
+    (with-dma-buffer-add-bucket ((buf (-> (current-frame) global-buf)) (bucket-id debug))
+      (draw-string-xy (if *sandover-bug-failed?* "BUG REPORT FAILED, SEE THE LOG" "BUG REPORT SAVED")
+                      buf
+                      16
+                      (the int (* 16.0 (-> (get-video-params) relative-y-scale)))
+                      (font-color yellow)
+                      (font-flags shadow kerning))))
+  (none))

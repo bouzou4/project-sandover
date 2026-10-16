@@ -1,0 +1,86 @@
+# Material taxonomy for texture classification.
+#
+# Single source of truth: the judge prompt's class bullets, the reviewer's buttons/legend
+# and keyboard shortcuts, CSV validation, and the FiftyOne `material_class`/`material_tags`
+# fields all load from this file (`sandover.materials.load_taxonomy`). Adding a class or tag
+# is a TOML edit -- see kb/howto/materials.md.
+#
+# `key` is one letter or digit, matched case-insensitively; it must be unique across every
+# class and tag below (they share one reviewer keyboard) and must not be one of the
+# reviewer's reserved keys (s/b/v/Enter). `description` is one line, used verbatim as the
+# judge prompt bullet and as the reviewer legend's tooltip.
+
+[[classes]]
+name = "stone"
+key = "1"
+description = "rock, cliffs, plaster, brick, cave walls, dirt, sand, ground, tiles"
+
+[[classes]]
+name = "wood"
+key = "2"
+description = "planks, bark, logs, rope, thatch, woven plant fibre, bamboo, baskets"
+
+[[classes]]
+name = "metal"
+key = "3"
+description = "plates, bolts, pipes, machinery, chrome, precursor surfaces (bronze-like, carved, rust-coloured, even when they look like stone); also tiny flat pale swatches whose name says metal/chrome/gold (they get shaded by an environment map)"
+
+[[classes]]
+name = "foliage"
+key = "4"
+description = "leaves, grass, ferns, vines, moss cards, flowers, living plants"
+
+[[classes]]
+name = "organic"
+key = "5"
+description = "character parts - skin, faces, eyes, eyelids, hair, fur, leather, creature hide, scales, feathers, shells"
+
+[[classes]]
+name = "special"
+key = "6"
+description = "sky, clouds, water, fire, glow, light rays, particles, effects, UI, HUD, fonts, icons, pure gradients, and anything that is not a surface material"
+
+[[classes]]
+name = "glass"
+key = "9"
+description = "windows, panes, bottles, lenses, glasses, crystal -- specular and transparent or translucent, distinct from a flat metal envmap swatch"
+
+[[classes]]
+name = "cloth"
+key = "0"
+description = "clothing, fabric, capes, curtains, banners, canvas -- woven material with a sheen, distinct from leather or creature hide (stays `organic`)"
+
+[[classes]]
+name = "snow"
+key = "I"
+description = "snow (packed, powder, drifts, snow-covered ground); clear or blue ice is `ice`"
+
+[[classes]]
+name = "lava"
+key = "L"
+description = "molten rock, emissive"
+
+[[classes]]
+name = "ice"
+key = "C"
+description = "clear or blue ice: frozen lakes, ice walls, icicles, ice crystals (glossy, translucent); snow stays `snow`"
+
+[[tags]]
+name = "fur"
+key = "7"
+description = "the fur shell shader: Daxter, lurkers, anything hairy"
+
+[[tags]]
+name = "precursor"
+key = "8"
+description = "bronze-like Precursor metal; class stays `metal`"
+
+[[tags]]
+name = "baked-tint"
+key = "T"
+description = "metal whose reflection keeps the baked light's colour (eco vent dishes)"
+
+[[tags]]
+name = "shaft"
+key = "H"
+description = "fake light shaft or beam volume (translucent geometry); background draws skip it in the remaster look"

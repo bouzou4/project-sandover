@@ -1,0 +1,88 @@
+name: "Sandover bug report"
+description: Something looks or behaves wrong in Sandover. Attach the bug report zip the game saves for you.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Save a bug report in the game first.** Where you see the problem, press **F7** (or Pause > Options > Sandover > Save bug report: the menu closes and the frame behind it is saved). "BUG REPORT SAVED" shows at the top left.
+        The game writes `sandover-bug-<date>-<time>.zip` to `%APPDATA%\Sandover\bug-reports\` (paste that into the Explorer address bar). The zip holds the frame, where you were (level, camera, Jak, time of day), your Sandover settings, display and HDR state, the build, Windows version, graphics card and driver, and the last lines of the game log. File paths and your user name are removed. Drag the zip into the field below.
+
+  - type: textarea
+    id: saw
+    attributes:
+      label: What you saw
+      description: What is wrong, and where. Drag `preview.png` from the report folder here if you like (the full-size frame is in the zip).
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      placeholder: The original game shows ..., or the light should ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: bundle
+    attributes:
+      label: Bug report zip
+      description: Drag and drop `sandover-bug-<date>-<time>.zip` here (up to 25 MB). One zip per problem; several are fine.
+      placeholder: Drop the zip here.
+    validations:
+      required: true
+
+  - type: input
+    id: build
+    attributes:
+      label: Build id
+      description: Optional when you attached the zip (it holds the build). Else the `bin` line of `build.json` next to `gk.exe`.
+      placeholder: 20261009-120000-0123456789
+    validations:
+      required: false
+
+  - type: dropdown
+    id: windows
+    attributes:
+      label: Windows version
+      description: Optional when you attached the zip.
+      options:
+        - Windows 11
+        - Windows 10
+        - Other
+    validations:
+      required: false
+
+  - type: input
+    id: gpu
+    attributes:
+      label: Graphics card and driver version
+      description: Optional when you attached the zip (it holds both).
+      placeholder: Vendor, model, driver version
+    validations:
+      required: false
+
+  - type: dropdown
+    id: hdr
+    attributes:
+      label: HDR
+      description: Windows Settings > System > Display > Use HDR, for the display the game is on.
+      options:
+        - "On"
+        - "Off"
+        - Not sure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I attached the bug report zip (or explained above why there is none)
+          required: true
+        - label: I searched the open issues for the same problem
+          required: true
+        - label: I play with my own copy of the game
+          required: true

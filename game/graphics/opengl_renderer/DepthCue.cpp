@@ -292,8 +292,8 @@ void DepthCue::read_dma(DmaFollower& dma,
 }
 
 void DepthCue::setup(SharedRenderState* render_state, ScopedProfilerNode& /*prof*/) {
-  if (m_debug.cache_setup && (m_ogl.last_draw_region_w == render_state->draw_region_w &&
-                              m_ogl.last_draw_region_h == render_state->draw_region_h &&
+  if (m_debug.cache_setup && (m_ogl.last_draw_region_w == render_state->render_fb_w &&
+                              m_ogl.last_draw_region_h == render_state->render_fb_h &&
                               // Also recompute when certain debug settings change
                               m_ogl.last_override_sharpness == m_debug.override_sharpness &&
                               m_ogl.last_custom_sharpness == m_debug.sharpness &&
@@ -303,8 +303,8 @@ void DepthCue::setup(SharedRenderState* render_state, ScopedProfilerNode& /*prof
     return;
   }
 
-  m_ogl.last_draw_region_w = render_state->draw_region_w;
-  m_ogl.last_draw_region_h = render_state->draw_region_h;
+  m_ogl.last_draw_region_w = render_state->render_fb_w;
+  m_ogl.last_draw_region_h = render_state->render_fb_h;
   m_ogl.last_override_sharpness = m_debug.override_sharpness;
   m_ogl.last_custom_sharpness = m_debug.sharpness;
   m_ogl.last_force_original_res = m_debug.force_original_res;
@@ -366,8 +366,8 @@ void DepthCue::setup(SharedRenderState* render_state, ScopedProfilerNode& /*prof
   //
   // The original game code would have created this as a view into the framebuffer whose width is 2x
   // as large, however this isn't necessary for the effect to work.
-  int pc_fb_sample_width = render_state->draw_region_w;
-  int pc_fb_sample_height = render_state->draw_region_h;
+  int pc_fb_sample_width = render_state->render_fb_w;
+  int pc_fb_sample_height = render_state->render_fb_h;
 
   m_ogl.framebuffer_sample_width = pc_fb_sample_width;
   m_ogl.framebuffer_sample_height = pc_fb_sample_height;
@@ -385,8 +385,8 @@ void DepthCue::setup(SharedRenderState* render_state, ScopedProfilerNode& /*prof
   // GOAL code), which kicks in the bilinear filtering effect. Normally, a 32x224 texture will
   // be reused for each slice but for the sake of efficient rendering, we'll create a framebuffer
   // that can store all 16 slices side-by-side and draw all slices to it all at once.
-  int pc_depth_cue_fb_width = render_state->draw_region_w;
-  int pc_depth_cue_fb_height = render_state->draw_region_h;
+  int pc_depth_cue_fb_width = render_state->render_fb_w;
+  int pc_depth_cue_fb_height = render_state->render_fb_h;
 
   if (m_debug.force_original_res) {
     pc_depth_cue_fb_width = 512;
@@ -537,10 +537,11 @@ void DepthCue::draw(SharedRenderState* render_state, ScopedProfilerNode& prof) {
   glBindFramebuffer(GL_READ_FRAMEBUFFER, render_state->render_fb);
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_ogl.framebuffer_sample_fbo);
 
-  glBlitFramebuffer(render_state->draw_offset_x,                                // srcX0
-                    render_state->draw_offset_y,                                // srcY0
-                    render_state->draw_offset_x + render_state->draw_region_w,  // srcX1
-                    render_state->draw_offset_y + render_state->draw_region_h,  // srcY1
+  // the render framebuffer, not the window's letterboxed region
+  glBlitFramebuffer(render_state->render_fb_x,                               // srcX0
+                    render_state->render_fb_y,                               // srcY0
+                    render_state->render_fb_x + render_state->render_fb_w,  // srcX1
+                    render_state->render_fb_y + render_state->render_fb_h,  // srcY1
                     0,                                                          // dstX0
                     0,                                                          // dstY0
                     m_ogl.framebuffer_sample_width,                             // dstX1
@@ -608,8 +609,8 @@ void DepthCue::draw(SharedRenderState* render_state, ScopedProfilerNode& prof) {
     glBlendEquation(GL_FUNC_ADD);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 
-    glViewport(render_state->draw_offset_x, render_state->draw_offset_y,
-               render_state->draw_region_w, render_state->draw_region_h);
+    glViewport(render_state->render_fb_x, render_state->render_fb_y, render_state->render_fb_w,
+               render_state->render_fb_h);
 
     prof.add_draw_call();
     prof.add_tri(2 * TOTAL_DRAW_SLICES);

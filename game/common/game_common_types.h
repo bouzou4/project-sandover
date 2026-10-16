@@ -18,5 +18,5 @@ enum class Language {
 struct GameLaunchOptions {
   GameVersion game_version = GameVersion::Jak1;
   bool disable_display = false;
-  int server_port = DECI2_PORT;
+  int server_port = -1;  // -1: DECI2_PORT - 1 + game_version
 };

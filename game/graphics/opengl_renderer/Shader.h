@@ -8,7 +8,8 @@
 class Shader {
  public:
   static constexpr char shader_folder[] = "game/graphics/opengl_renderer/shaders/";
-  Shader(const std::string& shader_name, GameVersion version);
+  /// frag_name: fragment shader file to use instead of shader_name.frag (empty: same name).
+  Shader(const std::string& shader_name, GameVersion version, const std::string& frag_name = "");
   Shader() = default;
   void activate() const;
   bool okay() const { return m_is_okay; }
@@ -69,6 +70,34 @@ enum class ShaderId {
   SLOW_TIME = 42,
   OCEAN_ENVMAP = 43,
   OCEAN_ENVMAP_HAZE = 44,
+  SSAO_DEPTH_DEBUG = 45,
+  SSAO_MSAA_PROBE = 46,
+  SSAO_LINEARIZE = 47,
+  SSAO_MINIFY = 48,
+  SSAO_AO = 49,
+  SSAO_BLUR = 50,
+  SSAO_COMPOSITE = 51,
+  SSAO_VIEW = 52,
+  TFRAG3_SUN = 53,
+  BLOOM_BRIGHT = 54,
+  BLOOM_BLUR = 55,
+  BLOOM_ADD = 56,
+  MERC2_SHADOW = 57,
+  GENERIC_SHADOW = 58,
+  EMISSIVE_TILES = 59,
+  EMISSIVE_SELECT = 60,
+  EMISSIVE_LIGHT = 61,
+  OCEAN_WATER = 62,  // ocean shading with tessellation (ocean_water.vert/.tesc/.tese)
+  SWAMP_MIST = 63,
+  SMAA_EDGES = 64,
+  SMAA_WEIGHTS = 65,
+  SMAA_BLEND = 66,
+  FSR_EASU = 67,  // optional, built by fsr_ready(): bilinear if it fails to build
+  FSR_RCAS = 68,
+  SUN_VIS = 69,
+  SUN_DISC = 70,
+  SKY_BODY = 71,
+  SKY_STARS = 72,
   MAX_SHADERS
 };
 
@@ -78,6 +107,17 @@ class ShaderLibrary {
   Shader& operator[](ShaderId id) { return m_shaders[(int)id]; }
   Shader& at(ShaderId id) { return m_shaders[(int)id]; }
 
+  /// The tessellated ocean program (ShaderId::OCEAN_WATER), compiled on the first call so a
+  /// vanilla boot never touches the tessellation stages. False, logged once, where the context
+  /// has no tessellation stages or the program fails to build.
+  bool ocean_water_ready();
+  /// The FSR 1 programs (FSR_EASU, FSR_RCAS), compiled on the first call, so they cost nothing
+  /// until a render scale below 1 asks for them. False, logged once, if either fails to build.
+  bool fsr_ready();
+
  private:
   Shader m_shaders[(int)ShaderId::MAX_SHADERS];
+  GameVersion m_version;
+  int m_ocean_water_state = 0;  // 0 not tried, 1 ready, -1 unavailable
+  int m_fsr_state = 0;          // same states
 };

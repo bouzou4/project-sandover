@@ -33,6 +33,8 @@ struct TFragBufferedData {
 };
 static_assert(sizeof(TFragBufferedData) == 328 * 16);
 
+struct PbrLevelMaps;
+
 class TFragment : public BucketRenderer {
  public:
   TFragment(const std::string& name,
@@ -75,6 +77,13 @@ class TFragment : public BucketRenderer {
                    const LevelData* loader_data);
 
   int lod() const { return Gfx::g_global_settings.lod_tfrag; }
+
+  /// Camera packet from this frame's DMA, or nullptr if this renderer got none this frame.
+  const TfragPcPortData* camera_this_frame(u64 frame_idx) const {
+    return m_pc_port_frame == frame_idx ? &m_pc_port_data : nullptr;
+  }
+  /// Hide draws whose texture matches this filter regardless of vista state (nullptr: off).
+  void set_force_hide_filter(const char* filter) { m_force_hide_filter = filter; }
   struct DebugVertex {
     math::Vector3f position;
     math::Vector4f rgba;
@@ -121,6 +130,7 @@ class TFragment : public BucketRenderer {
     GLuint time_of_day_texture = -1;
     GLuint vao = -1;
     u32 vert_count = 0;
+    int fr3_tree = -1;  // index in tfrag_trees[geom]
     const std::vector<tfrag3::StripDraw>* draws = nullptr;
     const tfrag3::PackedTimeOfDay* colors = nullptr;
     const tfrag3::BVH* vis = nullptr;
@@ -141,7 +151,12 @@ class TFragment : public BucketRenderer {
 
     bool freeze_itimes = false;
     math::Vector<s32, 4> itimes_debug[4];
+
+    std::vector<u8> vista_hidden;
+    std::string vista_hidden_filter;
   };
+  const u8* vista_hidden_draws(TreeCache& tree, const SharedRenderState* render_state);
+  const char* m_force_hide_filter = nullptr;
 
   struct {
     GLuint decal;
@@ -177,4 +192,9 @@ class TFragment : public BucketRenderer {
 
   bool m_has_level = false;
   const std::vector<GLuint>* m_anim_slot_array;
+  const tfrag3::Level* m_level_data = nullptr;
+  const UnbakeSidecar* m_unbake = nullptr;
+  const std::vector<u8>* m_tex_class = nullptr;
+  PbrLevelMaps* m_pbr_maps = nullptr;
+  u64 m_pc_port_frame = UINT64_MAX;
 };

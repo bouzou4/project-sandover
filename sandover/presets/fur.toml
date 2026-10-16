@@ -1,0 +1,31 @@
+# Fur shells (issue #170): `medium` is the chosen default and the engine defaults (size rule exponent
+# 1.75). Rig captures apply it with `sandover-capture run ... --preset fur=<name>`.
+# `off` is the toggle state, not a preset. Parameters are internal and never shown.
+#
+# shells     shell count drawn over each fur-tagged merc draw (one instanced draw)
+# length_m   tip offset along the skinned normal, metres
+# density    strands per texture UV unit (one strand per cell of the UV grid)
+# gravity    tip droop towards world down, fraction of the length (quadratic in height)
+# curl       sideways swirl per vertex, fraction of the length (quadratic in height)
+# root_dark  colour scale at the root is 1 - root_dark, rising to 1 at the tip
+# size_exp   optional: length x (texture metres per UV unit / size_ref_m)^size_exp, 1-16, and root
+#            darkening and face-on coverage / that factor (0 = same length everywhere); default 1.75
+# size_ref_m optional: metres per UV unit up to which the length is as set; default 0.3
+# caption    one line for the screening grid: what visibly differs, never parameters
+
+[meta]
+schema = 1
+phase = "fur"
+round = 2
+chosen = "medium"  # the engine defaults match it
+pick_set = "fur"
+
+[presets.medium]
+label = "Medium"
+caption = "visible tufts on the outline and a soft, slightly darker body"
+shells = 16
+length_m = 0.02125
+density = 64.0
+gravity = 0.3
+curl = 0.1
+root_dark = 0.35

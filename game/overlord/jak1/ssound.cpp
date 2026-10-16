@@ -135,6 +135,7 @@ void UpdateLocation(Sound* sound) {
     snd_StopSound(sound->sound_handle);
   } else {
     s32 pan = GetPan(sound);
+    snd_SpatialSetPosition(id, sound->params.trans.x, sound->params.trans.y, sound->params.trans.z);
     snd_SetSoundVolPan(id, volume, pan);
   }
 }
@@ -148,6 +149,7 @@ void SetEarTrans(Vec3w* ear_trans0, Vec3w* ear_trans1, Vec3w* cam_trans, s32 cam
   gEarTrans[1] = *ear_trans1;
   gCamTrans = *cam_trans;
   gCamAngle = cam_angle;
+  snd_SpatialSetListener(cam_trans->x, cam_trans->y, cam_trans->z, cam_angle, gMirrorMode != 0);
 
   for (auto& s : gSounds) {
     if (s.id != 0 && s.is_music == 0) {
@@ -159,6 +161,7 @@ void SetEarTrans(Vec3w* ear_trans0, Vec3w* ear_trans1, Vec3w* cam_trans, s32 cam
   }
 
   SetVAGVol();
+  snd_SpatialFlush();
 }
 
 void SetMusicVol() {

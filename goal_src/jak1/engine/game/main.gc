@@ -348,6 +348,215 @@
           ))))
   0)
 
+;; og:preserve-this sandover: world light state for the renderer (WorldLights.h)
+(defun pc-world-light-links ((aid uint))
+  "The entity-links of actor `aid` in an active level, or #f (entity-by-aid's search)."
+  (dotimes (i (-> *level* length))
+    (let ((lev (-> *level* level i)))
+      (when (= (-> lev status) 'active)
+        (let ((arr (-> lev entity)))
+          (when (nonzero? arr)
+            (let ((lo 0)
+                  (hi (+ (-> arr length) -1)))
+              (while (>= hi lo)
+                (let* ((mid (+ lo (/ (- hi lo) 2)))
+                       (l (-> arr data mid))
+                       (id (-> l perm aid)))
+                  (cond
+                    ((= id aid) (return l))
+                    ((< (the-as uint id) aid) (set! lo (+ mid 1)))
+                    (else (set! hi (+ mid -1))))))))))))
+  (the-as entity-links #f))
+
+(defun pc-world-light-level ((aid uint) (gate int))
+  "How strongly the emitter of actor `aid` glows now, 0..1000, for world light gate `gate`:
+   11 crate with contents out, 12 lit cave crystal (its glow, 0..1993: the fade it gives its
+   palette slot), 13/14 alive with its task open/complete,
+   15 dark eco crystal (its model's emissive: dark idle, the countdown flashes; the explosion's starflash),
+   else alive (process up, not dead or complete, not hidden or in an idle-dark state)."
+  (let ((l (pc-world-light-links aid)))
+    (if (not l) (return 0))
+    (let ((proc (-> l process))
+          (status (-> l perm status)))
+      (if (or (not proc) (logtest? status (entity-perm-status dead))) (return 0))
+      (let ((sname (if (-> proc state) (-> proc state name) #f)))
+        (case gate
+          ((11) (if (= sname 'special-contents-die) 1000 0))
+          ((12)
+           ;; color-mult x is glow-u, clamped as set-fade! clamps the palette fade
+           (if (and (= sname 'cavecrystal-active) (type-type? (-> proc type) process-drawable))
+             (the int (* 1000.0 (fmax 0.0 (fmin 1.993 (-> (the process-drawable proc) draw color-mult x)))))
+             0))
+          ((15)
+           ;; the model's own emissive (1 during each countdown flash), 1 = present but dark
+           (cond
+             ((or (logtest? status (entity-perm-status complete))
+                  (not (type-type? (-> proc type) process-drawable)))
+              0)
+             ((= sname 'dark-crystal-explode)
+             ;; the explosion's starflash (part 2154): full, fading out over its 0.18 s timer
+             (let ((dt (- (current-time) (-> (the process-drawable proc) state-time))))
+               (max 1 (- 1000 (/ (* 1000 dt) (seconds 0.18))))))
+             (else
+              (let ((c (-> (the process-drawable proc) draw color-emissive)))
+                (max 1 (the int (* 1000.0 (fmin 1.0 (fmax (-> c x) (fmax (-> c y) (-> c z)))))))))))
+          (else
+           (cond
+             ((logtest? status (entity-perm-status complete)) 0)
+             ((or (= sname 'die) (= sname 'pickup) (= sname 'blocked) (= sname 'vent-blocked)) 0)
+             ((and (type-type? (-> proc type) process-drawable)
+                   (nonzero? (-> (the process-drawable proc) draw))
+                   (logtest? (-> (the process-drawable proc) draw status) (draw-status hidden)))
+              0)
+             ((= gate 13) (if (task-complete? *game-info* (-> l perm task)) 0 1000))
+             ((= gate 14) (if (task-complete? *game-info* (-> l perm task)) 1000 0))
+             (else 1000))))))))
+
+(defun pc-world-lights-update ()
+  "Answer the renderer's world light queries for this frame (nothing when world lights are off)."
+  (let ((n (pc-world-lights-begin (if *time-of-day-proc* (-> *time-of-day-proc* 0 hour) -1))))
+    (dotimes (i n)
+      (let ((q (pc-world-lights-query i)))
+        (pc-world-lights-set i (pc-world-light-level (logand q #xffffffff) (the int (shr q 32)))))))
+  (none))
+
+;; og:preserve-this sandover: eco shots and blasts light around them (WorldLights.h)
+(defun pc-eco-shot-type? ((t type))
+  "A shot: the type descends from projectile or arcing-shot (sandover/lights/eco.py SHOT_BASES)."
+  (dotimes (i 16)
+    (if (or (not t) (= t object)) (return #f))
+    (if (or (= (-> t symbol) 'projectile) (= (-> t symbol) 'arcing-shot)) (return #t))
+    (set! t (-> t parent)))
+  #f)
+
+;; direct-mapped caches by address: types never move; groups are cleared when the levels change
+(define *pc-eco-type-addr* (new 'global 'boxed-array uint32 64))
+(define *pc-eco-type-shot* (new 'global 'boxed-array symbol 64))
+(define *pc-eco-group-addr* (new 'global 'boxed-array uint32 256))
+(define *pc-eco-group-known* (new 'global 'boxed-array symbol 256))
+(define *pc-eco-cache-levels* (new 'global 'boxed-array symbol 2))
+
+(defun pc-eco-shot? ((t type))
+  "pc-eco-shot-type?, cached by type."
+  (let* ((a (the-as uint32 t))
+         (i (logand (shr a 4) 63)))
+    (when (!= (-> *pc-eco-type-addr* i) a)
+      (set! (-> *pc-eco-type-addr* i) a)
+      (set! (-> *pc-eco-type-shot* i) (pc-eco-shot-type? t)))
+    (-> *pc-eco-type-shot* i)))
+
+(defun pc-eco-group-known? ((g sparticle-launch-group))
+  "The engine has a colour for group G (EcoLights.inc), cached by group."
+  (let* ((a (the-as uint32 g))
+         (i (logand (shr a 4) 255)))
+    (when (!= (-> *pc-eco-group-addr* i) a)
+      (set! (-> *pc-eco-group-addr* i) a)
+      (set! (-> *pc-eco-group-known* i) (nonzero? (pc-eco-lights-known (-> g name)))))
+    (-> *pc-eco-group-known* i)))
+
+(defun pc-eco-cache-check ()
+  "Forget the cached groups when the loaded levels change (their groups may reuse addresses)."
+  (let ((changed #f))
+    (dotimes (i 2)
+      (let ((name (-> *level* level i name)))
+        (when (!= (-> *pc-eco-cache-levels* i) name)
+          (set! (-> *pc-eco-cache-levels* i) name)
+          (set! changed #t))))
+    (if changed
+      (dotimes (i 256)
+        (set! (-> *pc-eco-group-addr* i) 0))))
+  (none))
+
+(defun pc-eco-light-send ((p process) (part sparticle-launch-control) (pos vector) (size float) (level float))
+  "Report one shot or blast by the particle group it launches (the engine knows its colour)."
+  (when (and part
+             (nonzero? part)
+             (-> part group)
+             (nonzero? (-> part group))
+             (< 0.0 level)
+             (pc-eco-group-known? (-> part group)))
+    (pc-eco-lights-push (-> part group name)
+                        (the-as pointer pos)
+                        (+ (* 1024 (the int (fmax 0.0 (fmin 65535.0 size)))) (the int (* 1000.0 (fmin 1.0 level))))
+                        (the int (-> p pid))))
+  (none))
+
+(defun pc-eco-shot-level ((pd process-drawable))
+  "1 while the shot shows: its model's colour-mult, and a hidden or model-less shot only while it
+   still launches its particles."
+  (let ((part (-> pd part))
+        (draw (-> pd draw))
+        (level 1.0))
+    (when (and draw (nonzero? draw))
+      (set! level (fmax 0.0 (fmin 1.0 (-> draw color-mult x)))))
+    (when (or (not draw) (zero? draw) (logtest? (-> draw status) (draw-status hidden)))
+      (if (not (and part
+                    (nonzero? part)
+                    (< (- (the int (-> *display* real-actual-frame-counter)) (-> part last-spawn-frame)) (seconds 0.1))))
+        (set! level 0.0)))
+    level))
+
+(define *pc-eco-blast-life* (seconds 0.15))
+
+(defun pc-eco-lights-update ()
+  "List the live eco shots and blasts for the renderer. Nothing is sent while paused, so the
+   renderer keeps the last list (a paused frame keeps its lights)."
+  (when (and (not (paused?)) (nonzero? (pc-eco-lights-begin)))
+    (pc-eco-cache-check)
+    (iterate-process-tree
+      *active-pool*
+      (lambda ((p process))
+        (cond
+          ((type-type? (-> p type) part-tracker)
+           ;; a blast: a flash over *pc-eco-blast-life*, not the tracker's spawn + linger (7 s)
+           (let* ((pt (the part-tracker p))
+                  (age (- (current-time) (-> pt start-time))))
+             (if (nonzero? (-> pt root))
+               (pc-eco-light-send p (-> pt part) (-> pt root trans) 0.0 (- 1.0 (/ (the float age) (the float *pc-eco-blast-life*)))))))
+          ((and (type-type? (-> p type) process-drawable) (pc-eco-shot? (-> p type)))
+           (let ((pd (the process-drawable p)))
+             (when (and (nonzero? (-> pd root)) (type-type? (-> pd root type) collide-shape))
+               (let ((cs (the collide-shape (-> pd root))))
+                 (pc-eco-light-send p
+                                    (-> pd part)
+                                    (-> pd root trans)
+                                    (if (-> cs root-prim) (-> cs root-prim local-sphere w) 0.0)
+                                    (pc-eco-shot-level pd)))))))
+        (none))
+      *null-kernel-context*)
+    (pc-eco-lights-end))
+  (none))
+
+(defun pc-lava-light-update ()
+  "Send each level's lava light to the renderer: its mood's light-group 0 dir2 while it points
+   down (the under-light vanilla gives the characters), else level 0; with the lava clock's own
+   factor, so a pinned clock keeps the mood's fades. Colour 0..1 per channel, 10 bits each; bit
+   30 set when vanilla lights the characters with it. update-mood-lavatube computes the lava
+   light (update-mood-lava) and then zeroes its level (update-mood-quick): there the level is
+   the lava clock and bit 30 stays clear."
+  (dotimes (i 2)
+    (let ((lev (-> *level* level i)))
+      (when (and (!= (-> lev status) 'inactive) (nonzero? (-> lev mood)))
+        (let* ((l (-> lev mood light-group 0 dir2))
+               (lt (case (-> lev name)
+                     (('village3) (-> (the-as village3-states (-> lev mood state)) lava-time))
+                     (('ogre) (-> (the-as ogre-states (-> lev mood state)) lava-time))
+                     (else *lava-time*)))
+               (clock (+ 0.875 (* 0.125 (sin lt))))
+               (down (< (-> l direction y) -0.99))
+               (vanilla (and down (< 0.0 (-> l level))))
+               (level (cond (vanilla (-> l level))
+                            ((and down (= (-> lev name) 'lavatube)) clock)
+                            (else 0.0))))
+          (pc-lava-light (symbol->string (-> lev name))
+                         (the int (* 1000000.0 level))
+                         (the int (* 1000000.0 clock))
+                         (logior (the int (* 1000.0 (fmax 0.0 (fmin 1.0 (-> l color x)))))
+                                 (shl (the int (* 1000.0 (fmax 0.0 (fmin 1.0 (-> l color y))))) 10)
+                                 (shl (the int (* 1000.0 (fmax 0.0 (fmin 1.0 (-> l color z))))) 20)
+                                 (if vanilla (shl 1 30) 0)))))))
+  (none))
+
 (defbehavior display-loop process ()
   "the main 'display loop' in GOAL. v-sync is done in this function, so all frames start and end here."
   ;; increase our stack size.
@@ -510,13 +719,15 @@
                               (font-color red)
                               (font-flags shadow kerning middle large)))
             ;; draw console text on screen
-            (let ((a3-8 (the int (draw-string *stdcon0* s3-1 *font-context*))))
-              (draw-string-xy *stdcon1*
-                              s3-1
-                              (the int (-> *font-context* origin x))
-                              a3-8
-                              (font-color default)
-                              (font-flags shadow kerning)))
+            ;; og:preserve-this sandover: *display-debug-text* (pckernel-h.gc)
+            (when *display-debug-text*
+              (let ((a3-8 (the int (draw-string *stdcon0* s3-1 *font-context*))))
+                (draw-string-xy *stdcon1*
+                                s3-1
+                                (the int (-> *font-context* origin x))
+                                a3-8
+                                (font-color default)
+                                (font-flags shadow kerning))))
             ;; draw misc info
             (if *display-iop-info* (show-iop-info s3-1))
             (if *display-memcard-info* (show-mc-info s3-1)))
@@ -565,7 +776,13 @@
       ; (auto-save-check)
       (with-profiler "update-pc"
         (#when PC_PORT
-          (update *pc-settings*)))
+          (update *pc-settings*)
+          (sandover-settings-update)
+          (sandover-bug-report-update)
+          (pc-world-lights-update)
+          (pc-eco-lights-update)
+          (pc-launch-lights-end (if (paused?) 1 0))
+          (pc-lava-light-update)))
       ;; suspend
       (suspend)))
   0)

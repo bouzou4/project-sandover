@@ -1,6 +1,7 @@
 #include "OceanTexture.h"
 
 #include "game/graphics/opengl_renderer/AdgifHandler.h"
+#include "game/graphics/opengl_renderer/Materials.h"
 
 #include "third-party/imgui/imgui.h"
 
@@ -233,6 +234,11 @@ void OceanTexture::handle_ocean_texture_jak1(DmaFollower& dma,
     // if we did mipmaps, the above code rendered to temp, and now we need to generate mipmaps
     // in the real output
     make_texture_with_mipmaps(render_state, prof);
+  } else if (water_active(render_state)) {
+    // the near ocean's single-level texture gets box-filtered mips for the water shading
+    glBindTexture(GL_TEXTURE_2D, m_result_texture.texture());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, NUM_MIPS - 1);
+    glGenerateMipmap(GL_TEXTURE_2D);
   }
 
   // give to gpu!
@@ -435,6 +441,27 @@ void OceanTexture::make_texture_with_mipmaps(SharedRenderState* render_state,
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     prof.add_draw_call();
     prof.add_tri(2);
+  }
+  if (water_active(render_state)) {
+    // the levels above are point samples of the base (aliased): box-filter their colour, then
+    // restore the game's per-level alpha fade
+    glBindTexture(GL_TEXTURE_2D, m_result_texture.texture());
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, m_temp_texture.texture());
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
+    for (int i = 1; i < NUM_MIPS; i++) {
+      FramebufferTexturePairContext ctxt(m_result_texture, i);
+      glUniform1f(glGetUniformLocation(render_state->shaders[ShaderId::OCEAN_TEXTURE_MIPMAP].id(),
+                                       "alpha_intensity"),
+                  std::max(0.f, 1.f - 0.51f * i));
+      glUniform1f(
+          glGetUniformLocation(render_state->shaders[ShaderId::OCEAN_TEXTURE_MIPMAP].id(), "scale"),
+          1.f / (1 << i));
+      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+      prof.add_draw_call();
+      prof.add_tri(2);
+    }
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
   }
   glBindVertexArray(0);
 }

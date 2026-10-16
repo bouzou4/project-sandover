@@ -41,11 +41,18 @@ set(RUNTIME_SOURCE
         graphics/jak3_texture_remap.cpp
         graphics/jakx_texture_remap.cpp
         graphics/screenshot.cpp
+        graphics/bug_report.cpp
         graphics/opengl_renderer/background/background_common.cpp
+        graphics/opengl_renderer/background/Caustics.cpp
         graphics/opengl_renderer/background/Hfrag.cpp
         graphics/opengl_renderer/background/Shrub.cpp
         graphics/opengl_renderer/background/TFragment.cpp
         graphics/opengl_renderer/background/Tie3.cpp
+        graphics/opengl_renderer/background/Canopy.cpp
+        graphics/opengl_renderer/background/CanopyVol.cpp
+        graphics/opengl_renderer/background/Unbake.cpp
+        graphics/opengl_renderer/LevelHeightfield.cpp
+        graphics/opengl_renderer/Materials.cpp
         graphics/opengl_renderer/BlitDisplays.cpp
         graphics/opengl_renderer/BucketRenderer.cpp
         graphics/opengl_renderer/CollideMeshRenderer.cpp
@@ -85,6 +92,26 @@ set(RUNTIME_SOURCE
         graphics/opengl_renderer/SkyBlendGPU.cpp
         graphics/opengl_renderer/SkyRenderer.cpp
         graphics/opengl_renderer/SlowTimeEffect.cpp
+        graphics/opengl_renderer/PerfTimers.cpp
+        graphics/opengl_renderer/GlQueries.cpp
+        graphics/opengl_renderer/SsaoDepth.cpp
+        graphics/opengl_renderer/SsaoRenderer.cpp
+        graphics/opengl_renderer/Swamp.cpp
+        graphics/opengl_renderer/SunDisc.cpp
+        graphics/opengl_renderer/BloomRenderer.cpp
+        graphics/opengl_renderer/Smaa.cpp
+        graphics/opengl_renderer/Upscaler.cpp
+        graphics/opengl_renderer/EmissiveLights.cpp
+        graphics/opengl_renderer/LavaField.cpp
+        graphics/opengl_renderer/LightTracker.cpp
+        graphics/opengl_renderer/EmissiveTable.cpp
+        graphics/opengl_renderer/InlandWater.cpp
+        graphics/opengl_renderer/WorldLights.cpp
+        graphics/opengl_renderer/Neighbours.cpp
+        graphics/opengl_renderer/ActorShadows.cpp
+        graphics/opengl_renderer/WorldShadows.cpp
+        graphics/opengl_renderer/InspectRenderer.cpp
+        graphics/opengl_renderer/VistaRenderer.cpp
         graphics/opengl_renderer/sprite/GlowRenderer.cpp
         graphics/opengl_renderer/sprite/Sprite3_Distort.cpp
         graphics/opengl_renderer/sprite/Sprite3_Glow.cpp
@@ -94,7 +121,9 @@ set(RUNTIME_SOURCE
         graphics/opengl_renderer/TextureUploadHandler.cpp
         graphics/opengl_renderer/VisDataHandler.cpp
         graphics/opengl_renderer/Warp.cpp
+        graphics/hdr/HdrPresent.cpp
         graphics/pipelines/opengl.cpp
+        graphics/xr/OpenXr.cpp
         graphics/sceGraphicsInterface.cpp
         graphics/texture/jak1_tpage_dir.cpp
         graphics/texture/jak2_tpage_dir.cpp
@@ -391,7 +420,8 @@ add_library(runtime STATIC ${RUNTIME_SOURCE} "../third-party/glad/src/glad.c")
 
 target_link_libraries(runtime common fmt SDL3::SDL3 imgui discord-rpc sound stb_image libco libcurl)
 if(WIN32)
-    target_link_libraries(runtime mman)
+    target_link_libraries(runtime mman openxr_loader d3d11 dxgi)
+    target_compile_definitions(runtime PRIVATE SANDOVER_XR)
 else()
     target_link_libraries(runtime pthread dl)
 endif()

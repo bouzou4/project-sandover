@@ -1,4 +1,6 @@
 #version 410 core
+SSAO_NORMAL_VERT
+INSPECT_VERT
 
 // merc vertex definition
 layout (location = 0) in vec3 position_in;
@@ -12,6 +14,30 @@ layout (location = 5) in uvec3 mats;
 uniform vec4 hvdf_offset;
 uniform vec4 fog_constants;
 
+// unified vista fog (vista_atmo_foreground_uniforms): x on, y start (m), z density (1/m),
+// w 1/scale height (1/m); atmo_up: world y of the camera axes
+uniform vec4 atmo;
+uniform vec3 atmo_up;
+uniform vec3 atmo_cam;
+// neighbour-mode haze: x density (1/m), y start (m), z max amount
+uniform vec4 haze;
+out float haze_f;
+
+float atmo_fog(vec3 cpos, float fog_min) {
+  float dist_m = length(cpos) * (1. / 4096.);
+  float mid_y_m = (atmo_cam.y + 0.5 * dot(atmo_up, cpos)) * (1. / 4096.);
+  float od = atmo.z * max(dist_m - atmo.y, 0.) * exp(-atmo.w * max(mid_y_m, 0.));
+  return (255. - fog_min) * (1. - exp(-od));
+}
+
+// atmo.x 2: fog is max(game, unified + haze); only the excess takes the tint and haze colour
+float atmo_combine(float van, float af, inout float hz, out float tw) {
+  float v = van / 255., te = 1. - (1. - af / 255.) * (1. - hz), a1 = max(v, af / 255.);
+  tw = te > v ? (te - v) / te : 0.;
+  hz = te > v ? max(1. - (1. - te) / max(1. - a1, 1e-4), 0.) : 0.;
+  return a1 * 255.;
+}
+
 uniform mat4 perspective_matrix;
 
 uniform vec4 fade;
@@ -19,6 +45,7 @@ uniform vec4 fade;
 // output
 out vec3 vtx_color;
 out vec2 vtx_st;
+out vec3 emerc_cpos;  // camera space, as merc2 shadow_cpos
 
 out float fog;
 
@@ -33,7 +60,16 @@ layout (std140) uniform ub_bones {
 };
 
 
+// clip (x, y, w) image of a camera-space direction, following the transform in main()
+vec3 merc_clip_axis(vec4 t) {
+  return vec3((t.x * fog_constants.x + (hvdf_offset.x - 2048.) * t.w) / 256.,
+              -(t.y * fog_constants.x + (hvdf_offset.y - 2048.) * t.w) / 128. * SCISSOR_ADJUST *
+                  HEIGHT_SCALE,
+              t.w);
+}
+
 void main() {
+  insp_vid = uint(gl_VertexID);
 
 
   vec4 p = vec4(position_in, 1);
@@ -56,6 +92,13 @@ void main() {
 
   float Q = fog_constants.x / transformed[3];
   fog = 255 - clamp(-transformed.w + hvdf_offset.w, fog_constants.y, fog_constants.z);
+  haze_f = 0.;
+  if (atmo.x > 0.) {
+    float af = atmo_fog(vtx_pos.xyz / vtx_pos.w, fog_constants.y);
+    haze_f = haze.z * (1. - exp(-haze.x * max(length(vtx_pos.xyz / vtx_pos.w) * (1. / 4096.) - haze.y, 0.)));
+    float tw;
+    fog = atmo.x > 1.5 ? atmo_combine(fog, af, haze_f, tw) : af;
+  }
 
   // emerc
   vec2 st_mod = st_in;
@@ -121,8 +164,24 @@ void main() {
   transformed.xyz *= transformed.w;
   transformed.y *= SCISSOR_ADJUST * HEIGHT_SCALE;
   gl_Position = transformed;
+  ssao_cpos = gl_Position.xyw;
+  ssao_vnrm = vec4(0.0);
+  if (ssao_nrm == 2) {
+    mat4 xb = bones[mats[0]].X * weights_in[0];
+    if (weights_in[1] > 0) {
+      xb += bones[mats[1]].X * weights_in[1];
+    }
+    if (weights_in[2] > 0) {
+      xb += bones[mats[2]].X * weights_in[2];
+    }
+    mat4 pxb = perspective_matrix * xb;
+    ssao_vnrm = vec4(ssao_clip_normal(merc_clip_axis(pxb[0]), merc_clip_axis(pxb[1]),
+                                      merc_clip_axis(pxb[2]), normal_in),
+                     1.0);
+  }
 
 
   vtx_color = fade.xyz;
+  emerc_cpos = vtx_pos.xyz / vtx_pos.w;
   vtx_st = st_mod;
 }

@@ -21,9 +21,20 @@ u8 g_global_excite = 0;
 
 Player::Player() : mVmanager(mSynth) {
   InitCubeb();
+  if (g_spatial_mode_request != SpatialMode::Off) {
+    SetSpatialMode(g_spatial_mode_request);
+  }
 }
 
 Player::~Player() {
+  {
+    std::scoped_lock swap(mSpatialSwap);
+    std::unique_ptr<SpatialOutput> old;
+    {
+      std::scoped_lock lock(mTickLock);
+      old = std::move(mSpatial);
+    }
+  }
   DestroyCubeb();
 }
 
@@ -67,6 +78,7 @@ void Player::InitCubeb() {
     lg::error("Cubeb init failed");
     return;
   }
+  mCubebRunning = true;
 }
 
 void Player::DestroyCubeb() {
@@ -134,12 +146,26 @@ u32 Player::PlaySound(BankHandle bank_id, u32 sound_id, s32 vol, s32 pan, s32 pm
   auto bank = mLoader.GetBankByHandle(bank_id);
   if (bank == nullptr) {
     lg::error("play_sound: Bank {} does not exist", static_cast<void*>(bank_id));
+    mPendingPos.reset();
     return 0;
   }
 
   u32 handle = mHandleAllocator.GetId();
+  bool spatial = false;
+  if (mSpatial && mPendingPos) {
+    // OpenAL places it; the voices stay centred so their L+R sum is the unpanned signal.
+    spatial = mSpatial->Claim(handle, *mPendingPos);
+    if (spatial) {
+      pan = 0;
+    }
+  }
+  mPendingPos.reset();
+
   auto handler = bank->MakeHandler(mVmanager, sound_id, vol, pan, pm, pb, GetTick(), handle);
   if (!handler.has_value()) {
+    if (spatial) {
+      mSpatial->Release(handle);
+    }
     return 0;
   }
 
@@ -147,6 +173,9 @@ u32 Player::PlaySound(BankHandle bank_id, u32 sound_id, s32 vol, s32 pan, s32 pm
   if (handler_to_stop) {
     handler_to_stop->Stop();
     if (handler_to_stop == handler.value().get()) {
+      if (spatial) {
+        mSpatial->Release(handle);
+      }
       return 0;
     }
   }
@@ -346,6 +375,9 @@ void Player::SetSoundVolPan(s32 sound_id, s32 vol, s32 pan) {
   if (handler == mHandlers.end())
     return;
 
+  if (pan >= 0 && mSpatial && mSpatial->Owns(sound_id)) {
+    pan = 0;
+  }
   handler->second->SetVolPan(vol, pan);
 }
 
@@ -406,6 +438,99 @@ s32 Player::GetSoundUserData(BankHandle block_handle,
   }
 
   return 0;
+}
+
+void Player::SpatialTick(SpatialOutput& out) {
+  // Same 240 Hz handler clock as Tick.
+  if (mSpatialHtick == 200) {
+    mTick++;
+    for (auto it = mHandlers.begin(); it != mHandlers.end();) {
+      bool done = it->second->Tick();
+      if (done) {
+        mHandleAllocator.FreeId(it->first);
+        it = mHandlers.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    out.Prune([this](u32 h) { return mHandlers.find(h) != mHandlers.end(); });
+    mSpatialHtick = 0;
+    if (mTick % 2400 == 0) {
+      lg::info("[spatial] {} positional sounds on sources now, {} since start", out.ActiveSlots(),
+               out.TotalClaims());
+    }
+  }
+  mSpatialHtick++;
+  mSynth.TickRouted(out);
+}
+
+void Player::SetSpatialMode(SpatialMode mode) {
+  std::scoped_lock swap(mSpatialSwap);
+  SpatialMode current = mSpatial ? mSpatial->Mode() : SpatialMode::Off;
+  if (mode == current) {
+    return;
+  }
+
+  std::unique_ptr<SpatialOutput> old;
+  {
+    std::scoped_lock lock(mTickLock);
+    old = std::move(mSpatial);
+  }
+  old.reset();  // joins OpenAL's mixer, which may be waiting on mTickLock
+
+  if (mode != SpatialMode::Off) {
+    if (mCubebRunning) {
+      cubeb_stream_stop(mStream);
+      mCubebRunning = false;
+    }
+    auto out =
+        SpatialOutput::OpenDevice(mode, mTickLock, [this](SpatialOutput& o) { SpatialTick(o); });
+    if (out) {
+      std::scoped_lock lock(mTickLock);
+      mSpatial = std::move(out);
+      lg::info("[spatial] audio spatial mode {}", SpatialModeName(mode));
+      return;
+    }
+    lg::error("[spatial] could not open mode {}, back to the stereo output", SpatialModeName(mode));
+  }
+
+  if (!mCubebRunning && mStream && cubeb_stream_start(mStream) == CUBEB_OK) {
+    mCubebRunning = true;
+  }
+  lg::info("[spatial] audio spatial mode off");
+}
+
+SpatialMode Player::GetSpatialMode() {
+  std::scoped_lock lock(mTickLock);
+  return mSpatial ? mSpatial->Mode() : SpatialMode::Off;
+}
+
+void Player::SetNextSoundPosition(const SpatialVec& pos) {
+  std::scoped_lock lock(mTickLock);
+  if (mSpatial) {
+    mPendingPos = pos;
+  }
+}
+
+void Player::SetSoundPosition(u32 sound_handle, const SpatialVec& pos) {
+  std::scoped_lock lock(mTickLock);
+  if (mSpatial) {
+    mSpatial->SetPosition(sound_handle, pos);
+  }
+}
+
+void Player::SetListener(const SpatialVec& pos, float yaw_deg, bool mirror) {
+  std::scoped_lock lock(mTickLock);
+  if (mSpatial) {
+    mSpatial->SetListener(pos, yaw_deg, mirror);
+  }
+}
+
+void Player::FlushSpatial() {
+  std::scoped_lock swap(mSpatialSwap);
+  if (mSpatial) {
+    mSpatial->Flush();
+  }
 }
 
 }  // namespace snd

@@ -16,7 +16,11 @@ void Merc2BucketRenderer::render(DmaFollower& dma,
     return;
   }
 
+  render_state->merc_props = render_state->version == GameVersion::Jak1 &&
+                             (m_my_id == (int)jak1::BucketId::MERC_TFRAG_TEX_LEVEL0 ||
+                              m_my_id == (int)jak1::BucketId::MERC_TFRAG_TEX_LEVEL1);
   m_renderer->render(dma, render_state, prof, &m_debug_stats);
+  render_state->merc_props = false;
 
   m_empty = m_debug_stats.num_predicted_draws == 0;
 }

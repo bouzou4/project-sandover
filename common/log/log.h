@@ -6,6 +6,7 @@
 #include <sys/time.h>
 #endif
 #include <string>
+#include <vector>
 
 #include "fmt/color.h"
 #include "fmt/format.h"
@@ -45,6 +46,8 @@ void set_file(const std::string& filename,
               const bool should_rotate = true,
               const bool append = false,
               const std::string& dir = "");
+/// The last `n` lines logged or printed (at most 400 are kept), oldest first.
+std::vector<std::string> recent_lines(size_t n);
 void set_flush_level(level log_level);
 void set_file_level(level log_level);
 void set_stdout_level(level log_level);

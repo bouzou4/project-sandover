@@ -2,6 +2,11 @@
 
 #include "common/log/log.h"
 
+#include "game/graphics/gfx.h"
+#include "game/graphics/opengl_renderer/EmissiveTable.h"
+#include "game/graphics/opengl_renderer/GlQueries.h"
+#include "game/graphics/opengl_renderer/SsaoRenderer.h"
+#include "game/graphics/opengl_renderer/Swamp.h"
 #include "game/graphics/opengl_renderer/background/background_common.h"
 #include "game/graphics/opengl_renderer/dma_helpers.h"
 
@@ -206,7 +211,7 @@ void Sprite3::handle_sprite_frame_setup(DmaFollower& dma,
   ASSERT(base_offset.vifcode1().immediate == SpriteDataMem::Buffer1);
 }
 
-void Sprite3::render_3d(DmaFollower& dma) {
+void Sprite3::render_3d(DmaFollower& dma, SharedRenderState* render_state) {
   // one time matrix data
   auto matrix_data = dma.read_and_advance();
   ASSERT(matrix_data.size_bytes == sizeof(Sprite3DMatrixData));
@@ -216,6 +221,26 @@ void Sprite3::render_3d(DmaFollower& dma) {
   ASSERT(unpack_ok);
   static_assert(sizeof(m_3d_matrix_data) == 5 * 16);
   memcpy(&m_3d_matrix_data, matrix_data.data, sizeof(m_3d_matrix_data));
+  if (render_state->eye.active && render_state->game_camera.valid) {
+    math::Vector4f cam[4];
+    for (int i = 0; i < 4; i++) {
+      for (int j = 0; j < 4; j++) {
+        cam[i][j] = m_3d_matrix_data.camera(j, i);
+      }
+    }
+    eye_world_to_clip(cam, render_state->game_camera.persp, render_state->eye);
+    for (int i = 0; i < 4; i++) {
+      for (int j = 0; j < 4; j++) {
+        m_3d_matrix_data.camera(j, i) = cam[i][j];
+      }
+    }
+  } else if (render_state->stereo_eye_x != 0.f && render_state->has_pc_data) {
+    // world-to-clip matrix: translation row -= e * perspective row 0
+    float* cam = m_3d_matrix_data.camera.data();
+    for (int i = 0; i < 4; i++) {
+      cam[12 + i] -= render_state->camera_persp[0][i] * render_state->stereo_eye_x;
+    }
+  }
   // TODO
 }
 
@@ -230,6 +255,15 @@ void Sprite3::render_2d_group0(DmaFollower& dma,
   glUniform1f(glGetUniformLocation(shid, "max_scale"), m_frame_data.max_scale);
   glUniform1f(glGetUniformLocation(shid, "fog_min"), m_frame_data.fog_min);
   glUniform1f(glGetUniformLocation(shid, "fog_max"), m_frame_data.fog_max);
+  vista_atmo_foreground_uniforms(render_state, shid);
+  // the game's depth fog as the background computes it (fog value hvdf.w + persp[2][3] * depth),
+  // for the fog floor of blended world sprites; and the swamp mist
+  glUniform4f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, shid, "van_fog"), render_state->camera_hvdf_off.w(),
+              render_state->camera_persp[2][3], render_state->camera_fog.y(),
+              render_state->camera_fog.z());
+  const auto& rot = render_state->camera_rot;
+  glUniform3f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, shid, "van_fwd"), rot[0][2], rot[1][2], rot[2][2]);
+  swamp_mist_sprite_uniforms(render_state, shid);
   // glUniform1f(glGetUniformLocation(shid, "bonus"), m_frame_data.bonus);
   // glUniform4fv(glGetUniformLocation(shid, "hmge_scale"), 1, m_frame_data.hmge_scale.data());
   glUniform1f(glGetUniformLocation(shid, "deg_to_rad"), m_frame_data.deg_to_rad);
@@ -239,8 +273,17 @@ void Sprite3::render_2d_group0(DmaFollower& dma,
   glUniform4fv(glGetUniformLocation(shid, "xy_array"), 8, m_frame_data.xy_array[0].data());
   glUniform4fv(glGetUniformLocation(shid, "xyz_array"), 4, m_frame_data.xyz_array[0].data());
   glUniform4fv(glGetUniformLocation(shid, "st_array"), 4, m_frame_data.st_array[0].data());
-  glUniform4fv(glGetUniformLocation(shid, "basis_x"), 1, m_frame_data.basis_x.data());
-  glUniform4fv(glGetUniformLocation(shid, "basis_y"), 1, m_frame_data.basis_y.data());
+  if (render_state->eye.active) {
+    // billboard size in screen units follows the eye's projection scale
+    auto bx = m_frame_data.basis_x, by = m_frame_data.basis_y;
+    bx.x() *= render_state->eye.fov_x;
+    by.y() *= render_state->eye.fov_y;
+    glUniform4fv(glGetUniformLocation(shid, "basis_x"), 1, bx.data());
+    glUniform4fv(glGetUniformLocation(shid, "basis_y"), 1, by.data());
+  } else {
+    glUniform4fv(glGetUniformLocation(shid, "basis_x"), 1, m_frame_data.basis_x.data());
+    glUniform4fv(glGetUniformLocation(shid, "basis_y"), 1, m_frame_data.basis_y.data());
+  }
 
   u16 last_prog = -1;
 
@@ -343,6 +386,12 @@ void Sprite3::render_2d_group1(DmaFollower& dma,
   glUniformMatrix4fv(
       glGetUniformLocation(render_state->shaders[ShaderId::SPRITE3].id(), "hud_matrix"), 1,
       GL_FALSE, m_hud_matrix_data.matrix.data());
+  if (render_state->eye.active) {
+    // HUD sprites keep the game's screen scale
+    auto shid = render_state->shaders[ShaderId::SPRITE3].id();
+    glUniform4fv(glGetUniformLocation(shid, "basis_x"), 1, m_frame_data.basis_x.data());
+    glUniform4fv(glGetUniformLocation(shid, "basis_y"), 1, m_frame_data.basis_y.data());
+  }
 
   // loop through chunks.
   while (looks_like_2d_chunk_start(dma)) {
@@ -438,7 +487,7 @@ void Sprite3::render_jak2(DmaFollower& dma,
   handle_sprite_frame_setup(dma, render_state->version, render_state, prof);
 
   // 3d sprites
-  render_3d(dma);
+  render_3d(dma, render_state);
 
   // 2d draw
   // m_sprite_renderer.reset_state();
@@ -519,7 +568,7 @@ void Sprite3::render_jak1(DmaFollower& dma,
   handle_sprite_frame_setup(dma, render_state->version, render_state, prof);
 
   // 3d sprites
-  render_3d(dma);
+  render_3d(dma, render_state);
 
   // 2d draw
   // m_sprite_renderer.reset_state();
@@ -605,6 +654,34 @@ void Sprite3::flush_sprites(SharedRenderState* render_state,
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx_offset * sizeof(u32), m_index_buffer_data.data(),
                GL_STREAM_DRAW);
 
+  // bloom and tile lights: additive world sprites add to the emissive mask, HUD sprites clear it
+  const bool emissive =
+      render_state->emissive_mask &&
+      (Gfx::g_global_settings.bloom_enable || Gfx::g_global_settings.emissive_lights_enable);
+  const GLint em_loc =
+      emissive ? glGetUniformLocation(render_state->shaders[ShaderId::SPRITE3].id(), "em_out")
+               : -1;
+  // listed light textures (emissive_table) write their own E with a max blend instead
+  const bool em_table = emissive && emissive_table::active();
+  const GLint em_table_loc =
+      emissive ? glGetUniformLocation(render_state->shaders[ShaderId::SPRITE3].id(), "em_table")
+               : -1;
+  const GLint em_chroma_loc =
+      emissive ? glGetUniformLocation(render_state->shaders[ShaderId::SPRITE3].id(), "em_chroma")
+               : -1;
+  const GLint em_unlit_loc =
+      emissive ? glGetUniformLocation(render_state->shaders[ShaderId::SPRITE3].id(), "em_unlit")
+               : -1;
+  // tile lights: emissive sprites keep their nearest depth on draw buffer 4 (max of 1 / z)
+  const bool sz = emissive && SsaoRenderer::sprite_depth_drawing(true);
+  if (sz) {
+    const GLuint prog = render_state->shaders[ShaderId::SPRITE3].id();
+    const float* lin = SsaoRenderer::depth_lin();
+    glUniform3f(glGetUniformLocation(prog, "sz_lin"), lin[0], lin[1], lin[2]);
+    glUniform1f(glGetUniformLocation(prog, "sz_min_e"),
+                0.5f * Gfx::g_global_settings.ssao_emissive_lo);
+  }
+
   // now do draws!
   for (const auto bucket : m_bucket_list) {
     u32 tbp = bucket->key >> 32;
@@ -630,6 +707,43 @@ void Sprite3::flush_sprites(SharedRenderState* render_state,
     glUniform1f(glGetUniformLocation(render_state->shaders[ShaderId::SPRITE3].id(), "alpha_max"),
                 10.f);
     glUniform1i(glGetUniformLocation(render_state->shaders[ShaderId::SPRITE3].id(), "tex_T0"), 0);
+    {
+      const auto ab = mode.get_alpha_blend();
+      const bool additive = mode.get_ab_enable() && (ab == DrawMode::AlphaBlend::SRC_0_SRC_DST ||
+                                                     ab == DrawMode::AlphaBlend::SRC_0_FIX_DST);
+      glUniform4f(glGetUniformLocation(render_state->shaders[ShaderId::SPRITE3].id(), "atmo_color"),
+                  render_state->fog_color[0] / 255.f, render_state->fog_color[1] / 255.f,
+                  render_state->fog_color[2] / 255.f, additive ? 1.f : 0.f);
+    }
+    if (emissive) {
+      const auto ab = mode.get_alpha_blend();
+      const bool additive = mode.get_ab_enable() && (ab == DrawMode::AlphaBlend::SRC_0_SRC_DST ||
+                                                     ab == DrawMode::AlphaBlend::SRC_0_FIX_DST);
+      const emissive_table::Entry* light = nullptr;
+      if (em_table && !double_draw) {
+        if (const auto* gt = render_state->texture_pool->lookup_gpu_texture(tbp)) {
+          light = emissive_table::find(((u32)gt->tex_id.page << 16) | gt->tex_id.tex);
+        }
+      }
+      // sprites keep the highlight material of the surface behind them
+      SsaoRenderer::emissive_draw_buffers(double_draw || additive || light, true,
+                                          !render_state->light_material);
+      if (double_draw) {
+        glDisablei(GL_BLEND, 2);
+      } else if (light) {
+        glEnablei(GL_BLEND, 2);
+        glBlendEquationi(2, GL_MAX);
+        glUniform1f(em_chroma_loc, light->min_chroma);
+        glUniform1f(em_unlit_loc, 1.f - light->lights);
+      }
+      glUniform1f(em_loc, double_draw ? 0.f : 1.f);
+      glUniform1f(em_table_loc, light ? light->e : 0.f);
+      if (sz) {
+        glEnablei(GL_BLEND, 4);
+        glBlendEquationi(4, GL_MAX);
+        glBlendFunci(4, GL_ONE, GL_ONE);
+      }
+    }
 
     prof.add_draw_call();
     prof.add_tri(2 * (bucket->ids.size() / 5));
@@ -660,6 +774,17 @@ void Sprite3::flush_sprites(SharedRenderState* render_state,
     }
   }
 
+  if (emissive) {
+    SsaoRenderer::emissive_draw_buffers(false);
+    if (em_table) {
+      glBlendEquationi(2, GL_FUNC_ADD);
+    }
+    if (sz) {
+      SsaoRenderer::sprite_depth_drawing(false);
+      glDisablei(GL_BLEND, 4);
+      glBlendEquationi(4, GL_FUNC_ADD);
+    }
+  }
   m_sprite_buckets.clear();
   m_bucket_list.clear();
   m_last_bucket_key = UINT64_MAX;

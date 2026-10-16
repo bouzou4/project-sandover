@@ -1,8 +1,8 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: Feature Requests and Ideas
-    url: https://github.com/open-goal/jak-project/discussions/new/choose
-    about: Please use the discussion board to bring up feature requests and ideas. If there is interest in them, they can then be converted to an issue(s).
-  - name: Discord Help Channel
-    url: https://discord.gg/dPRCfsju3N
-    about: The best place for general help and asking questions.
+  - name: Sandover releases
+    url: https://github.com/bouzou4/project-sandover/releases
+    about: Download the latest build; its README.txt explains how to save a bug report with F7.
+  - name: Known issues
+    url: https://github.com/bouzou4/project-sandover/issues?q=is%3Aissue+label%3Abug
+    about: Check whether the problem is already reported before opening a new one.

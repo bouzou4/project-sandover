@@ -1,4 +1,6 @@
 #version 410 core
+SSAO_NORMAL_VERT
+INSPECT_VERT
 
 layout (location = 0) in vec3 position_in;
 layout (location = 1) in vec4 rgba_in;
@@ -14,6 +16,11 @@ uniform bool use_full_matrix;
 uniform mat4 full_matrix;
 uniform vec4 hvdf_offset;
 uniform uint warp_sample_mode;
+uniform float stereo_eye_x;
+// XR head tracking: camera-space point c is at eye_rot * (c - eye_t) in the eye
+uniform int eye_on;
+uniform mat3 eye_rot;
+uniform vec3 eye_t;
 
 out vec2 tex_coord;
 
@@ -21,10 +28,12 @@ out vec4 fragment_color;
 out float fog;
 
 flat out uvec2 tex_info;
+out vec3 pbr_gpos;  // camera space, for material shading (Materials.h)
 
 const float warp_off = 1.0f - (SCISSOR_HEIGHT / 512.0f);
 
 void main() {
+  insp_vid = uint(gl_VertexID);
   // lq.xy vf22, 0(vi10)          texture load?
   // lq_buffer(Mask::xy, vu.vf22, vu.vi10);
 
@@ -45,8 +54,14 @@ void main() {
     transformed -= full_matrix[0] * position_in.x ;
     transformed -= full_matrix[1] * position_in.y;
     transformed -= full_matrix[2] * position_in.z ;
+  } else if (eye_on != 0) {
+    vec3 eye_pos = eye_rot * (position_in - eye_t);
+    transformed.xyz = eye_pos * scale.xyz;
+    transformed.z += mat_32;
+    transformed.w = mat_23 * eye_pos.z + mat_33;
+    transformed *= -1;
   } else {
-    transformed.xyz = position_in * scale.xyz;
+    transformed.xyz = (position_in - vec3(stereo_eye_x, 0, 0)) * scale.xyz;
     transformed.z += mat_32;
     transformed.w = mat_23 * position_in.z + mat_33;
     transformed *= -1;
@@ -95,7 +110,11 @@ void main() {
   gl_Position = transformed;
   // scissoring area adjust
   gl_Position.y *= SCISSOR_ADJUST * HEIGHT_SCALE;
+  ssao_cpos = gl_Position.xyw;
+  ssao_vnrm = vec4(0.0);
 
   fragment_color = vec4(rgba_in.rgb, rgba_in.a * 2);
   tex_info = byte_info.xy;
+  pbr_gpos = use_full_matrix ? vec3(0.0)
+                             : (eye_on != 0 ? position_in : position_in - vec3(stereo_eye_x, 0, 0));
 }

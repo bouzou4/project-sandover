@@ -56,3 +56,28 @@ third-party/draco:
     - "PR #3723 (https://github.com/open-goal/jak-project/pull/3723)"
 third-party/json.hpp
   git: https://github.com/nlohmann/json/blob/eba0a92bfb1abf242f30e894b96ba11c9f4048c7/single_include/nlohmann/json.hpp
+third-party/openxr:
+  git: https://github.com/KhronosGroup/OpenXR-SDK/tree/release-1.1.63
+  license: Apache License 2.0
+  modifications:
+    - "Only the loader, headers, jsoncpp and their licenses are kept; specification/, CI files and the Android-only jnipp and android-jni-wrappers are dropped"
+third-party/openal-soft:
+  git: https://github.com/kcat/openal-soft/tree/1.25.2
+  license: LGPL 2 or later (BSD-3-Clause and pffft portions; see the license files)
+  modifications:
+    - "Only the library sources, bundled fmt/gsl, the default HRTF, docs and license files are kept; examples/ (except examples/common, which the CMake file always references), utils/ and CI files are dropped"
+    - "Built as a shared library (OpenAL32.dll next to gk)"
+    - "common/opthelpers.h: NONBLOCKING is empty with the MSVC STL (clang-cl ABI), whose std::invoke rejects nonblocking member function pointers"
+    - "alc/backends/wasapi.cpp: the spatial stream activation blob points at a stack object; the PROPVARIANT is emptied before PropVariantClear frees it (heap corruption on endpoints with spatial sound on)"
+third-party/smaa:
+  git: https://github.com/iryoku/smaa/tree/71c806a838bdd7d517df19192a20f0c61b3ca29d
+  license: MIT
+  modifications:
+    - "Only LICENSE.txt and the precomputed Textures/AreaTex.h and Textures/SearchTex.h are kept here, line endings LF"
+    - "SMAA.hlsl lives in game/graphics/opengl_renderer/shaders (the shader loader reads that folder), licence header kept; the ASCII-art logo comment (lines ending in a backslash, a line continuation GLSL 4.1 rejects) and two non-ASCII middle dots in a comment diagram are removed; no code changed"
+game/graphics/opengl_renderer/shaders/ffx:
+  git: https://github.com/GPUOpen-Effects/FidelityFX-FSR/tree/v1.0.2
+  commit: a21ffb8f6c13233ba336352bdff293894c706575
+  license: MIT (license.txt)
+  modifications:
+    - "None: ffx-fsr/ffx_a.h, ffx-fsr/ffx_fsr1.h and license.txt as published; they sit in the shader folder because the shader loader reads only that folder at run time"

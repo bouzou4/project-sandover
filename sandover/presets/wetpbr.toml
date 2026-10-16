@@ -1,0 +1,42 @@
+# Wet gloss (follow-up to the wet shoreline, #321): one rule for wet non-porous surfaces, behind
+# its own toggle. The engine defaults (gfx.h wet_pbr*) are the `l2` preset, the chosen
+# default; `off` is the earlier selected shoreline and swamp film.
+# - Splash zone: by the sea (sw_flags 4), surfaces that are not sand (SandTextures.inc, from the
+#   collision pat) are wet well above the waterline: fully to splash_full_m, dry at splash_top_m,
+#   with a world-noise edge and wet streaks running up steep faces. Sand keeps the selected band.
+# - Wet look there: darkening to `dark` (linear light) with +50% chroma, and a water film in the
+#   PBR inputs: w = gloss x wet, roughness = mix(dry, rough, w), F0 = mix(look F0, f0, w), detail
+#   normal = mix(detail, geometric, 0.6 w). The class shading's own response (GGX sun and key
+#   highlight, mood-environment reflection) makes the sheen; no separate film.
+# - The swamp's wet surfaces (sw_flags 2) take the film the same way (no splash zone, the swamp's
+#   own darkening).
+# Engine side: pbr_bg_frag.glsl (sw_flags 16, sw_gloss, sw_splash), pbr_common_frag.glsl
+# (pbr_wet_w, pbr_wet_r, pbr_wet_f0), Swamp.cpp. `sandover-preset apply wetpbr <l2|off>`.
+#
+# [presets.<name>.wet]
+#   gloss          film weight at full wetness, 0..1
+#   rough          the film's roughness
+#   f0             the film's reflectance at normal incidence (stylised above water's 0.02)
+#   dark           brightness of fully wet non-sand shore surfaces in linear light, 0..1
+#   splash_full_m  splash zone fully wet up to this height above the sea (m)
+#   splash_top_m   and dry from this height (m); the edge noise and the streaks scale with the fade
+#                  (splash_top_m - splash_full_m)
+# caption          one line for the screening grid: what visibly differs, never parameters
+
+[meta]
+schema = 1
+phase = "wetpbr"
+round = 5
+# Revision 5: l2 was chosen, the revision-4 wet rock with a lower splash zone.
+
+[presets.l2]
+label = "Wet rock, line at 0.7-1.3 m (chosen default)"
+caption = "a dark wet splash zone up the rocks and pilings with sun streaks, wet to about 0.7 m, dry by 1.3 m; sand unchanged"
+
+[presets.l2.wet]
+gloss = 0.8
+rough = 0.2
+f0 = 0.1
+dark = 0.55
+splash_full_m = 0.7
+splash_top_m = 1.3
