@@ -1,4 +1,6 @@
 #version 410 core
+SSAO_NORMAL_VERT
+INSPECT_VERT
 
 layout (location = 0) in vec3 position_in;
 layout (location = 1) in vec4 rgba_in;
@@ -11,6 +13,7 @@ out vec4 fragment_color;
 
 // this is just for debugging.
 void main() {
+  insp_vid = uint(gl_VertexID);
   vec4 transformed = camera[3];
   transformed += camera[0] * position_in.x;
   transformed += camera[1] * position_in.y;
@@ -36,6 +39,8 @@ void main() {
   // scissoring area adjust
   transformed.y *= SCISSOR_ADJUST * HEIGHT_SCALE;
   gl_Position = transformed;
+  ssao_cpos = gl_Position.xyw;
+  ssao_vnrm = vec4(0.0);
 
   // time of day lookup
   fragment_color = rgba_in;

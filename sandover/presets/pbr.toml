@@ -1,0 +1,265 @@
+# Material class shading (Jak 1). Read by the engine at start-up and by the ImGui
+# "Materials > Reload preset" button; `pc-set-pbr-param` values sent later win. The toggle
+# itself (`pc-set-pbr-param 0 1`) is never set here: shading stays off by default.
+# Engine side: game/graphics/opengl_renderer/Materials.cpp. How-to: kb/howto/materials.md.
+# The engine reads a TOML subset: [section], key = number, key = [n, n, n], key = "text".
+
+[global]
+strength = 1.0      # scales detail and highlights together; 0 = vanilla look
+detail = 1.0        # normal-map strength scale on top of the per-class `normal`
+highlight = 1.0     # highlight scale on top of the per-class `highlight`
+key = 0.5           # key-light highlight where the sidecar has no sun share
+source = "maps"     # "maps" (per-texture, derive-maps) or "procedural" (the earlier look)
+look = "bold"   # look applied over these values at start-up; `pc-set-pbr-param 11 n` switches
+                    # (0 base, 1 faithful, 2 bold, 3 cinematic)
+
+# Material response (metallic workflow, mood environment, roughness lobe). metallic: how far
+# metallic textures move to the metal model (diffuse *= 1 - m, F0 = mix(0.04, albedo, m)).
+# env: mood-environment reflection (sky/horizon/ground hemisphere plus a sun glow, from the live
+# fog colour and the fitted light, sampled along the reflection vector, blurred by roughness).
+# fresnel: rim scale. ambient: hemisphere response of the detail normal in shade. band: 0 GGX
+# lobe, 1 the stylized two-step band. lobe: sun and key lobe scale. metal_darken: extra diffuse
+# darkening on metallic textures. specular: dielectric reflectance as a multiple of 0.04.
+metallic = 0.35
+env = 0.25
+fresnel = 0.5
+ambient = 0.15
+roughness_contrast = 1.0
+band = 1.0
+lobe = 0.5
+metal_darken = 0.0
+specular = 1.0
+# metal_hue: 1 = metals reflect the bake's colour (not only its luminance) under a mood
+# environment desaturated to its luminance, and take half the class tint in F0 (precursor
+# bronze 1, 0.72, 0.42 acts as about 1, 0.86, 0.71); 0 = the earlier response. Param 25.
+metal_hue = 1.0
+# transmit, wrap: scales on the per-class `transmit` and `wrap` below (params 26, 27; 0 = off).
+# wind_tie: 1 = wind TIE draws (palm canopies) take class shading like other TIE (param 28).
+transmit = 1.0
+wrap = 1.0
+wind_tie = 1
+# bake_wrap: scale on the per-class `bake_wrap` below (param 29); 0 until picked.
+bake_wrap = 0.0
+# sun_occlusion: 1 = backlit leaves glow only where the sun reaches them, through the crowns' leaf
+# volume (lighting/canopy maps) and past the solid world (level heightfield); 0 = as before (param
+# 30). leaf_density: optical depth scale of the leaf volume for that test (param 31, 0..4).
+# Chosen look: transmit 1, sun_occlusion 1, leaf_density 2.5.
+sun_occlusion = 1
+leaf_density = 2.5
+# glint: scale on the per-class `glint` below (param 32; 0 = off; the candidate arm B2 was 2.5). Shape:
+# one crystal per occupied world cell of glint_cell_m, glint_density of the cells occupied, facet
+# normals spread by glint_spread (rad, rms), each lit inside a glint_width (rad) lobe round the
+# sun half vector. Glints are HDR and bloom; under ~6 px per cell they fade into their mean, a
+# bright sheen along the sun's mirror path.
+glint = 1.0
+glint_cell_m = 0.03
+glint_density = 1.0
+glint_spread = 0.35
+glint_width = 0.12
+# ice: strength of the ice response on class `ice` (param 40, millionths): glossy coat, a darker
+# bluer inner layer seen through the surface, sun through thin ice. Loaded at start-up and on
+# every look change (param 11 reloads this file and so resets an earlier param 40); boot stays
+# vanilla through the material shading toggle, as with metal_hue. 0 = off: `ice` rows take
+# stone's class parameters, detail layer and wetness. Chosen: 1.0 (moderate, ice-depth revision 3);
+# the strong variant is 2.5: (pc-set-pbr-param 40 2500000), or the Materials debug slider.
+ice = 1.0
+
+[ice]
+depth_m = 0.15      # depth of the inner layer the view ray reaches below the surface
+absorb_m = 0.15     # path over which the ice's own colour is applied once (deeper = bluer)
+roughness = 0.18    # surface coat roughness (reflection and sun lobe)
+transmit = 1.0      # sun through thin ice, x sun colour at strength 1
+
+[maps]
+max_size = 0        # cap on map width/height in texels (box-halved at load); 0 = as derived
+
+# Parallax offset on masonry (textures derive-maps gave a height: stone with a brick/stone/
+# block/wall/tile/cobble name, or a `parallax` opt-in). tfrag, tie and etie only; no geometry
+# change. `pc-set-pbr-param 22 0/1` toggles it, 23 sets depth_m (millionths).
+[parallax]
+enable = 1
+depth_m = 0.0375          # deepest groove, metres (clamped to 0.08); the self-shadow march follows it
+taps = 3                  # height samples, 1-3
+grazing = [0.15, 0.45]    # n.v over which the offset fades in (0 at silhouettes)
+fade_m = [20.0, 40.0]     # distance over which the offset fades out, metres, for a texture
+                          # repeating every fade_ref_m; scaled by its metres per repeat (x0.25-4)
+fade_ref_m = 2.0
+basis = 1                 # 1: per-vertex basis, continuous across triangle edges; 0: per triangle
+
+# Per class. env, rough_bias, lobe, sheen: material response (reflection scale, added
+# roughness, sun and key lobe scale, grazing sheen in the albedo hue; defaults 1, 0, 1, 0). normal: per-texture normal-map strength (1 = the map as derived). highlight:
+# added colour at full sun. gloss: Blinn exponent where a texture has no roughness map (with a
+# map, the exponent comes from roughness). tint: highlight colour; albedo_tint: how much the
+# highlight follows the texture hue (metallic textures follow it at least 0.85).
+# transmit: sun through thin leaves seen from behind, albedo^2 x sun x sun share x |N.L| on the
+# far side x (V.-L)^transmit_power, faded out as the sun reaches the horizon (default 0, power 2).
+# wrap: wrapped N.L, (N.L + w) / (1 + w), on the sun and key relief: a soft terminator (default 0).
+# bake_wrap: the bake's own sun term (sidecar gain x visibility) takes a soft N.L, (N.L + w)^2 / 4w
+# over -w..w, instead of max(N.L, 0), plus 0.3 w of cool light scattered just inside the shade.
+# glint: sun glints, one glint's HDR peak x sun colour in full direct sun (default 0).
+# detail / tile_m / uv_repeats only apply to the procedural source.
+
+[class.stone]
+normal = 1.2
+highlight = 0.07
+gloss = 6
+tint = [1.0, 0.97, 0.9]
+albedo_tint = 0.3
+detail = 0.30
+tile_m = 2.0
+uv_repeats = 4
+
+[class.wood]
+normal = 2.0
+highlight = 0.08
+gloss = 8
+tint = [1.0, 0.93, 0.8]
+albedo_tint = 0.5
+detail = 0.25
+tile_m = 1.2
+uv_repeats = 4
+
+[class.metal]
+normal = 2.0
+highlight = 0.35
+gloss = 16
+tint = [1.0, 1.0, 1.0]
+albedo_tint = 0.85
+detail = 0.12
+tile_m = 1.5
+uv_repeats = 3
+
+[class.precursor]
+normal = 2.0
+highlight = 0.40
+gloss = 14
+tint = [1.0, 0.72, 0.42]
+albedo_tint = 0.5
+detail = 0.10
+tile_m = 2.0
+uv_repeats = 3
+
+[class.foliage]
+env = 0.4
+sheen = 0.3
+transmit = 1.0
+transmit_power = 2.0
+normal = 2.0
+highlight = 0.08
+gloss = 8
+tint = [0.95, 1.0, 0.85]
+albedo_tint = 0.5
+detail = 0.20
+tile_m = 0.6
+uv_repeats = 3
+
+[class.organic]
+normal = 2.0
+highlight = 0.10
+gloss = 10
+tint = [1.0, 0.95, 0.92]
+albedo_tint = 0.3
+detail = 0.10
+tile_m = 0.5
+uv_repeats = 6
+
+[class.cloth]
+env = 0.3
+rough_bias = 0.15
+sheen = 0.8
+normal = 2.0
+highlight = 0.06
+gloss = 5
+tint = [1.0, 1.0, 1.0]
+albedo_tint = 0.6
+detail = 0.20
+tile_m = 0.35
+uv_repeats = 8
+
+[class.snow]
+wrap = 0.5
+bake_wrap = 1.0
+glint = 6.0
+normal = 2.0
+highlight = 0.20
+gloss = 30
+tint = [0.92, 0.97, 1.0]
+albedo_tint = 0.0
+detail = 0.25
+tile_m = 0.6
+uv_repeats = 4
+
+[class.glass]
+normal = 0.0
+highlight = 0.30
+gloss = 40
+
+# ice under the base response: smoother than its stone-derived maps, a stronger lobe; the
+# coat, inner layer and transmission are the [ice] rule above
+[class.ice]
+normal = 1.0
+highlight = 0.30
+gloss = 60
+rough_bias = -0.4
+lobe = 1.5
+tint = [0.92, 0.97, 1.0]
+albedo_tint = 0.0
+
+# ---- looks: applied over everything above ----
+
+# Faithful: close to the earlier look, metals only lean toward the metal model.
+[look.faithful]
+metallic = 0.35
+env = 0.25
+fresnel = 0.5
+ambient = 0.15
+band = 1.0
+lobe = 0.5
+
+# Bold: full metallic workflow, the world in the reflections, relief in shade.
+[look.bold]
+metallic = 1.0
+env = 0.6
+fresnel = 1.0
+ambient = 0.5
+roughness_contrast = 1.2
+band = 0.3
+lobe = 0.7
+specular = 2.0
+
+[look.bold.class.metal]
+rough_bias = -0.1
+
+[look.bold.class.stone]
+rough_bias = 0.1
+
+[look.bold.class.wood]
+lobe = 1.3
+
+[look.bold.class.precursor]
+rough_bias = -0.1
+
+# Cinematic: full environment, strong fresnel, pushed roughness contrast, darker metal diffuse.
+[look.cinematic]
+metallic = 1.0
+env = 1.0
+fresnel = 1.6
+ambient = 0.6
+roughness_contrast = 1.6
+band = 0.0
+lobe = 1.0
+metal_darken = 0.15
+specular = 2.5
+
+[look.cinematic.class.metal]
+rough_bias = -0.15
+
+[look.cinematic.class.precursor]
+rough_bias = -0.15
+
+[look.cinematic.class.stone]
+rough_bias = 0.15
+
+[look.cinematic.class.wood]
+rough_bias = -0.05
+lobe = 1.5

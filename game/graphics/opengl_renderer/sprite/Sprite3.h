@@ -19,6 +19,14 @@ class Sprite3 : public BucketRenderer {
   void render(DmaFollower& dma, SharedRenderState* render_state, ScopedProfilerNode& prof) override;
   void draw_debug_window() override;
   static constexpr int SPRITES_PER_CHUNK = 48;
+  /// HUD sprites kept back this frame (render_state->defer_hud_sprites, Jak 1): draw them now.
+  /// keep: the sprites stay held for another flush (XR 2D layer canvases).
+  void flush_deferred_hud(SharedRenderState* render_state,
+                          ScopedProfilerNode& prof,
+                          bool keep = false);
+  /// Discards the held HUD sprites (XR second eye: the 2D layer has them).
+  void drop_deferred_hud();
+  bool hud_deferred() const { return m_hud_deferred; }
 
  private:
   void render_jak1(DmaFollower& dma, SharedRenderState* render_state, ScopedProfilerNode& prof);
@@ -43,7 +51,7 @@ class Sprite3 : public BucketRenderer {
                                  GameVersion version,
                                  SharedRenderState* render_state,
                                  ScopedProfilerNode& prof);
-  void render_3d(DmaFollower& dma);
+  void render_3d(DmaFollower& dma, SharedRenderState* render_state);
   void render_2d_group0(DmaFollower& dma,
                         SharedRenderState* render_state,
                         ScopedProfilerNode& prof);
@@ -65,8 +73,19 @@ class Sprite3 : public BucketRenderer {
   void handle_clamp(u64 val, SharedRenderState* render_state, ScopedProfilerNode& prof);
   void handle_alpha(u64 val, SharedRenderState* render_state, ScopedProfilerNode& prof);
 
-  void flush_sprites(SharedRenderState* render_state, ScopedProfilerNode& prof, bool double_draw);
+  void flush_sprites(SharedRenderState* render_state,
+                     ScopedProfilerNode& prof,
+                     bool double_draw,
+                     bool keep = false);
+  void clear_sprites();
+  /*!
+   * Rebuild this flush's draw list back to front (farthest sprite first) into m_sorted_list.
+   * Consecutive additive sprites that also add on the emissive buffer commute, so each stretch of
+   * them is drawn grouped by bucket key; every other sprite keeps its depth order.
+   */
+  void sort_world_sprites(SharedRenderState* render_state, bool em_table);
 
+  bool m_hud_deferred = false;
   GlowRenderer m_glow_renderer;
   void glow_dma_and_draw(DmaFollower& dma,
                          SharedRenderState* render_state,
@@ -199,10 +218,23 @@ class Sprite3 : public BucketRenderer {
     std::vector<u32> ids;
     u32 offset_in_idx_buffer = 0;
     u64 key = -1;
+    bool commutes = false;  // sort_world_sprites: may reorder within an additive stretch
   };
 
   std::map<u64, Bucket> m_sprite_buckets;
   std::vector<Bucket*> m_bucket_list;
+
+  // world sprites back to front on the Sandover render path (Jak 1)
+  bool m_sort_world = true;
+  struct SortKey {
+    float w;
+    u32 sprite;
+    const Bucket* bucket;
+  };
+  std::vector<SortKey> m_sort_keys;
+  std::vector<Bucket> m_sorted_runs;
+  std::vector<Bucket*> m_sorted_list;
+  int m_sorted_draws = 0;
 
   u64 m_last_bucket_key = UINT64_MAX;
   Bucket* m_last_bucket = nullptr;

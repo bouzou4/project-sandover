@@ -1,0 +1,57 @@
+# Glow prop pop-in (fix/light-popin, sandover/kb/symptoms.md): green cave mushrooms and ice
+# crystals lit their surroundings only once they were among the 8 glow props nearest the camera.
+# Two approaches, each three shots along one camera's own view line (same rotation, camera moved
+# along its forward axis): far, mid, near. Jak stays where the source frame had him.
+# A = the old selection, B = the fix (8 glow slots, as many as before), B2 = B with option 36 at
+# 8 (identical to B now; kept so the arm list matches the first round).
+# All arms run on the fix-light-popin-2 bin: (pc-set-emissive-lights 35 0) is master's selection
+# (8 nearest, full power, no ramp). A may instead run on a master bin with the A forms minus
+# the 35 form; the result should be identical.
+# Cameras, each from a captured frame (BUILD-RULES camera rule):
+# - maincave-mushrooms-*: crystals-001/0021 (the play frame: dark eco crystal,
+#   chest, mushroom patches), t = -4, 0, +6 m along its forward. Offline (rasterised level
+#   geometry, table rows, baked vertex colour, 8 glow slots): at -4 A lights none of the patches
+#   on screen and B lights 3.4% of the frame (mean +30/255: the patch behind the crystal and the
+#   one on the left); at 0 A 2.6%, B 4.6%; at +6 A = B.
+# - snow-crystals-*: vanilla-001/raw/0019-A (the snow ice crystals by Jak, play frame
+#   0019), t = -6, -3, +3 m. Offline: at -6 A lights 3.8% of the frame and B 24% (mean +47/255:
+#   the centre crystal cluster and the wall behind it); at -3 A 18%, B 25%; at +3 A = B.
+# Each look is the play look (settings defaults) then the arm's form. One instance, any order.
+set: light-popin
+looks:
+  A:
+    - '(sandover-settings-reset! (-> *pc-settings* sandover))'
+    - '(sandover-settings-reapply)'
+    - '(sandover-settings-update)'
+    - '(define-extern pc-set-emissive-lights (function int int none))'
+    - '(pc-set-emissive-lights 35 0)'
+  B:
+    - '(sandover-settings-reset! (-> *pc-settings* sandover))'
+    - '(sandover-settings-reapply)'
+    - '(sandover-settings-update)'
+    - '(define-extern pc-set-emissive-lights (function int int none))'
+    - '(pc-set-emissive-lights 37 1)'
+  B2:
+    - '(sandover-settings-reset! (-> *pc-settings* sandover))'
+    - '(sandover-settings-reapply)'
+    - '(sandover-settings-update)'
+    - '(define-extern pc-set-emissive-lights (function int int none))'
+    - '(pc-set-emissive-lights 37 1)'
+    - '(pc-set-emissive-lights 36 8000000)'
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 120
+  hour: 12
+  effects: on
+  wind: off
+  particles: on
+  jak: show
+  goals_after_load: ["(disable-hud 0)"]
+shots:
+  - {name: maincave-mushrooms-far, continue: maincave-to-robocave, hour: 12.55, jak_pos: [4714544.0, 45075.6, -12254603.0], camera: {pos: [4737952.6, 77787.0, -12307853.3], rot: [0.9477, -0.0005, 0.3190, -0.0917, 0.9574, 0.2739, -0.3056, -0.2888, 0.9073]}}
+  - {name: maincave-mushrooms-mid, continue: maincave-to-robocave, hour: 12.55, jak_pos: [4714544.0, 45075.6, -12254603.0], camera: {pos: [4732946.0, 73054.8, -12292988.0], rot: [0.9477, -0.0005, 0.3190, -0.0917, 0.9574, 0.2739, -0.3056, -0.2888, 0.9073]}}
+  - {name: maincave-mushrooms-near, continue: maincave-to-robocave, hour: 12.55, jak_pos: [4714544.0, 45075.6, -12254603.0], camera: {pos: [4725436.2, 65956.5, -12270690.1], rot: [0.9477, -0.0005, 0.3190, -0.0917, 0.9574, 0.2739, -0.3056, -0.2888, 0.9073]}}
+  - {name: snow-crystals-far, continue: snow-start, hour: 12.24, jak_pos: [3302844.2, 1030461.8, -14205372.0], camera: {pos: [3312985.0, 1052533.4, -14140349.4], rot: [-0.9942, -0.0000, 0.1072, -0.0155, 0.9895, -0.1438, -0.1061, -0.1446, -0.9838]}}
+  - {name: snow-crystals-mid, continue: snow-start, hour: 12.24, jak_pos: [3302844.2, 1030461.8, -14205372.0], camera: {pos: [3311681.8, 1050756.6, -14152438.2], rot: [-0.9942, -0.0000, 0.1072, -0.0155, 0.9895, -0.1438, -0.1061, -0.1446, -0.9838]}}
+  - {name: snow-crystals-near, continue: snow-start, hour: 12.24, jak_pos: [3302844.2, 1030461.8, -14205372.0], camera: {pos: [3309075.2, 1047203.1, -14176615.8], rot: [-0.9942, -0.0000, 0.1072, -0.0155, 0.9895, -0.1438, -0.1061, -0.1446, -0.9838]}}

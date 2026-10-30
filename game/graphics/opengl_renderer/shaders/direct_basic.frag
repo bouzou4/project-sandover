@@ -7,6 +7,7 @@ in vec4 gs_scissor;
 uniform int scissor_enable;
 // game width, game height, viewport width, viewport height
 uniform vec4 game_sizes;
+uniform int saturate_out;  // FP16 target: clamp like an 8-bit target
 
 void main() {
   if (scissor_enable == 1) {
@@ -23,4 +24,7 @@ void main() {
   }
 
   color = fragment_color;
+  if (saturate_out == 1) {
+    color = clamp(color, 0.0, 1.0);
+  }
 }

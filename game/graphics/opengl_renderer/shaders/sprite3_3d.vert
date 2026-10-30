@@ -25,6 +25,26 @@ uniform vec4 xyz_array[4];
 uniform vec4 st_array[4];
 
 flat out vec4 fragment_color;
+
+// unified vista fog (vista_atmo_foreground_uniforms), world sprites only
+uniform vec4 atmo;
+uniform vec3 atmo_cam;
+out float atmo_f;
+// neighbour-mode haze: x density (1/m), y start (m), z max amount
+uniform vec4 haze;
+out float haze_f;
+// the game's linear depth fog, for the fog floor (atmo.x 2): hvdf w, depth slope, min, max; and
+// the camera's view axis in world space
+uniform vec4 van_fog;
+uniform vec3 van_fwd;
+out float van_f;
+// the swamp mist (Swamp.h, swamp_mist.frag) along the ray to the sprite: x density at the water
+// line (1/m, 0 off), y 1 / scale height, z start (m), w max; eye height above the water line (m)
+uniform vec4 sw_mist;
+uniform float sw_eye_h;
+uniform vec4 sw_sun;  // xyz world direction toward the sun, w glow strength (0: none)
+out float mist_f;
+out float mist_g;
 out vec3 tex_coord;
 flat out uvec2 tex_info;
 
@@ -174,4 +194,35 @@ void main() {
   fragment_color.w *= 2;
 
   tex_info = tex_info_in.xy;
+
+  atmo_f = 0.;
+  haze_f = 0.;
+  van_f = 0.;
+  mist_f = 0.;
+  mist_g = 0.;
+  if (rendermode != 2) {
+    vec3 d = position - atmo_cam;
+    if (atmo.x > 1.5) {
+      float z = abs(dot(d, van_fwd));
+      van_f = (255. - clamp(van_fog.x + van_fog.y * z, van_fog.z, van_fog.w)) / 255.;
+    }
+    if (sw_mist.x > 0.) {
+      float dist = length(d) * (1. / 4096.);
+      float vy = d.y * (1. / 4096.) / max(dist, 1e-4);
+      float y0 = sw_eye_h + vy * min(sw_mist.z, dist);
+      float y1 = sw_eye_h + vy * dist;
+      float e0 = exp(-max(y0, -1.) * sw_mist.y);
+      float e1 = exp(-max(y1, -1.) * sw_mist.y);
+      float k = (y1 - y0) * sw_mist.y;
+      float avg = abs(k) > 1e-3 ? (e0 - e1) / k : e0;
+      mist_f = min(1. - exp(-sw_mist.x * max(dist - sw_mist.z, 0.) * avg), sw_mist.w);
+      mist_g = sw_sun.w * pow(max(dot(d / max(length(d), 1e-4), sw_sun.xyz), 0.), 6.);
+    }
+  }
+  if (atmo.x > 0. && rendermode != 2) {
+    float dist_m = length(position - atmo_cam) * (1. / 4096.);
+    float mid_y_m = 0.5 * (position.y + atmo_cam.y) * (1. / 4096.);
+    atmo_f = 1. - exp(-atmo.z * max(dist_m - atmo.y, 0.) * exp(-atmo.w * max(mid_y_m, 0.)));
+    haze_f = haze.z * (1. - exp(-haze.x * max(dist_m - haze.y, 0.)));
+  }
 }

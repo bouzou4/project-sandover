@@ -38,6 +38,103 @@ IOP_Kernel::IOP_Kernel() {
   m_start_time = time_point_cast<microseconds>(steady_clock::now());
 }
 
+IOP_Kernel::~IOP_Kernel() {
+  m_watchdog_quit = true;
+  if (m_watchdog.joinable()) {
+    m_watchdog.join();
+  }
+}
+
+static s64 now_us() {
+  return time_point_cast<microseconds>(steady_clock::now()).time_since_epoch().count();
+}
+
+void IOP_Kernel::start_watchdog(int seconds, void (*extra)()) {
+  if (seconds <= 0 || m_watchdog.joinable()) {
+    return;
+  }
+  m_watchdog_seconds = seconds;
+  m_watchdog_extra = extra;
+  lg::info("[IOP watchdog] armed: {} s", seconds);
+  m_watchdog = std::thread([this]() { watchdog_loop(); });
+}
+
+void IOP_Kernel::watchdog_loop() {
+  const s64 limit = s64(m_watchdog_seconds) * 1000000;
+  s64 episode = 0;  // start of the stall being reported, 0 = none
+  int dumps = 0;
+  while (!m_watchdog_quit) {
+    std::this_thread::sleep_for(milliseconds(250));
+    s64 now = now_us();
+    s64 run_start = m_run_start_us;
+    const char* why = nullptr;
+    s64 since = 0;
+    if (run_start && now - run_start > limit) {
+      why = "an IOP thread has not yielded";
+      since = run_start;
+    } else {
+      std::scoped_lock lock(sif_mtx);
+      for (auto& r : sif_records) {
+        s64 issued = r.cmd.issued.time_since_epoch().count();
+        if (!r.cmd.finished && issued && now - issued > limit) {
+          why = "an RPC has not finished";
+          since = issued;
+          break;
+        }
+      }
+    }
+    if (!why) {
+      episode = 0;
+      continue;
+    }
+    if (since != episode) {
+      episode = since;
+      dumps = 0;
+    }
+    // first dump at the limit, then at 3x and 9x to show whether anything moved
+    s64 age = now - since;
+    if ((dumps == 0 && age > limit) || (dumps == 1 && age > 3 * limit) ||
+        (dumps == 2 && age > 9 * limit)) {
+      dumps++;
+      watchdog_dump(why);
+    }
+  }
+}
+
+void IOP_Kernel::watchdog_dump(const char* why) {
+  static const char* states[] = {"Run", "Ready", "Wait", "WaitSuspend", "Suspend", "Dormant"};
+  static const char* waits[] = {"None", "Sleep", "Semaphore", "Delay", "Messagebox", "EventFlag"};
+  s64 now = now_us();
+  s64 run_start = m_run_start_us;
+  IopThread* running = m_running;
+  lg::warn("[IOP watchdog] {}; running: {} for {} ms", why, running ? running->name : "(kernel)",
+           run_start ? (now - run_start) / 1000 : 0);
+  for (auto& t : threads) {
+    lg::warn("[IOP watchdog]   thread {:2} {:<16} pri {:3} {:<8} wait {:<10} wakeups {}", t.thID,
+             t.name, t.priority, states[(int)t.state], waits[(int)t.waitType], t.wakeupCount);
+  }
+  for (size_t i = 0; i < semas.size(); i++) {
+    lg::warn("[IOP watchdog]   sema {} count {}/{} waiters {}", i, semas[i].count,
+             semas[i].maxCount, semas[i].wait_list.size());
+  }
+  for (size_t i = 0; i < mbxs.size(); i++) {
+    lg::warn("[IOP watchdog]   mbx {} messages {}", i, mbxs[i].messages.size());
+  }
+  {
+    std::scoped_lock lock(sif_mtx);
+    for (auto& r : sif_records) {
+      s64 issued = r.cmd.issued.time_since_epoch().count();
+      lg::warn("[IOP watchdog]   rpc 0x{:x} thread {} started {} finished {} fno {} size {} age {} ms",
+               r.qd->serve_data->command, r.thread_to_wake, r.cmd.started, r.cmd.finished,
+               r.cmd.fno, r.cmd.size, issued ? (now - issued) / 1000 : -1);
+    }
+  }
+  if (m_watchdog_extra) {
+    m_watchdog_extra();
+  }
+  fflush(stdout);
+}
+
 /*
 ** -----------------------------------------------------------------------------
 ** Functions callable by threads
@@ -321,7 +418,15 @@ void IOP_Kernel::runThread(IopThread* thread) {
   ASSERT(_currentThread == nullptr);  // should run in the kernel thread
   _currentThread = thread;
   thread->state = IopThread::State::Run;
+  if (m_watchdog_seconds) {
+    m_running = thread;
+    m_run_start_us = now_us();
+  }
   co_switch(thread->thread);
+  if (m_watchdog_seconds) {
+    m_run_start_us = 0;
+    m_running = nullptr;
+  }
   _currentThread = nullptr;
 }
 
@@ -495,6 +600,7 @@ void IOP_Kernel::sif_rpc(s32 rpcChannel,
   rec->cmd.copy_back_size = recvSize;
   rec->cmd.started = false;
   rec->cmd.finished = false;
+  rec->cmd.issued = time_point_cast<microseconds>(steady_clock::now());
 
   iWakeupThread(rec->thread_to_wake);
 

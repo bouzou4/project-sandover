@@ -37,9 +37,11 @@
    is running at full speed or slowdown = 2.0 if the game is running at half speed."
   ;; don't allow slowdowns of more than 4x. This prevents the dt's in the physics
   ;; calculations from getting huge.
-  (let ((ratio (fmin 4.0 slowdown)))
+  (let ((ratio (fmin 4.0 slowdown))
+        (fps (pc-game-fps)))
     (set! (-> this time-ratio) ratio)
-    (case (get-video-mode)
+    ;; og:preserve-this an XR session steps the game at its own tick, whatever the video mode
+    (case (if (nonzero? (pc-get-xr-game-rate)) 'custom (get-video-mode))
       (('pal)
        (set! (-> this time-adjust-ratio) (* 1.2 ratio))
        (set! (-> this seconds-per-frame) (* 0.02 ratio))
@@ -53,11 +55,11 @@
        ;; 5 "ticks" per frame * 60 fps = 300 ticks per second.
        (set! (-> this time-factor) 5.0))
       (('custom)
-       (set! (-> this time-adjust-ratio) (* (/ 60.0 (-> *pc-settings* target-fps)) ratio))
-       (set! (-> this seconds-per-frame) (/ ratio (-> *pc-settings* target-fps)))
-       (set! (-> this frames-per-second) (* (the float (-> *pc-settings* target-fps)) (/ 1.0 ratio)))
+       (set! (-> this time-adjust-ratio) (* (/ 60.0 fps) ratio))
+       (set! (-> this seconds-per-frame) (/ ratio fps))
+       (set! (-> this frames-per-second) (* (the float fps) (/ 1.0 ratio)))
        ;; x "ticks" per frame * y fps = 300 ticks per second.
-       (set! (-> this time-factor) (/ 300.0 (-> *pc-settings* target-fps))))
+       (set! (-> this time-factor) (/ 300.0 fps)))
       (else (format #t "Warning: Tried to set unsupported video-mode"))))
   (-> this time-ratio))
 

@@ -18,6 +18,18 @@ struct SpuVolume {
   /*   2 */ s16 right;
 };
 
+/// Receives voices that belong to spatialized sounds instead of the stereo mix.
+class VoiceRouter {
+ public:
+  virtual ~VoiceRouter() = default;
+  /// Takes the voice's output if its owner is spatialized; returns false to mix it normally.
+  virtual bool Route(u32 owner, s16Output sample) = 0;
+  /// Takes an unclaimed music, dialog or ambient voice; returns false to mix it normally.
+  virtual bool RouteRole(VoiceRole /*role*/, s16Output /*sample*/) { return false; }
+  /// End of one output sample: the stereo mix of unrouted voices and the master volume.
+  virtual void EndSample(s16Output bed, s32 master_volume) = 0;
+};
+
 class Synth {
  public:
   Synth() {
@@ -26,6 +38,8 @@ class Synth {
   }
 
   s16Output Tick();
+  /// Same as Tick, but voices the router claims are handed to it instead of the mix.
+  void TickRouted(VoiceRouter& router);
   void AddVoice(std::shared_ptr<Voice> voice);
   void SetMasterVol(u32 volume);
 

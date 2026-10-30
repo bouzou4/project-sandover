@@ -14,9 +14,274 @@
 ;;;; methods
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Sandover settings file (sandover.gc)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun sandover-skip-value ((file file-stream))
+  "Skip an unknown key's value, stopping before the ) that closes the key."
+  (let ((depth 0)
+        (in-string? #f))
+    (while #t
+      (let ((c (file-stream-getc file)))
+        (cond
+          ((= c 255) (return 0))
+          (in-string? (if (= c #x22) (set! in-string? #f)))
+          ((= c #x22) (set! in-string? #t))
+          ((= c #x28) (+! depth 1))
+          ((= c #x29)
+           (when (zero? depth)
+             (file-stream-seek file -1 SCE_SEEK_CUR)
+             (return 0))
+           (+! depth -1))))))
+  0)
+
+(defmacro sandover-read-bool (file)
+  `(!= (file-stream-read-symbol ,file) #f))
+
+(defun sandover-read-name ((file file-stream))
+  "A list value as a symbol. Builds before this one wrote them quoted, so quotes are dropped."
+  (file-stream-seek-past-whitespace file)
+  (file-stream-read-word file)
+  (let* ((s *pc-temp-string*)
+         (n (length s)))
+    (when (and (>= n 2) (= (-> s data 0) #x22) (= (-> s data (+ n -1)) #x22))
+      (dotimes (i (+ n -2))
+        (set! (-> s data i) (-> s data (+ i 1))))
+      (set! (-> s data (+ n -2)) 0)))
+  (string->symbol *pc-temp-string*))
+
+(defun sandover-read-quoted ((file file-stream) (dst (pointer uint8)) (size int))
+  "A quoted value into dst, NUL-terminated and cut at size - 1 bytes. A bare word reads as empty."
+  (file-stream-seek-past-whitespace file)
+  (set! (-> dst 0) 0)
+  (let ((c (file-stream-getc file)))
+    (cond
+      ((= c #x22)
+       (let ((n 0)
+             (done? #f))
+         (until done?
+           (set! c (file-stream-getc file))
+           (cond
+             ((or (= c #x22) (= c 255)) (set! done? #t))
+             ((< n (+ size -1)) (set! (-> dst n) c) (+! n 1))))
+         (set! (-> dst n) 0)))
+      (else
+       (file-stream-seek file -1 SCE_SEEK_CUR)
+       (file-stream-read-word file))))
+  0)
+
+;; the device name as a string, for the writer and the push (sandover-audio-update)
+(define *sandover-audio-device-str* (new 'global 'string 128 (the-as string #f)))
+
+;; the version of the sandover.gc being read (sandover-settings-read)
+(define *sandover-settings-file-version* SANDOVER_SETTINGS_VERSION)
+
+(defun sandover-field-read ((obj sandover-settings) (f sandover-field) (file file-stream))
+  "Read the value of a known key into its field. A value that matches none of its names keeps the field."
+  (let ((addr (sandover-field-addr obj f)))
+    (case (-> f kind)
+      ((SANDOVER_FIELD_BOOL) (set! (-> (the-as (pointer symbol) addr)) (sandover-read-bool file)))
+      ((SANDOVER_FIELD_ENUM)
+       (let ((name (sandover-read-name file)))
+         (dotimes (i (-> f names length))
+           (when (= name (-> f names i))
+             ;; before version 4 the tiers were SAO deep-low, deep-medium, deep: deep is medium now
+             (set! (-> (the-as (pointer int32) addr))
+                   (if (and (< *sandover-settings-file-version* 4) (string= (-> f key) "ssao-quality") (or (= i 1) (= i 2)))
+                     (+ i -1)
+                     i))))))
+      ((SANDOVER_FIELD_INTMAP)
+       (let ((v (file-stream-read-int file)))
+         (dotimes (i (-> f ints length))
+           (if (= v (-> f ints i)) (set! (-> (the-as (pointer int32) addr)) i)))))
+      ;; read as floats: string->int drops the sign of a decimal
+      ((SANDOVER_FIELD_FLOAT)
+       (let ((v (file-stream-read-float file)))
+         (set! (-> (the-as (pointer float) addr))
+               (if (and (logtest? (-> f flags) SANDOVER_FLAG_NEGATIVE) (< v 0.0))
+                 -1.0
+                 (fmax (-> f lo) (fmin (-> f hi) v))))))
+      ((SANDOVER_FIELD_WORD)
+       (file-stream-seek-past-whitespace file)
+       (file-stream-read-word file)
+       (dotimes (i (-> f words length))
+         (if (string= *pc-temp-string* (-> f words i)) (set! (-> (the-as (pointer int32) addr)) i))))
+      ((SANDOVER_FIELD_BYTES) (sandover-read-quoted file (the-as (pointer uint8) addr) (-> f size)))
+      (else (set! (-> (the-as (pointer int32) addr)) (file-stream-read-int file)))))
+  0)
+
+(defun sandover-settings-read-key ((obj sandover-settings) (file file-stream))
+  "Read the value of the key in *pc-temp-string*; unknown keys are skipped."
+  (let ((i (sandover-field-find *pc-temp-string*)))
+    (if (< i 0)
+      (sandover-skip-value file)
+      (sandover-field-read obj (-> *sandover-fields* i) file)))
+  0)
+
+(defun sandover-settings-read ((obj sandover-settings) (filename string))
+  "Read a sandover.gc file into obj. Missing keys keep their value; unknown keys are skipped,
+   so an older build reads a newer file. Returns #f if the file is missing or malformed."
+  (let ((file (new 'stack 'file-stream filename 'read)))
+    (when (not (file-stream-valid? file))
+      (return #f))
+    (with-settings-scope (file)
+                         (case-str (file-stream-read-word file)
+                           (("sandover")
+                            (let ((version (file-stream-read-int file)))
+                              (if (> version SANDOVER_SETTINGS_VERSION)
+                                (format 0 "[PC] sandover.gc version ~D is newer than ~D, reading known keys~%" version SANDOVER_SETTINGS_VERSION))
+                              (set! *sandover-settings-file-version* version)
+                              (dosettings (file) (sandover-settings-read-key obj file))
+                              ;; version 1 saved scRGB as the untouched default; HDR10 is the default since 2
+                              (if (and (< version 2) (zero? (-> obj hdr-output)))
+                                (set! (-> obj hdr-output) 1))
+                              ;; before 3 the sun rode on neighbours; the material look and tonemap rows
+                              ;; are gone, so the picked looks apply
+                              (when (< version 3)
+                                (set! (-> obj sun?) (-> obj vista?))
+                                (set! (-> obj pbr-look) 1)
+                                (set! (-> obj tonemap) 2))))
+                           (else (pc-settings-read-throw-error file "not a sandover settings file"))))
+    (file-stream-close file))
+  #t)
+
+(defun sandover-field-write ((obj sandover-settings) (f sandover-field) (file file-stream) (msaa int))
+  "Write a field as its key's line. The int row writes the msaa argument, and only when it is not negative."
+  (when (or (!= (-> f kind) SANDOVER_FIELD_INT) (>= msaa 0))
+    (let* ((addr (sandover-field-addr obj f))
+           (v (-> (the-as (pointer int32) addr))))
+      (format file "  (~S " (-> f key))
+      (case (-> f kind)
+        ((SANDOVER_FIELD_BOOL) (format file "~A" (-> (the-as (pointer symbol) addr))))
+        ((SANDOVER_FIELD_ENUM)
+         (format file "~A" (-> f names (if (and (>= v 0) (< v (-> f names length))) v (-> f fallback)))))
+        ((SANDOVER_FIELD_INTMAP)
+         (format file "~D" (-> f ints (if (and (>= v 0) (< v (-> f ints length))) v (-> f fallback)))))
+        ((SANDOVER_FIELD_FLOAT)
+         (let* ((x (-> (the-as (pointer float) addr)))
+                (w (if (and (logtest? (-> f flags) SANDOVER_FLAG_NEGATIVE) (< x 0.0)) -1.0 x)))
+           (if (logtest? (-> f flags) SANDOVER_FLAG_DECIMALS)
+             (format file "~,,3f" w)
+             (format file "~D" (the int w)))))
+        ((SANDOVER_FIELD_WORD)
+         (format file "~S" (-> f words (if (and (>= v 0) (< v (-> f words length))) v (-> f fallback)))))
+        ;; ~A prints a string in quotes
+        ((SANDOVER_FIELD_BYTES)
+         (format file "~A" (string<-charp *sandover-audio-device-str* (the-as (pointer uint8) addr))))
+        (else (format file "~D" msaa)))
+      (format file ")~%")))
+  0)
+
+(defun sandover-settings-write ((obj sandover-settings) (filename string) (msaa int))
+  "Write obj as a sandover.gc file; msaa >= 0 adds the MSAA key (the VR profile's file)."
+  (let ((file (new 'stack 'file-stream filename 'write)))
+    (if (not (file-stream-valid? file)) (return #f))
+    (format file "(sandover ~D~%" SANDOVER_SETTINGS_VERSION)
+    (dotimes (i (-> *sandover-fields* length))
+      (sandover-field-write obj (-> *sandover-fields* i) file msaa))
+    (format file "  )~%")
+    (file-stream-close file))
+  (format 0 "[PC] Sandover settings write: ~A~%" filename)
+  #t)
+
+(define *sandover-settings-loaded?* #f)
+
+(defun sandover-first-boot! ((obj pc-settings-jak1))
+  "No sandover.gc yet: the Sandover defaults, and Sandover's MSAA over one a stock build saved."
+  (set! (-> obj gfx-msaa) PC_DEFAULT_MSAA)
+  (sandover-settings-reset! (-> obj sandover))
+  0)
+
+(defun sandover-profile-file ((profile symbol))
+  "The file of a profile, in *pc-temp-string-1*: sandover.gc (flat screen) or sandover-vr.gc."
+  (format (clear *pc-temp-string-1*) (if (= profile 'vr) "~S/sandover-vr.gc" "~S/sandover.gc") *pc-settings-folder*))
+
+(defun sandover-profile-settings ((profile symbol))
+  "The settings of a profile: the active ones (*pc-settings* sandover) or the stored other ones."
+  (if (= profile *sandover-profile*) (-> *pc-settings* sandover) (-> *pc-settings* sandover-other)))
+
+(defun sandover-profile-msaa ((profile symbol))
+  "A profile's MSAA: the stock row's value (gfx-msaa) for the active profile, else its stored value."
+  (if (= profile *sandover-profile*) (-> *pc-settings* gfx-msaa) (-> *pc-settings* sandover-other msaa)))
+
+(defun sandover-settings-load ((obj pc-settings-jak1))
+  "Read sandover.gc (flat screen, the active profile at boot) and sandover-vr.gc from the settings
+   folder. A missing file is written with its profile's defaults."
+  (set! *sandover-profile* 'flat)
+  (sandover-profile-file 'flat)
+  (cond
+    ((pc-filepath-exists? *pc-temp-string-1*)
+     (cond
+       ((sandover-settings-read (-> obj sandover) *pc-temp-string-1*)
+        (format 0 "[PC] Sandover settings read: ~S~%" *pc-temp-string-1*))
+       (else
+        (format 0 "[PC] Sandover settings at ~S could not be read, using defaults~%" *pc-temp-string-1*)
+        (sandover-settings-reset! (-> obj sandover)))))
+    (else
+     (sandover-first-boot! obj)
+     ((method-of-type pc-settings commit-to-file) obj)
+     (sandover-profile-file 'flat)
+     (pc-mkdir-file-path *pc-temp-string-1*)
+     (sandover-settings-write (-> obj sandover) *pc-temp-string-1* -1)))
+  ;; the VR profile; an MSAA it does not name starts from the flat screen's
+  (sandover-settings-reset-vr! (-> obj sandover-other))
+  (set! (-> obj sandover-other msaa) -1)
+  (sandover-profile-file 'vr)
+  (cond
+    ((pc-filepath-exists? *pc-temp-string-1*)
+     (cond
+       ((sandover-settings-read (-> obj sandover-other) *pc-temp-string-1*)
+        (format 0 "[PC] Sandover VR settings read: ~S~%" *pc-temp-string-1*))
+       (else
+        (format 0 "[PC] Sandover VR settings at ~S could not be read, using defaults~%" *pc-temp-string-1*)
+        (sandover-settings-reset-vr! (-> obj sandover-other))
+        (set! (-> obj sandover-other msaa) -1))))
+    (else
+     (if (< (-> obj sandover-other msaa) 0) (set! (-> obj sandover-other msaa) (-> obj gfx-msaa)))
+     (pc-mkdir-file-path *pc-temp-string-1*)
+     (sandover-settings-write (-> obj sandover-other) *pc-temp-string-1* (-> obj sandover-other msaa))))
+  (if (< (-> obj sandover-other msaa) 0) (set! (-> obj sandover-other msaa) (-> obj gfx-msaa)))
+  (set! *sandover-settings-loaded?* #t)
+  0)
+
+(defun sandover-profile-switch! ((profile symbol))
+  "Make profile the active one: swap the two settings sets and the stock MSAA value. The next
+   sandover-settings-update pushes whatever differs."
+  (when (!= profile *sandover-profile*)
+    (let ((tmp (new 'stack-no-clear 'sandover-settings))
+          (a (-> *pc-settings* sandover))
+          (b (-> *pc-settings* sandover-other)))
+      (set! (-> a msaa) (-> *pc-settings* gfx-msaa))
+      (mem-copy! (the-as pointer tmp) (the-as pointer a) (size-of sandover-settings))
+      (mem-copy! (the-as pointer a) (the-as pointer b) (size-of sandover-settings))
+      (mem-copy! (the-as pointer b) (the-as pointer tmp) (size-of sandover-settings))
+      (set! (-> *pc-settings* gfx-msaa) (-> a msaa)))
+    (set! *sandover-profile* profile)
+    ;; a profile saved with vanilla rendering pushes nothing at the switch: say so
+    (format 0 "[PC] Sandover settings profile: ~A~S~%" profile
+            (if (-> *pc-settings* sandover vanilla?) " (vanilla rendering)" "")))
+  profile)
+
+(defmethod commit-to-file ((obj pc-settings-jak1))
+  "commits the current settings to the file, then the Sandover settings to sandover.gc and
+   sandover-vr.gc. pc-settings.gc always gets the flat screen's MSAA."
+  (let ((msaa (-> obj gfx-msaa)))
+    (set! (-> obj gfx-msaa) (sandover-profile-msaa 'flat))
+    ((method-of-type pc-settings commit-to-file) obj)
+    (set! (-> obj gfx-msaa) msaa))
+  ;; not before the load: a first boot commits pc-settings.gc before sandover.gc is read
+  (when *sandover-settings-loaded?*
+    (sandover-profile-file 'flat)
+    (sandover-settings-write (sandover-profile-settings 'flat) *pc-temp-string-1* -1)
+    (sandover-profile-file 'vr)
+    (sandover-settings-write (sandover-profile-settings 'vr) *pc-temp-string-1* (sandover-profile-msaa 'vr)))
+  (none))
+
 (defmethod initialize ((obj pc-settings-jak1))
   "initial initialize method to be run after allocating"
   ((method-of-type pc-settings initialize) obj)
+  (sandover-settings-load obj)
   (set! (-> *setting-control* default sfx-volume) (-> obj memcard-volume-sfx))
   (set! (-> *setting-control* default music-volume) (-> obj memcard-volume-music))
   (set! (-> *setting-control* default dialog-volume) (-> obj memcard-volume-dialog))
@@ -506,6 +771,288 @@
   (format file "      )~%")
   (format file "    )~%")
   0)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Sandover settings apply
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; defined in drawable.gc, which loads after this file
+(define-extern pc-set-shadows (function int float none))
+;; defined in sparticle-launcher.gc, which loads after this file
+(define-extern pc-set-hide-shafts (function int none))
+(define-extern *sp-hide-light-shafts?* symbol)
+
+;; What the engine was last told, as effective values. Starts at the engine's boot state (every
+;; feature off), so only differences are pushed: an all-off sandover.gc pushes nothing.
+(define *sandover-applied* (new 'static 'sandover-settings))
+
+;; the HDR calibration pattern the engine was last told to draw (pc-set-hdr-output 8)
+(define *sandover-calibration-pattern* 0)
+
+;; set by progress-pc.gc: the pattern for the focused calibration row, 0 when the page is not up
+(define *sandover-calibration-pattern-func* (the-as (function int) #f))
+
+(defun sandover-boot-state! ((obj sandover-settings))
+  "The engine's boot state as effective values: upstream's path, every Sandover feature off."
+  (dotimes (i (-> *sandover-fields* length))
+    (if (!= (-> *sandover-fields* i boot) SANDOVER_NO_BOOT)
+      (sandover-field-set! obj (-> *sandover-fields* i) (-> *sandover-fields* i boot))))
+  obj)
+
+;; the render path last sent with pc-set-sandover-path (-1: not yet)
+(define *sandover-path-sent* -1)
+
+
+;; the mounted flag last sent (pc-set-motion-blur 11)
+(define *sandover-vehicle* 0)
+
+;; the audio output and device last sent (pc-set-audio-output); -1: not yet
+(define *sandover-audio-sent* -1)
+;; gk --audio-spatial as an output (0-4): runs instead of the Output row until that row is
+;; confirmed, and is never saved. -2: not read yet, -1: none or dropped
+(define *sandover-audio-cli* -2)
+(define *sandover-audio-device-sent* (new 'global 'string 128 (the-as string #f)))
+
+(defun sandover-audio-held? ()
+  "gk --audio-spatial objects runs: Windows Spatial Sound is set up once per process, so the
+   Audio rows hold."
+  (= (pc-get-audio-state 4) 5))
+
+(defun sandover-audio-cli-output ()
+  "The command line's output for this session (gk --audio-spatial), or -1."
+  (when (= *sandover-audio-cli* -2)
+    (let ((cli (pc-get-audio-state 4)))
+      (set! *sandover-audio-cli* (if (and (>= cli 0) (< cli 5)) cli -1))
+      (if (>= *sandover-audio-cli* 0)
+        (format 0 "[PC] Sandover audio output ~D from the command line (not saved)~%" cli))))
+  *sandover-audio-cli*)
+
+(defun sandover-audio-update ()
+  "Push the Audio page's output and device when they change. Sound is not rendering: vanilla
+   rendering leaves it alone, and REPL forms (pc-set-audio-spatial) stay until the menu changes.
+   The command line's output overrides the saved row in the engine only."
+  (when (not (sandover-audio-held?))
+    (let* ((s (-> *pc-settings* sandover))
+           (cli (sandover-audio-cli-output))
+           (out (if (>= cli 0) cli (-> s audio-output))))
+      (string<-charp *sandover-audio-device-str* (-> s audio-device))
+      (when (or (!= out *sandover-audio-sent*)
+                (not (string= *sandover-audio-device-str* *sandover-audio-device-sent*)))
+        (set! *sandover-audio-sent* out)
+        (copy-string<-string *sandover-audio-device-sent* *sandover-audio-device-str*)
+        (pc-set-audio-output out *sandover-audio-device-str*))))
+  (none))
+
+(defun sandover-riding-vehicle? ()
+  "The player rides the zoomer or the flut flut: the game's own mounted test, collide-action racer
+   or flut on the target's root prim (set by target-racing-start and target-flut-start)."
+  (and *target* (logtest? (-> *target* control root-prim prim-core action) (collide-action racer flut))))
+
+(defun sandover-settings-reapply ()
+  "Forget what was pushed: the next frame pushes every Sandover setting that differs from the boot state."
+  (sandover-boot-state! *sandover-applied*)
+  ;; the engine's AA mode and render scale may not be at boot: unknown, so the next push sends both
+  (set! (-> *sandover-applied* upscaler) -2)
+  (set! (-> *sandover-applied* render-scale) -1)
+  ;; the render path too, so a REPL or rig override does not outlive the reapply
+  (set! *sandover-path-sent* -1)
+  (set! *sandover-calibration-pattern* 0)
+  (set! (-> *sandover-applied* contact-shadows?) #f)
+  (pc-set-shadow-option 41 0)
+  (set! (-> *sandover-applied* motion-blur) 0)
+  ;; motion blur shutter, radius cap and debug view (pc-set-motion-blur 2-6) back to the defaults
+  (pc-set-motion-blur 7 1)
+  ;; camera motion blur mode and the mounted flag back to the engine's boot state
+  (pc-set-motion-blur 10 0)
+  (set! *sandover-vehicle* 0)
+  (pc-set-motion-blur 11 0)
+  ;; the audio output is pushed again on the next frame (the engine skips an unchanged one)
+  (set! *sandover-audio-sent* -1)
+  ;; shafts drawn again (boot state); the flag, not pc-set-hide-shafts, which is unbound at load
+  (set! *sp-hide-light-shafts?* #f)
+  ;; shadow map size and taps (shadow option 40) back to the engine default, high
+  (pc-set-shadow-option 40 2000000)
+  ;; effect parameters that are not settings fields: back to the engine defaults (lava rules,
+  ;; including its debug view and clock pin), so a rig shot cannot leak them into the next
+  (pc-set-lava 15 1)
+  ;; glow prop ranking (pc-set-emissive-lights 35-36) and eco shot lights (27-28) back to the
+  ;; engine defaults
+  (pc-set-emissive-lights 37 1)
+  ;; FSR 3 debug view, sharpness and jitter, DLSS and FSR 4 jitter signs (pc-set-aa 2-4, 6, 7) back
+  ;; to the defaults
+  (pc-set-aa 5 1)
+  ;; terrain sun cover strength (shadow option 20) back to the engine default, 1
+  (pc-set-shadow-option 20 1000000)
+  ;; water sun glint strength, roughness and peak (pc-set-water 95-97) back to the engine defaults
+  (pc-set-water 98 1)
+  ;; world sun map options (shadow options 32-38: receivers, map size, cascades, penumbra, range)
+  ;; back to the engine defaults
+  (pc-set-shadow-option 39 1)
+  ;; sun disc size, glare, brightness, fade and HDR mode (pc-set-sun-option 11-18) back to the
+  ;; engine defaults
+  (pc-set-sun-option 19 1)
+  ;; sky bodies style, starburst, wash, glow, moon, stars (pc-set-sun-option 20-28) back to the
+  ;; engine defaults
+  (pc-set-sun-option 29 1)
+  (none))
+
+(sandover-settings-reapply)
+
+(defun sandover-vanilla? ((s sandover-settings))
+  "Upstream's render path runs: the switch is on, or the engine cannot run temporal AA (below
+   GL 4.3, or the FSR 3.1 programs did not build)."
+  (or (-> s vanilla?) (zero? (pc-temporal-aa-state))))
+
+(defun sandover-temporal-aa? ((s sandover-settings))
+  "Temporal AA runs: not vanilla rendering (in stereo and XR one context per eye). Settings that
+   accumulate over frames key off this."
+  (and (not (-> s vanilla?)) (nonzero? (pc-temporal-aa-state))))
+
+(defun sandover-stereo-engine? ()
+  "The engine draws stereo or XR (pc-temporal-aa-state 2): contact shadows do not run there."
+  (= (pc-temporal-aa-state) 2))
+
+(defun sandover-xr-session? ()
+  "An OpenXR session runs: the VR profile is active and the render scale sizes the eye frame."
+  (nonzero? (pc-get-xr-state 0)))
+
+;; REPL: 'flat or 'vr holds that profile whatever the XR state; #f follows the XR session
+(define *sandover-profile-force* #f)
+
+;; set by progress-pc.gc: #t while a menu row is being edited (its backup belongs to this profile)
+(define *sandover-menu-editing-func* (the-as (function symbol) #f))
+
+(defun sandover-profile-wanted ()
+  "The profile the settings should run: the VR one while an OpenXR session runs."
+  (cond
+    (*sandover-profile-force* *sandover-profile-force*)
+    ((sandover-xr-session?) 'vr)
+    (else 'flat)))
+
+(defun sandover-effective! ((dst sandover-settings) (src sandover-settings))
+  "What the engine should run: vanilla rendering is the boot state; a list whose parent switch is
+   off falls back to its boot state."
+  (cond
+    ((sandover-vanilla? src) (sandover-boot-state! dst))
+    (else
+     (mem-copy! (the-as pointer dst) (the-as pointer src) (size-of sandover-settings))
+     (if (not (-> src pbr?)) (set! (-> dst pbr-look) -1))
+     (if (not (-> src ssao?)) (set! (-> dst ssao-quality) 1))
+     (if (not (-> src shadows?)) (set! (-> dst shadow-quality) 2))
+     ;; no temporal AA: MSAA at the msaa setting; the render scale still sizes an XR eye frame
+     (when (not (sandover-temporal-aa? src))
+       (set! (-> dst upscaler) -1)
+       (if (not (sandover-xr-session?)) (set! (-> dst render-scale) 0))
+       (set! (-> dst contact-shadows?) #f))
+     (if (sandover-stereo-engine?) (set! (-> dst contact-shadows?) #f))
+     (when (not (-> src hdr-target?))
+       (set! (-> dst tonemap) 0)
+       (set! (-> dst hdr-output) 2))
+     (when (= (-> dst hdr-output) 2)
+       (set! (-> dst paper-white) 200.0)
+       (set! (-> dst hdr-peak) -1.0)
+       (set! (-> dst hdr-black) -1.0))
+     dst)))
+
+(defun sandover-vista-apply ((on? symbol))
+  "Neighbour levels with unified fog and haze (the forms of `sandover-preset apply vista haze`)."
+  (cond
+    (on?
+     (pc-set-vista-fog "unified" 150 150 800)
+     (pc-set-vista-neighbour-fog "clear" -1 -1 -1)
+     (pc-set-vista-haze 850 200 #x8d8f80 700)
+     (pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)
+     (pc-set-vista-neighbour-haze "misty" 0)
+     (pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)
+     (pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)
+     (pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)
+     (pc-set-vista-neighbour-haze "training" 0)
+     (pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))
+     (pc-set-vista-option 12 1)
+     (pc-set-vista "neighbours"))
+    (else
+     (pc-set-vista "none")
+     (pc-set-vista-option 12 0)
+     (pc-set-vista-haze 0 -1 -1 -1)
+     (pc-set-vista-fog "vanilla" -1 -1 -1)))
+  (none))
+
+(defmacro sandover-changed? (field)
+  `(!= (-> want ,field) (-> old ,field)))
+
+(defun sandover-settings-update ()
+  "Push the Sandover settings that changed since the last push, once per frame (main.gc).
+   Nothing is sent while they match what the engine was last told, so REPL and rig forms stay."
+  ;; the profile follows the XR session; not while a row is being edited
+  (let ((profile (sandover-profile-wanted)))
+    (if (and (!= profile *sandover-profile*)
+             (not (and *sandover-menu-editing-func* (*sandover-menu-editing-func*))))
+      (sandover-profile-switch! profile)))
+  (let ((path (if (sandover-vanilla? (-> *pc-settings* sandover)) 0 1)))
+    (when (!= path *sandover-path-sent*)
+      (set! *sandover-path-sent* path)
+      (pc-set-sandover-path path)))
+  (let ((want (sandover-effective! (new 'stack-no-clear 'sandover-settings) (-> *pc-settings* sandover)))
+        (old *sandover-applied*))
+    (when (or (sandover-changed? ssao?) (sandover-changed? ssao-quality))
+      (cond
+        ((-> want ssao?) (pc-set-ssao-preset (-> want ssao-quality)) (pc-set-ssao-param 15 1000000))
+        (else (pc-set-ssao-preset -1))))
+    (if (sandover-changed? tile-lights?) (pc-set-emissive-lights 0 (if (-> want tile-lights?) 1000000 0)))
+    (when (sandover-changed? bloom?)
+      (cond
+        ((-> want bloom?) (pc-set-bloom 0 1000000) (pc-set-bloom 4 1000000))
+        (else (pc-set-bloom 0 0))))
+    (when (sandover-changed? shadows?)
+      (cond
+        ((-> want shadows?) (pc-set-shadows 1 1.0) (pc-set-shadow-option 5 300000) (pc-set-shadow-option 30 1000000))
+        (else (pc-set-shadows 0 1.0))))
+    (if (sandover-changed? shadow-quality) (pc-set-shadow-option 40 (* 1000000 (-> want shadow-quality))))
+    (if (and (sandover-changed? pbr-look) (>= (-> want pbr-look) 0))
+      (pc-set-pbr-param 11 (* 1000000 (+ 1 (-> want pbr-look)))))
+    (when (sandover-changed? pbr?)
+      (pc-set-pbr-param 0 (if (-> want pbr?) 1 0))
+      ;; the remaster look drops the fake sun-ray particles (beach grotto, jungle)
+      (pc-set-hide-shafts (if (-> want pbr?) 1 0)))
+    (if (sandover-changed? fur?) (pc-set-fur 0 (if (-> want fur?) 1000000 0)))
+    (if (sandover-changed? water?) (pc-set-water 0 (if (-> want water?) 1000000 0)))
+    (if (sandover-changed? glint?) (pc-set-water 94 (if (-> want glint?) 1000000 0)))
+    ;; on = the strong level
+    (if (sandover-changed? contact-shadows?) (pc-set-shadow-option 41 (if (-> want contact-shadows?) 2000000 0)))
+    (if (sandover-changed? motion-blur) (pc-set-motion-blur 0 (* 1000000 (-> want motion-blur))))
+    (if (sandover-changed? camera-blur) (pc-set-motion-blur 10 (* 1000000 (-> want camera-blur))))
+    (if (sandover-changed? vista?) (sandover-vista-apply (-> want vista?)))
+    (when (sandover-changed? sun?)
+      ;; the disc follows the hour through the clock address the vista switch otherwise sends
+      (if (and (-> want sun?) (not (-> want vista?)))
+        (pc-set-vista-option 5 (the int (&-> *time-of-day-context* time))))
+      (pc-set-sun-option 10 (if (-> want sun?) 1000000 0)))
+    (if (sandover-changed? hdr-target?) (pc-set-hdr-target (-> want hdr-target?)))
+    (if (sandover-changed? tonemap) (pc-set-tonemap 0 (* 1000000 (-> want tonemap))))
+    (if (sandover-changed? paper-white) (pc-set-hdr-output 2 (the int (* 1000000.0 (-> want paper-white)))))
+    ;; GOAL int math is 32-bit: a peak in millionths overflows above 2147 nits, so send thousandths
+    (if (sandover-changed? hdr-peak) (pc-set-hdr-output 9 (the int (* 1000.0 (-> want hdr-peak)))))
+    (if (sandover-changed? hdr-black) (pc-set-hdr-output 4 (the int (* 1000000.0 (-> want hdr-black)))))
+    (when (sandover-changed? hdr-output)
+      (cond
+        ((= (-> want hdr-output) 2) (pc-set-hdr-output 0 0))
+        (else (pc-set-hdr-output 1 (* 1000000 (-> want hdr-output))) (pc-set-hdr-output 0 1000000))))
+    ;; engine mode: 0 MSAA (applied upscaler -1), 1 FSR 3.1, 2 DLSS, 3 FSR 4 (FSR 3.1 where
+    ;; unavailable)
+    (if (sandover-changed? upscaler) (pc-set-aa 0 (* 1000000 (+ 1 (-> want upscaler)))))
+    (if (sandover-changed? render-scale) (pc-set-aa 1 (sandover-render-scale-millionths (-> want render-scale))))
+    (mem-copy! (the-as pointer old) (the-as pointer want) (size-of sandover-settings)))
+  (sandover-audio-update)
+  ;; the mounted flag, on change (camera motion blur, Vehicles)
+  (let ((riding (if (sandover-riding-vehicle?) 1 0)))
+    (when (!= riding *sandover-vehicle*)
+      (set! *sandover-vehicle* riding)
+      (pc-set-motion-blur 11 riding)))
+  (let ((pattern (if *sandover-calibration-pattern-func* (*sandover-calibration-pattern-func*) 0)))
+    (when (!= pattern *sandover-calibration-pattern*)
+      (set! *sandover-calibration-pattern* pattern)
+      (pc-set-hdr-output 8 (* 1000000 pattern))))
+  (none))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; PC settings

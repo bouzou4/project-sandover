@@ -1,0 +1,95 @@
+# Class response round (WS4): backlit leaves, soft terminator on snow and wind TIE
+# class shading (F6, palm canopies). Run every arm except C with `--play-look` (reset, reapply,
+# update as the first after-load form), then these forms as after-load forms:
+#   A  (today):            (pc-set-pbr-param 26 0) (pc-set-pbr-param 27 0) (pc-set-pbr-param 28 0)
+#                          (pc-set-pbr-param 29 0)
+#   B  (leaf backlight + terminator + F6):     (pc-set-pbr-param 26 1000000) (pc-set-pbr-param 27 1000000)
+#                          (pc-set-pbr-param 28 1) (pc-set-pbr-param 29 0)
+#   Bf6 (F6 alone):        26 0, 27 0, 28 1, 29 0
+#   C  (original game):    no forms, no --play-look.
+# Snow edge shots (snow-drifts-*, snow-drift-edge), S4b on the bake's sun term, one parameter:
+#   A:  (pc-set-pbr-param 26 0) (pc-set-pbr-param 27 0) (pc-set-pbr-param 28 0) (pc-set-pbr-param 29 0)
+#   B1: (pc-set-pbr-param 26 0) (pc-set-pbr-param 27 0) (pc-set-pbr-param 28 0) (pc-set-pbr-param 29 600000)
+#   B2: (pc-set-pbr-param 26 0) (pc-set-pbr-param 27 0) (pc-set-pbr-param 28 0) (pc-set-pbr-param 29 1000000)
+#   C:  no forms, no --play-look.
+# B2 for leaves (narrower lobe): the B forms with SANDOVER_PBR_PRESET at the root's
+# sandover/presets/pbr-b2.toml (foliage transmit_power 8).
+# The *-sun cameras look 8 degrees below the h15 sun (blended mood sun, dir_fit) from below a
+# leaf canopy: rays within ~5 degrees of the sun hit leaves first (village1: palm fronds, 24/24;
+# jungle: jng-canopy, 80%, sidecar sun share 0.73 on the hit vertices).
+schema: 1
+set: class-response
+variants:
+  A: ["(pc-set-pbr-param 26 0)", "(pc-set-pbr-param 27 0)", "(pc-set-pbr-param 28 0)", "(pc-set-pbr-param 29 0)"]
+  B: ["(pc-set-pbr-param 26 1000000)", "(pc-set-pbr-param 27 1000000)", "(pc-set-pbr-param 28 1)", "(pc-set-pbr-param 29 0)"]
+  Bf6: ["(pc-set-pbr-param 26 0)", "(pc-set-pbr-param 27 0)", "(pc-set-pbr-param 28 1)", "(pc-set-pbr-param 29 0)"]
+  B1: ["(pc-set-pbr-param 26 0)", "(pc-set-pbr-param 27 0)", "(pc-set-pbr-param 28 0)", "(pc-set-pbr-param 29 600000)"]
+  B2: ["(pc-set-pbr-param 26 0)", "(pc-set-pbr-param 27 0)", "(pc-set-pbr-param 28 0)", "(pc-set-pbr-param 29 1000000)"]
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 300
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+shots:
+  # under a village1 palm, looking up through the fronds toward the 15 h sun (leaf backlight + F6)
+  - name: village1-palm-sun
+    continue: village1-hut
+    hour: 15
+    jak: hide
+    camera:
+      pos: [-439951.4, 115466.2, 569794.6]
+      rot: [-0.983913, 0.0, 0.17865, 0.073084, 0.912493, 0.402511, -0.163017, 0.409092, -0.897814]
+  # jungle path near jungle-start, looking up through jng-canopy toward the 15 h sun (leaf backlight on tfrag)
+  - name: jungle-canopy-sun
+    continue: jungle-start
+    hour: 15
+    jak: hide
+    camera:
+      pos: [1086344.8, 84446.5, -734407.9]
+      rot: [-0.967879, 0.0, 0.251417, 0.097765, 0.921298, 0.376366, -0.23163, 0.388857, -0.891705]
+  # gameplay context: dusk sun 55 degrees off the view axis, palms mid-distance (F6)
+  - {name: village1-hut-dusk, continue: village1-hut, hour: 18, camera: from_continue}
+  # whole wind-TIE palm (wind-group-3-25) and trunk from the ground 25 m away, sun 13 degrees
+  # above the crown behind it; 97% of rays to the palm hit it first (revision 002 gap 1)
+  - name: village1-palm-whole
+    continue: village1-hut
+    hour: 16.5
+    jak: hide
+    camera:
+      pos: [-780740.1, 214715.1, 880475.0]
+      rot: [-0.991205, 0.0, 0.132333, -0.012636, 0.995431, -0.094643, -0.131728, -0.095483, -0.986677]
+  # Snow edge. Snow-capped boulders and rolling snow ground west of the fort, sun from the
+  # side. Checked by ray casting every triangle of the level: camera 3.4 m from the nearest
+  # geometry, nothing above it, no actor within 70 m in the view cone (entity data); frame 56%
+  # snow, 32% sky, 12% rock. Predicted (sidecar bake terms, linear before tonemap), 17.25 h:
+  # edge band (|N.L| < 0.4) 36% of the frame, B1 +21 levels mean (max +67), B2 +42 (max +118),
+  # bands ~560 px wide at 2560x1440; fully lit faces unchanged (+0/+1).
+  - name: snow-drifts-wide
+    continue: snow-start
+    hour: 17.25
+    jak_pos: [2893054.0, 1048112.0, -14691425.8]
+    camera:
+      pos: [2868823.5, 1055228.7, -14662158.0]
+      rot: [-0.766045, 0.0, -0.642788, 0.089459, 0.990268, -0.106613, 0.636532, -0.139173, -0.758589]
+  # same camera, lower sun (19 deg up, 58 deg from the view): band 48% of the frame, B1 +30
+  # levels mean (max +67), B2 +57 (max +123)
+  - name: snow-drifts-low
+    continue: snow-start
+    hour: 17.5
+    jak_pos: [2893054.0, 1048112.0, -14691425.8]
+    camera:
+      pos: [2868823.5, 1055228.7, -14662158.0]
+      rot: [-0.766045, 0.0, -0.642788, 0.089459, 0.990268, -0.106613, 0.636532, -0.139173, -0.758589]
+  # 9 m from one boulder's lit-to-shade edge, 2 m above it (ground 1.4 m below the camera, the
+  # aim ray reaches the edge unblocked, nearest geometry 3.0 m, no actors in view): band 55% of
+  # the frame, B1 +34 levels mean (max +66), B2 +63 (max +118), bands ~630 px wide
+  - name: snow-drift-edge
+    continue: snow-start
+    hour: 17.5
+    jak: hide
+    camera:
+      pos: [2892133.9, 1051909.5, -14681642.4]
+      rot: [-0.64133, 0.0, -0.767265, 0.166443, 0.976187, -0.139124, 0.748994, -0.21693, -0.626058]

@@ -1,5 +1,7 @@
 #include "Tools.h"
 
+#include <cstdlib>
+
 #include "common/goos/ParseHelpers.h"
 #include "common/util/DgoWriter.h"
 #include "common/util/FileUtil.h"
@@ -34,7 +36,8 @@ bool CompilerTool::run(const ToolInput& task, const PathMap& /*path_map*/) {
     CompilationOptions options;
     options.filename = task.input.at(0);
     options.color = true;
-    options.write = true;
+    // set by tools that only need the compiler's type info and must not touch out/
+    options.write = !std::getenv("OPENGOAL_MAKE_NO_WRITE");
     m_compiler->asm_file(options);
   } catch (std::exception& e) {
     lg::print("Compilation failed: {}\n", e.what());

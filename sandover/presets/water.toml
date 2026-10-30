@@ -1,0 +1,216 @@
+# Ocean shading (Jak 1): Gerstner waves, foam, shallow colour, glint and fresnel on the
+# near and mid ocean. Rig captures apply it with `sandover-capture run ... --preset
+# water=bold`; `off` is the toggle state, not a preset. The engine defaults (gfx.h) match
+# `bold` (the revision-2 pick). Engine side: water_waves.glsl, ocean_common.vert/.frag, Materials.cpp
+# water_setup_ocean, CommonOceanRenderer.cpp. Findings: kb/findings/2026-09-25-water.md
+# (revision 1), kb/findings/2026-09-25-water-waves.md (revision 2), kb/findings/2026-09-26-water-antitile.md
+# (tiling).
+#
+# wave         ripple-normal slope scale from the animated ocean texture's gradient
+# glint        sun glint intensity; peaks above 1 reach bloom on the FP16 target
+# glint_exp    glint Blinn exponent (lower is broader and softer)
+# fresnel      blend toward the horizon (mood fog) colour at grazing angles, 0..1
+# sparkle      sunlit crest sparkle from the ocean texture
+# displace     Gerstner amplitude scale; 0 keeps the vanilla vertices (revision 1 look)
+# subdiv       max tessellation level of an ocean triangle edge (GPU; the mid grid is 12 m)
+# range_full_m waves at full amplitude up to this distance (m)
+# range_zero_m waves fall off smoothly to none at this distance (m); shorter waves sooner
+# crest_foam   foam where the waves bunch up (Jacobian of the displacement below crest_j)
+# crest_j      Jacobian threshold of the crest foam (1 is flat water; lower is less foam)
+# shore_foam   foam lines where the water is shallow (scene depth under the surface)
+# shore_m      water depth (m) of the shoreline foam band
+# shallow      lighter, level-coloured water over shallow ground, 0..1
+# shallow_m    depth (m) over which the shallow colour fades to the level colour
+# sss          light through the wave tops, strongest looking toward the sun
+# crest_light  crests lighter and troughs darker, 0..1
+# absorb       near-ocean absorption per metre of water seen through, per channel
+#              exp(-absorb * absorb_r/g/b * m); Jak and the orbs fog by their own depth (the
+#              depth is re-copied before the near ocean), the fill is the game's own water colour
+# absorb_r/g/b per-channel absorption, times absorb (red goes first)
+# opaque_m     water depth (m) by which the near ocean is opaque
+# waves        up to 5 Gerstner waves: direction (degrees from +x), amplitude (m),
+#              wavelength (m), phase speed (m/s), steepness 0..1 (sharper crests); the
+#              fifth is the long swell (full range, not counted in the crest height)
+# sky_refl     what the fresnel term reflects: 0 the fog colour (revision 2), 1 the mood
+#              environment (horizon, derived zenith, sun glow) along the reflection vector
+# sky_haze_m   the reflection hazes into the fog colour over this distance (m)
+# amp_noise    per-wave amplitude noise (fraction), slow and world-position based
+# phase_noise  per-wave phase noise (turns); with amp_noise it breaks the sum's repeat
+# noise_m      cell size of that noise (m), much longer than the waves
+# shallow_depth_m  water depth (m) by which the shallow tint and the shore foam are gone. No
+#              scene depth behind counts as deep
+# shore_fade_near_m / shore_fade_far_m  the shallow tint and the shore foam fade out between
+#              these camera distances (m), so far shorelines draw no contour
+# shoal_m      the waves shrink to none as the water under them gets this shallow (m), so
+#              crests never climb onto ground near sea level; 0 keeps full height everywhere
+#
+# [presets.<name>.tiling] breaks the visible repeat; left out, the revision-5 look:
+#   hex          the game's ocean texture (one 96 m repeat) drawn with hex tiling, 0..1: three
+#                samples per pixel, each rotated and offset per vertex of a world-space
+#                triangle grid, blended with sharpened weights; fades out with the waves at
+#                the mid ocean's outer edge, so the flat far band still takes over
+#   hex_m        spacing of that grid (m)
+#   hex_rot_deg  largest rotation of a sample (degrees)
+#   warp_m       crest warp: every wave's phase shifts along it by a two-octave noise of this
+#                amplitude (m), varying 3x faster across the wave than along it, so crests bend
+#                (a few degrees) and the waves drift out of step instead of realigning; the
+#                second octave is a quarter as strong at cell / sqrt(12); 0 is off
+#   warp_cell_m  cell size of the warp's first octave (m)
+#   No two of bold's wave lengths are within 2% of a ratio p/q with q <= 6 (revision 3 had 9:4.5
+#   and 48:16), and the directions are off the round numbers, so no pair shares a short period.
+#
+# [presets.<name>.aa] keeps distant water from shimmering; left out, the revision-6 look:
+#   lod_start    the texture ripple normal and crest sparkle fade from this ocean-texture lod
+#                (log2 texels per pixel, widest footprint axis), and each foam noise octave from
+#                this lod of its own cells per pixel; -1.5 is about three pixels per texel
+#   lod_end      ... and are gone at this lod; closer water, below lod_start, is unchanged
+#   foam_edge_px the foam threshold is widened by this many pixels of its own gradient
+#                (fwidth), so the foam edge is anti-aliased instead of a 1-bit cut; 0 is hard
+#   wave_px_full / wave_px_zero  each Gerstner wave's slope (normal, glint, crest light, foam
+#                Jacobian; not its height) is whole above wave_px_full pixels per wavelength on
+#                screen and gone below wave_px_zero; wave_px_zero 0 is off
+#
+# [bodies] maps each level with an ocean map (level-info.gc :ocean) to a wave set: "sea" is
+# the preset's own `waves`, "lake" is [wave_sets.lake]. The last drawn level with an entry
+# picks the set, as update-ocean picks the ocean map; a camera below -100 m takes the lake
+# set (the sunken map). Mirrored by kWaterBodies in Materials.cpp (a test checks). Near and
+# mid ocean are one surface at two distances, so there is no per-type key. The jungle's
+# TIE water-anim surfaces are not the ocean renderer and are not covered here; the jungle
+# water near sea level is the ocean, and `shoal_m` keeps its waves off the banks.
+# caption      one line for the screening grid: what visibly differs, never parameters
+# A preset without the revision-2 keys gets the revision-1 look (see presets.py WATER_OPTIONAL).
+
+[meta]
+schema = 1
+phase = "water"
+round = 3
+chosen = "bold"
+
+[presets.bold]
+label = "Bold"
+caption = "taller, sharper waves with more foam, a wider foam band and brighter shallows"
+wave = 0.3
+glint = 1.6
+glint_exp = 256.0
+fresnel = 0.4
+sparkle = 0.5
+displace = 1.0
+subdiv = 16
+range_full_m = 300.0
+range_zero_m = 1200.0
+crest_foam = 0.8
+crest_j = 0.9
+shore_foam = 1.0
+shore_m = 1.0
+shallow = 0.75
+shallow_m = 3.5
+sss = 0.6
+crest_light = 0.5
+absorb = 0.03
+absorb_r = 1.6
+absorb_g = 0.9
+absorb_b = 0.5
+opaque_m = 12.0
+sky_refl = 0.6
+sky_haze_m = 400.0
+amp_noise = 0.35
+phase_noise = 0.0
+noise_m = 180.0
+shallow_depth_m = 1.75
+shore_fade_near_m = 40.0
+shore_fade_far_m = 160.0
+shoal_m = 2.5
+shoal_occ = -4.0
+depth_blur_m = 1.5
+
+[presets.bold.tiling]
+hex = 1.0
+hex_m = 56.0
+hex_rot_deg = 180.0
+warp_m = 10.0
+warp_cell_m = 180.0
+
+[presets.bold.aa]
+lod_start = -1.5
+lod_end = 0.5
+foam_edge_px = 1.0
+wave_px_full = 8.0
+wave_px_zero = 4.0
+
+[[presets.bold.waves]]
+dir_deg = 17.3
+amp_m = 0.4
+length_m = 16.0
+speed = 3.0
+steep = 0.85
+
+[[presets.bold.waves]]
+dir_deg = -33.1
+amp_m = 0.22
+length_m = 9.32
+speed = 2.3
+steep = 0.8
+
+[[presets.bold.waves]]
+dir_deg = 63.8
+amp_m = 0.1
+length_m = 4.5
+speed = 1.7
+steep = 0.7
+
+[[presets.bold.waves]]
+dir_deg = -71.2
+amp_m = 0.04
+length_m = 2.3
+speed = 1.1
+steep = 0.6
+
+[[presets.bold.waves]]
+dir_deg = 8.6
+amp_m = 0.25
+length_m = 47.0
+speed = 5.0
+steep = 0.25
+
+[bodies]
+training = "sea"
+village1 = "sea"
+beach = "sea"
+jungle = "sea"
+misty = "sea"
+village2 = "sea"
+swamp = "sea"
+sunken = "lake"
+sunkenb = "lake"
+
+[wave_sets.lake]
+label = "Lake"
+caption = "small, slow ripples with no swell"
+
+[[wave_sets.lake.waves]]
+dir_deg = 20.0
+amp_m = 0.07
+length_m = 6.0
+speed = 1.6
+steep = 0.45
+
+[[wave_sets.lake.waves]]
+dir_deg = -30.0
+amp_m = 0.04
+length_m = 3.5
+speed = 1.2
+steep = 0.4
+
+[[wave_sets.lake.waves]]
+dir_deg = 70.0
+amp_m = 0.02
+length_m = 1.9
+speed = 0.9
+steep = 0.35
+
+[[wave_sets.lake.waves]]
+dir_deg = -65.0
+amp_m = 0.01
+length_m = 1.1
+speed = 0.6
+steep = 0.3

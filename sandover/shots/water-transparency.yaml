@@ -1,0 +1,41 @@
+# Water transparency (2026-10-22 play report: Jak's legs and the orbs vanish under the ocean).
+# (1) the play snapshot: jungle-start cave mouth at night, Jak swimming, orbs under the surface;
+# (2) the same camera at noon; (3) the beach-start shallows at noon (the water-ablate camera, 6.8 m up behind Jak).
+# Vanilla: run --only the `*-vanilla` shots with no forms. The pick (arm A, 2026-10-22) is the
+# engine default: `*-pick` with --play-look, wave clock pinned; `*-dry` is the chroma reference.
+set: water-transparency
+defaults:
+  resolution: [3840, 2160]
+  msaa: 4
+  settle_frames: 120
+  effects: on
+  wind: on
+  particles: on
+  jak: show
+  actors: freeze
+shots:
+  - {name: cave-night-vanilla, continue: jungle-start, hour: 21.270834, jak_pos: [1834105.125, -4534.5986, -986661.0625],
+     camera: {pos: [1789885.75, 12902.3945, -1012507.75], rot: [0.518623, 0.0, -0.855003, 0.100742, 0.993034, 0.061108, 0.849047, -0.117827, 0.515010]}}
+  - {name: cave-noon-vanilla, continue: jungle-start, hour: 12, jak_pos: [1834105.125, -4534.5986, -986661.0625],
+     camera: {pos: [1789885.75, 12902.3945, -1012507.75], rot: [0.518623, 0.0, -0.855003, 0.100742, 0.993034, 0.061108, 0.849047, -0.117827, 0.515010]}}
+  - {name: beach-shallow-vanilla, continue: beach-start, hour: 12, jak_pos: [-580650.812, 8700.754, -298296.312],
+     camera: {pos: [-542860.062, 27657.885, -277138.25], rot: [-0.487705, 2e-06, 0.873008, -0.116803, 0.991009, -0.065254, -0.865159, -0.133794, -0.48332]}}
+  # --- the pick (engine defaults) and the dry reference
+  - {name: cave-night-dry, continue: jungle-start, hour: 21.270834, jak_pos: [1834105.125, -4534.5986, -986661.0625],
+     camera: {pos: [1789885.75, 12902.3945, -1012507.75], rot: [0.518623, 0.0, -0.855003, 0.100742, 0.993034, 0.061108, 0.849047, -0.117827, 0.515010]},
+     goals_after_load: ["(pc-set-water 90 100000000)", "(pc-set-water 6 21000000)"]}
+  - {name: cave-noon-dry, continue: jungle-start, hour: 12, jak_pos: [1834105.125, -4534.5986, -986661.0625],
+     camera: {pos: [1789885.75, 12902.3945, -1012507.75], rot: [0.518623, 0.0, -0.855003, 0.100742, 0.993034, 0.061108, 0.849047, -0.117827, 0.515010]},
+     goals_after_load: ["(pc-set-water 90 100000000)", "(pc-set-water 6 21000000)"]}
+  - {name: beach-shallow-dry, continue: beach-start, hour: 12, jak_pos: [-580650.812, 8700.754, -298296.312],
+     camera: {pos: [-542860.062, 27657.885, -277138.25], rot: [-0.487705, 2e-06, 0.873008, -0.116803, 0.991009, -0.065254, -0.865159, -0.133794, -0.48332]},
+     goals_after_load: ["(pc-set-water 90 100000000)", "(pc-set-water 6 21000000)"]}
+  - {name: cave-night-pick, continue: jungle-start, hour: 21.270834, jak_pos: [1834105.125, -4534.5986, -986661.0625],
+     camera: {pos: [1789885.75, 12902.3945, -1012507.75], rot: [0.518623, 0.0, -0.855003, 0.100742, 0.993034, 0.061108, 0.849047, -0.117827, 0.515010]},
+     goals_after_load: ["(pc-set-water 90 100000000)"]}
+  - {name: cave-noon-pick, continue: jungle-start, hour: 12, jak_pos: [1834105.125, -4534.5986, -986661.0625],
+     camera: {pos: [1789885.75, 12902.3945, -1012507.75], rot: [0.518623, 0.0, -0.855003, 0.100742, 0.993034, 0.061108, 0.849047, -0.117827, 0.515010]},
+     goals_after_load: ["(pc-set-water 90 100000000)"]}
+  - {name: beach-shallow-pick, continue: beach-start, hour: 12, jak_pos: [-580650.812, 8700.754, -298296.312],
+     camera: {pos: [-542860.062, 27657.885, -277138.25], rot: [-0.487705, 2e-06, 0.873008, -0.116803, 0.991009, -0.065254, -0.865159, -0.133794, -0.48332]},
+     goals_after_load: ["(pc-set-water 90 100000000)"]}

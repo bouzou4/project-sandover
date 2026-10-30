@@ -924,6 +924,9 @@
       (let ((lev (-> *level* level i))) (when lev (when (= sg (-> lev water-tex-foreground-sink-group)) (return #t)))))
     #f))
 
+;; og:preserve-this set around HUD model requests: pid bit 30 tells the renderer (no motion blur)
+(define *pc-merc-hud* #f)
+
 (defun pc-merc-draw-request ((dc draw-control) (dma-buf pointer) (matrix-buf pointer) (update-verts symbol) (blercs (pointer float)))
   (let ((start-packet (the-as dma-packet dma-buf))
         (qwc-total 0))
@@ -945,6 +948,11 @@
     (let ((uses-water (draw-control-uses-water-bucket dc)))
       ;; tell PC renderer if we're in a water bucket or not (has different settings.)
       (set! (-> (the (pointer uint64) dma-buf)) (if uses-water 1 0))
+      ;; the actor's identity for the renderer's motion vectors: process pid and draw-control
+      (let ((proc (-> dc process)))
+        (set! (-> (the (pointer int32) dma-buf) 2)
+              (logior (if (and proc (nonzero? proc)) (-> proc pid) 0) (if *pc-merc-hud* #x40000000 0))))
+      (set! (-> (the (pointer uint32) dma-buf) 3) (the-as uint dc))
       (&+! dma-buf 16)
       (+! qwc-total 1))
     (let ((matrix-slot-string (the (pointer uint8) dma-buf)) ;; matrix slot list (so PC knows what order they come in)
@@ -1597,7 +1605,9 @@
                  (set! (-> *merc-bucket-info* effect effect-idx ignore-alpha) (the-as uint 1)))
                 (else (set! (-> *merc-bucket-info* effect effect-idx use-mercneric) (the-as uint 1))))))
           (when (logtest? *vu1-enable-user* (vu1-renderer-mask merc))
+            (set! *pc-merc-hud* #t)
             (set! (-> buf base) (pc-merc-draw-request draw (the pointer a2-2) (the pointer mat-data) #f (the (pointer float) 0)))
+            (set! *pc-merc-hud* #f)
             (set! a2-2 (-> buf base))))
         (let ((a0-17 (logand (the int a2-2) 48)))
           (b! (zero? a0-17) cfg-22 :delay (set! at-2 #x20000000))

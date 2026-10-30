@@ -1,0 +1,147 @@
+# GTAO stills: AO tiers on cameras with creases, sand, rock, huts, caves and crowds.
+set: gtao-stills
+defaults:
+  resolution:
+  - 3840
+  - 2160
+  msaa: 2
+  settle_frames: 120
+  effects: 'off'
+  wind: 'off'
+  particles: 'off'
+  jak: show
+  wait_vista: true
+  wait_log_timeout: 90
+shots:
+- name: foliage-jak
+  continue: jungle-start
+  hour: 12
+  jak_pos:
+  - 1456966.9
+  - 454246.4
+  - -972185.6
+  camera:
+    pos:
+    - 1471631.1
+    - 457932.8
+    - -987746.5
+    rot:
+    - 0.7278
+    - 0.0
+    - 0.6858
+    - -0.2454
+    - 0.9338
+    - 0.2604
+    - -0.6404
+    - -0.3578
+    - 0.6796
+- name: beach-start-noon
+  continue: beach-start
+  hour: 12
+  camera: from_continue
+- name: beach-v1-noon
+  continue: beach-start
+  hour: 12
+  camera:
+    pos:
+    - -450560.0
+    - 163840.0
+    - -245760.0
+    rot:
+    - 0.983229
+    - -0.0
+    - 0.182373
+    - -0.007225
+    - 0.999215
+    - 0.038951
+    - -0.18223
+    - -0.039615
+    - 0.982458
+- name: village1-hut-noon
+  continue: village1-hut
+  hour: 12
+  camera: from_continue
+- name: village1-square-noon
+  continue: village1-hut
+  hour: 12
+  camera:
+    pos:
+    - -470800.0
+    - 110000.0
+    - 432700.0
+    rot:
+    - -0.8947
+    - 0.0
+    - -0.4464
+    - 0.1082
+    - 0.9701
+    - -0.2169
+    - 0.4331
+    - -0.2424
+    - -0.868
+- name: darkcave-0024
+  continue: darkcave-start
+  hour: 14.9664
+  jak_pos:
+  - 3831361.5
+  - 158281.875
+  - -11795829.0
+  camera:
+    pos:
+    - 3873233.0
+    - 177109.719
+    - -11804118.0
+    rot:
+    - 0.196384
+    - 0.0
+    - 0.980527
+    - -0.134885
+    - 0.990493
+    - 0.027015
+    - -0.971205
+    - -0.137564
+    - 0.194517
+- name: maincave-mushrooms-near
+  continue: maincave-to-robocave
+  hour: 12.55
+  jak_pos:
+  - 4714544.0
+  - 45075.6
+  - -12254603.0
+  camera:
+    pos:
+    - 4725436.2
+    - 65956.5
+    - -12270690.1
+    rot:
+    - 0.9477
+    - -0.0005
+    - 0.319
+    - -0.0917
+    - 0.9574
+    - 0.2739
+    - -0.3056
+    - -0.2888
+    - 0.9073
+- name: village2-crowd-night
+  continue: village2-start
+  hour: 3.1503
+  jak_pos:
+  - 1480276.125
+  - 93529.055
+  - -6235200.5
+  camera:
+    pos:
+    - 1444407.25
+    - 112838.617
+    - -6208895.0
+    rot:
+    - -0.592276
+    - 0.0
+    - -0.805735
+    - 0.105434
+    - 0.991402
+    - -0.077502
+    - 0.798807
+    - -0.130854
+    - -0.587183

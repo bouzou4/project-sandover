@@ -22,6 +22,13 @@ class OceanMidAndFar : public BucketRenderer {
   void render_jak2(DmaFollower& dma, SharedRenderState* render_state, ScopedProfilerNode& prof);
   void draw_debug_window() override;
   void init_textures(TexturePool& pool, GameVersion version) override;
+  /// Draws the mid ocean kept back while the water shading is on (Jak 1).
+  void flush_mid_deferred(SharedRenderState* render_state, ScopedProfilerNode& prof) {
+    m_mid_renderer.flush_deferred(render_state, prof);
+  }
+  bool mid_pending() const { return m_mid_renderer.mid_pending(); }
+  /// The game drew an ocean this frame: the near ocean only comes with this bucket (draw-ocean).
+  bool drawn_in_frame(u64 frame_idx) const { return m_drawn_frame == frame_idx; }
 
  private:
   void handle_ocean_far(DmaFollower& dma,
@@ -35,4 +42,5 @@ class OceanMidAndFar : public BucketRenderer {
   OceanEnvmap m_envmap_renderer;
   OceanTexture m_texture_renderer;
   OceanMid m_mid_renderer;
+  u64 m_drawn_frame = UINT64_MAX;
 };

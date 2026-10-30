@@ -35,6 +35,7 @@ struct SifRpcCommand {
 
   void* copy_back_buff;
   int copy_back_size;
+  time_stamp issued{};
 };
 
 struct SifRecord {
@@ -112,6 +113,7 @@ struct Messagebox {
 class IOP_Kernel {
  public:
   IOP_Kernel();
+  ~IOP_Kernel();
   s32 CreateThread(std::string n, void (*f)(), u32 priority);
   s32 ExitThread();
   void StartThread(s32 id);
@@ -207,6 +209,14 @@ class IOP_Kernel {
 
   bool sif_busy(u32 id);
 
+  /*!
+   * Debug watchdog (SANDOVER_IOP_WATCHDOG=<seconds>): logs the thread table, semaphores, message
+   * boxes and RPC ports when an IOP thread runs that long without yielding or an RPC stays
+   * unfinished that long. extra is called after the table with the overlord's own state.
+   */
+  void start_watchdog(int seconds, void (*extra)());
+  int watchdog_seconds() const { return m_watchdog_seconds; }
+
   void sif_rpc(s32 rpcChannel,
                u32 fno,
                bool async,
@@ -240,4 +250,13 @@ class IOP_Kernel {
   std::mutex sif_mtx, wakeup_mtx;
 
   time_stamp m_start_time;
+
+  void watchdog_loop();
+  void watchdog_dump(const char* why);
+  int m_watchdog_seconds = 0;
+  void (*m_watchdog_extra)() = nullptr;
+  std::thread m_watchdog;
+  std::atomic_bool m_watchdog_quit = false;
+  std::atomic<s64> m_run_start_us = 0;
+  std::atomic<IopThread*> m_running = nullptr;
 };

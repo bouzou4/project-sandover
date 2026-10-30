@@ -245,6 +245,7 @@ void MidiHandler::NoteOn() {
       voice->current_pb = m_cur_pm;
 
       voice->group = m_sound.VolGroup;
+      voice->SetRole(VoiceRole::Music);
       m_vm.StartTone(voice);
       m_voices.emplace_front(voice);
     }

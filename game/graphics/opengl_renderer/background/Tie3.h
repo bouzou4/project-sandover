@@ -6,6 +6,7 @@
 
 #include "game/graphics/gfx.h"
 #include "game/graphics/opengl_renderer/BucketRenderer.h"
+#include "game/graphics/opengl_renderer/background/Unbake.h"
 #include "game/graphics/opengl_renderer/background/background_common.h"
 #include "game/graphics/pipelines/opengl.h"
 
@@ -22,6 +23,8 @@ struct TieProtoVisibility {
 struct EtieUniforms {
   GLuint persp0, persp1, cam_no_persp, envmap_tod_tint, decal;
 };
+
+struct PbrLevelMaps;
 
 class Tie3 : public BucketRenderer {
  public:
@@ -73,6 +76,14 @@ class Tie3 : public BucketRenderer {
                            ScopedProfilerNode& prof,
                            tfrag3::TieCategory category);
 
+  /// Vista debug mode: draw another loaded level's ties with the given camera, no DMA.
+  /// hide_filter: proto names to skip in this level (nullptr: none).
+  void render_vista(const std::string& level,
+                    const char* hide_filter,
+                    const TfragRenderSettings& settings,
+                    SharedRenderState* render_state,
+                    ScopedProfilerNode& prof);
+
   struct WindWork {
     u32 paused;
     u32 pad[3];
@@ -120,10 +131,20 @@ class Tie3 : public BucketRenderer {
     const tfrag3::BVH* vis = nullptr;
     const u32* index_data = nullptr;
     std::vector<std::array<math::Vector4f, 4>> wind_matrix_cache;
+    // vista: wind-bent instance matrices (wind paused and never fed), camera applied on use
+    std::vector<std::array<math::Vector4f, 4>> wind_bent;
+    std::vector<std::array<math::Vector4f, 4>> wind_world;  // bent world matrices (canopy)
+    float wind_bent_mult = 0.f;                // m_wind_multiplier wind_bent was made with
+    std::array<math::Vector4f, 4> wind_cam{};  // camera of wind_cam_epoch
+    u64 wind_cam_epoch = 0;
+    std::vector<u64> wind_inst_epoch;  // per instance: epoch its wind_matrix_cache was made in
     GLuint wind_vertex_index_buffer;
     std::vector<u32> wind_vertex_index_offsets;
     bool has_proto_visibility = false;
     TieProtoVisibility proto_visibility;
+    const std::vector<std::string>* proto_names = nullptr;
+    std::vector<u8> vista_proto_vis;
+    std::string vista_filter;
 
     std::vector<std::pair<int, int>> draw_idx_temp;
     std::vector<u32> index_temp;
@@ -132,18 +153,37 @@ class Tie3 : public BucketRenderer {
     std::vector<GLsizei> multidraw_count_buffer;
     std::vector<void*> multidraw_index_offset_buffer;
     u64 draw_mode = 0;  // strip or not, GL enum
+    // per vertex 1 under a self-lit texture's base draw, for the envmap second pass (unit 58)
+    GLuint selflit_buf = 0, selflit_tex = 0;
   };
+
+  void build_selflit_masks();
+  size_t build_selflit_vertices(Tree& tree, int geom, int idx);
+  static constexpr int kSelfLitUnit = 58;
+  bool m_selflit_built = false;  // masks built for this level (only while option 32 is on)
 
   void envmap_second_pass_draw(const Tree& tree,
                                const TfragRenderSettings& settings,
                                SharedRenderState* render_state,
                                ScopedProfilerNode& prof,
-                               tfrag3::TieCategory category);
+                               tfrag3::TieCategory category,
+                               const UnbakeTree* em_tree,
+                               const UnbakeTree* nrm_tree);
+
+  const std::vector<u8>* vista_proto_flags(Tree& tree);
+  bool m_vista_hide_this_frame = false;
+  const char* m_vista_filter = "";
+  const class VistaHiZ* m_vista_hiz = nullptr;  // render_vista only
 
   std::array<std::vector<Tree>, 4> m_trees;  // includes 4 lods!
   std::string m_level_name;
   const std::vector<GLuint>* m_textures;
+  const tfrag3::Level* m_level = nullptr;
   u64 m_load_id = -1;
+  const UnbakeSidecar* m_unbake = nullptr;
+  const std::vector<u8>* m_tex_class = nullptr;
+  const std::vector<u8>* m_tex_selflit = nullptr;
+  PbrLevelMaps* m_pbr_maps = nullptr;
 
   std::vector<math::Vector<u8, 4>> m_color_result;
 
@@ -156,7 +196,8 @@ class Tie3 : public BucketRenderer {
 
   TfragPcPortData m_pc_port_data;
 
-  std::vector<float> m_wind_vectors;  // note: I suspect these are shared with shrub.
+  std::vector<float> m_wind_vectors;         // note: I suspect these are shared with shrub.
+  std::vector<float> m_stereo_wind_vectors;  // wind state at the start of the frame
 
   float m_wind_multiplier = 1.f;
 
@@ -198,4 +239,8 @@ class Tie3WithEnvmapJak1 : public Tie3 {
 
  private:
   bool m_enable_envmap = true;
+  // fragment shader runs of this bucket (GPU timing switch), read a few frames late
+  GLuint m_frag_q[4] = {};
+  bool m_frag_pending[4] = {};
+  int m_frag_next = 0;
 };

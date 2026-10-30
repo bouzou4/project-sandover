@@ -1,0 +1,9 @@
+site_name: Sandover KB
+docs_dir: kb
+site_dir: data/site
+
+theme:
+  name: material
+
+nav:
+  - Home: index.md

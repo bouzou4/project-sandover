@@ -12,7 +12,35 @@
 ;; the rate was defaulted to DISPLAY_FPS_RATIO before, but sp-launch-particles-var checks
 ;; if the rate is not 1.0 and crashes the game.
 (defmacro launch-particles (&key (system *sp-particle-system-2d*) particle origin &key (launch-state (the-as sparticle-launch-state #f)) &key (launch-control (the-as sparticle-launch-control #f)) &key (rate 1.0))
-  `(sp-launch-particles-var ,system ,particle ,origin ,launch-state ,launch-control ,rate))
+  `(if (not (and *sp-hide-light-shafts?* (sp-light-shaft? ,particle)))
+     (sp-launch-particles-var ,system ,particle ,origin ,launch-state ,launch-control ,rate)))
+
+;; Sandover: #t skips the ambient light shafts (pc-set-hide-shafts, the settings page's row)
+(define *sp-hide-light-shafts?* #f)
+
+(defun sp-light-shaft? ((launcher sparticle-launcher))
+  "An ambient light shaft: an edge-anchored sprite (rot-x 4) with no velocity or acceleration,
+   at least 10 m long and living at least 4 s. Matches the beach grotto (666) and jungle (864) rays."
+  (let ((anchored #f)
+        (long #f)
+        (lasting #f)
+        (moving #f)
+        (spec (-> launcher init-specs)))
+    (while (!= (-> spec 0 field) (sp-field-id spt-end))
+      (case (-> spec 0 field)
+        (((sp-field-id spt-rot-x)) (set! anchored (and (= (-> spec 0 flags) (sp-flag int)) (= (-> spec 0 initial-value) 4))))
+        (((sp-field-id spt-scale-x)) (set! long (and (= (-> spec 0 flags) (sp-flag float)) (>= (-> spec 0 initial-valuef) (meters 10)))))
+        (((sp-field-id spt-timer)) (set! lasting (and (= (-> spec 0 flags) (sp-flag int)) (>= (-> spec 0 initial-value) (seconds 4)))))
+        (((sp-field-id spt-vel-x) (sp-field-id spt-vel-y) (sp-field-id spt-vel-z)
+          (sp-field-id spt-accel-x) (sp-field-id spt-accel-y) (sp-field-id spt-accel-z))
+         (set! moving #t)))
+      (&+! spec 16))
+    (and anchored long lasting (not moving))))
+
+(defun pc-set-hide-shafts ((on int))
+  "1 hides the ambient light shaft particles (the remaster look), 0 draws them (vanilla)."
+  (set! *sp-hide-light-shafts?* (nonzero? on))
+  (none))
 
 ;; decomp begins
 
@@ -676,8 +704,28 @@
              (sphere-in-view-frustum? (the-as sphere gp-1))
              (sphere-in-view-frustum? (the-as sphere (begin (*! (-> gp-1 w) 8.0) gp-1))))))))))
 
+;; og:preserve-this capture mode: with particles off, launchers do not launch (or draw random numbers)
+(define-extern *particles-flag* symbol)
+
+(defun pc-launch-light-note ((this sparticle-launch-control) (origin vector))
+  "Publish this spawn call (group, origin, entity) to the engine's launch lights (WorldLights.h)."
+  (let ((p (-> this proc)))
+    (when (and p (nonzero? p) (-> this group) (nonzero? (-> this group)))
+      (let ((e (-> p entity))
+            (q (the-as pointer 0)))
+        (when (type-type? (-> p type) process-drawable)
+          (let ((root (-> (the-as process-drawable p) root)))
+            (if (and root (nonzero? root)) (set! q (the-as pointer (-> root quat))))))
+        (pc-launch-lights-push (-> this group name) (the-as pointer origin) (if (and e (nonzero? e)) (the int (-> e aid)) 0) q))))
+  (none))
+
 (defmethod spawn ((this sparticle-launch-control) (arg0 vector))
   (set! (-> this center quad) (-> arg0 quad))
+  ;; og:preserve-this sandover: every spawn call is the emitter's light (launch lights), on screen
+  ;; or not and with particles off; reads only, no random draws
+  (pc-launch-light-note this arg0)
+  (if (not *particles-flag*)
+    (return (the-as object 0)))
   ;; og:preserve-this
   ;; check if we are visible (remove this check to force particles to be drawn.)
   (if (not (or (is-visible? this arg0) (logtest? (-> this group flags) (sp-group-flag always-draw screen-space))))

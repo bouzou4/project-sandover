@@ -1,0 +1,309 @@
+# Wet rock revision 5: B1 of revision 4 was kept, with the tide line too high.
+# The kept look is the spec; only the splash zone's height changes. Under the gloss toggle,
+# non-sand surfaces by the sea are wet in a splash zone with a world-noise edge and wet streaks up
+# steep faces (both scaled with the zone's fade height), darkened in linear light with +50%
+# chroma, under a water film in the PBR inputs. Sand keeps the picked band.
+# Arms: C original game (the clock pin only; the rig boots all off), A the selected shoreline (dry
+# rock: play look + wet shoreline + swamp look, gloss off), B1 the chosen wet rock as seen
+# it (fully wet to 2.5 m, dry at 4 m), L1 (1.2 m / 2.0 m), L2 (0.7 m / 1.3 m); everything else in
+# L1 and L2 is B1's. Vanilla first, one instance (--parallel 1), actors frozen (rig default).
+# Every arm's stage hook moves the game clocks to 100000 s 4 frames before the shot; A, B1, L1, L2
+# also pin the Sandover wave and rain-ring clock (pc-set-water 90).
+# Cameras and the frames they come from (all under $SANDOVER_DATA), as revision 4:
+# - beach-rock-sun (9 h): wet-pbr-003/beach-rock-sun-*.png, the rocks at the tower
+#   foot.
+# - beach-pillars (13.9 h): orbs-001/candidates/A/nosup-0003.png, rock
+#   pillars standing in the sea; Jak placed as in that frame.
+# - village1-waterfront (16 h): shore-002/village1-dock-A-today.png, pilings and
+#   stilt houses at the water.
+# - swamp-dock1 (14.82 h): wet-pbr-003/swamp-dock1-A-picked.png, its continue camera
+#   made explicit; 300 settle frames; particles off. The swamp has no splash zone, so B1, L1 and
+#   L2 are the same there (the film on its wet surfaces).
+# Each look is the play look minus HDR output, as swamp-directions.yaml.
+set: wet-pbr
+looks:
+  A: &A  # picked looks, wet gloss off
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-ssao-preset 1)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-water 90 120000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 17 1000000)'
+    - '(pc-set-swamp 18 720000)'
+    - '(pc-set-swamp 19 500000)'
+    - '(pc-set-swamp 20 2000000)'
+    - '(pc-set-swamp 16 1000000)'
+    - '(pc-set-swamp 1 500000)'
+    - '(pc-set-swamp 2 1000000)'
+    - '(pc-set-swamp 3 1000000)'
+    - '(pc-set-swamp 4 2000000)'
+    - '(pc-set-swamp 0 1000000)'
+    - '(pc-set-swamp 6 500000)'
+    - '(pc-set-swamp 7 1000000)'
+    - '(pc-set-swamp 8 500000)'
+    - '(pc-set-swamp 5 1000000)'
+    - '(pc-set-swamp 10 50000)'
+    - '(pc-set-swamp 11 2500000)'
+    - '(pc-set-swamp 12 3000000)'
+    - '(pc-set-swamp 13 800000)'
+    - '(pc-set-swamp 14 1000000)'
+    - '(pc-set-swamp 15 350000)'
+    - '(pc-set-swamp 9 1000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 40 0)'
+  B1: &B1  # the chosen wet rock (b1, line 2.5-4 m), as seen
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-ssao-preset 1)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-water 90 120000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 17 1000000)'
+    - '(pc-set-swamp 18 720000)'
+    - '(pc-set-swamp 19 500000)'
+    - '(pc-set-swamp 20 2000000)'
+    - '(pc-set-swamp 16 1000000)'
+    - '(pc-set-swamp 1 500000)'
+    - '(pc-set-swamp 2 1000000)'
+    - '(pc-set-swamp 3 1000000)'
+    - '(pc-set-swamp 4 2000000)'
+    - '(pc-set-swamp 0 1000000)'
+    - '(pc-set-swamp 6 500000)'
+    - '(pc-set-swamp 7 1000000)'
+    - '(pc-set-swamp 8 500000)'
+    - '(pc-set-swamp 5 1000000)'
+    - '(pc-set-swamp 10 50000)'
+    - '(pc-set-swamp 11 2500000)'
+    - '(pc-set-swamp 12 3000000)'
+    - '(pc-set-swamp 13 800000)'
+    - '(pc-set-swamp 14 1000000)'
+    - '(pc-set-swamp 15 350000)'
+    - '(pc-set-swamp 9 1000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 41 800000)'
+    - '(pc-set-swamp 42 200000)'
+    - '(pc-set-swamp 43 100000)'
+    - '(pc-set-swamp 44 550000)'
+    - '(pc-set-swamp 45 2500000)'
+    - '(pc-set-swamp 46 4000000)'
+    - '(pc-set-swamp 40 1000000)'
+  L1: &L1  # b1 with the line at 1.2-2 m
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-ssao-preset 1)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-water 90 120000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 17 1000000)'
+    - '(pc-set-swamp 18 720000)'
+    - '(pc-set-swamp 19 500000)'
+    - '(pc-set-swamp 20 2000000)'
+    - '(pc-set-swamp 16 1000000)'
+    - '(pc-set-swamp 1 500000)'
+    - '(pc-set-swamp 2 1000000)'
+    - '(pc-set-swamp 3 1000000)'
+    - '(pc-set-swamp 4 2000000)'
+    - '(pc-set-swamp 0 1000000)'
+    - '(pc-set-swamp 6 500000)'
+    - '(pc-set-swamp 7 1000000)'
+    - '(pc-set-swamp 8 500000)'
+    - '(pc-set-swamp 5 1000000)'
+    - '(pc-set-swamp 10 50000)'
+    - '(pc-set-swamp 11 2500000)'
+    - '(pc-set-swamp 12 3000000)'
+    - '(pc-set-swamp 13 800000)'
+    - '(pc-set-swamp 14 1000000)'
+    - '(pc-set-swamp 15 350000)'
+    - '(pc-set-swamp 9 1000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 41 800000)'
+    - '(pc-set-swamp 42 200000)'
+    - '(pc-set-swamp 43 100000)'
+    - '(pc-set-swamp 44 550000)'
+    - '(pc-set-swamp 45 1200000)'
+    - '(pc-set-swamp 46 2000000)'
+    - '(pc-set-swamp 40 1000000)'
+  L2: &L2  # b1 with the line at 0.7-1.3 m
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-ssao-preset 1)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-water 90 120000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 17 1000000)'
+    - '(pc-set-swamp 18 720000)'
+    - '(pc-set-swamp 19 500000)'
+    - '(pc-set-swamp 20 2000000)'
+    - '(pc-set-swamp 16 1000000)'
+    - '(pc-set-swamp 1 500000)'
+    - '(pc-set-swamp 2 1000000)'
+    - '(pc-set-swamp 3 1000000)'
+    - '(pc-set-swamp 4 2000000)'
+    - '(pc-set-swamp 0 1000000)'
+    - '(pc-set-swamp 6 500000)'
+    - '(pc-set-swamp 7 1000000)'
+    - '(pc-set-swamp 8 500000)'
+    - '(pc-set-swamp 5 1000000)'
+    - '(pc-set-swamp 10 50000)'
+    - '(pc-set-swamp 11 2500000)'
+    - '(pc-set-swamp 12 3000000)'
+    - '(pc-set-swamp 13 800000)'
+    - '(pc-set-swamp 14 1000000)'
+    - '(pc-set-swamp 15 350000)'
+    - '(pc-set-swamp 9 1000000)'
+    - '(define-extern pc-set-swamp (function int int none))'
+    - '(pc-set-swamp 41 800000)'
+    - '(pc-set-swamp 42 200000)'
+    - '(pc-set-swamp 43 100000)'
+    - '(pc-set-swamp 44 550000)'
+    - '(pc-set-swamp 45 700000)'
+    - '(pc-set-swamp 46 1300000)'
+    - '(pc-set-swamp 40 1000000)'
+  C: &C  # original game: the clock pin only
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 120
+  effects: on
+  wind: on
+  particles: on
+  jak: show
+shots:
+  - {name: beach-pillars-vanilla, continue: beach-start, hour: 13.852, jak_pos: [-751530.812, 12957.32, -1009293.625], camera: {pos: [-749927.875, 34029.004, -958119.125], rot: [-0.999508, 0.0, 0.031357, -0.00377, 0.992745, -0.120176, -0.031129, -0.120235, -0.992257]},
+     goals_after_load: *C}
+  - {name: village1-waterfront-vanilla, continue: village1-hut, hour: 16, camera: {pos: [40960.0, 16384.0, 409600.0], rot: [-0.311039, 0.0, 0.950397, -0.057375, 0.998176, -0.018777, -0.948664, -0.06037, -0.310472]},
+     goals_after_load: *C}
+  - {name: beach-rock-sun-vanilla, continue: beach-start, hour: 9, camera: {pos: [-1133695.3, 40960.0, -950538.8], rot: [-0.959637, 0.0, -0.281241, 0.049823, 0.984183, -0.170003, 0.276792, -0.177153, -0.944459]},
+     goals_after_load: *C}
+  - {name: swamp-dock1-vanilla, continue: swamp-dock1, hour: 14.819, particles: off, settle_frames: 300, camera: {pos: [1314475.625, 26164.838, -8234152.5], rot: [0.3154, 0.0, -0.9489, 0.1134, 0.9928, 0.0376, 0.9421, -0.1195, 0.3131]},
+     goals_after_load: *C}
+  - {name: beach-pillars-A-picked, continue: beach-start, hour: 13.852, jak_pos: [-751530.812, 12957.32, -1009293.625], camera: {pos: [-749927.875, 34029.004, -958119.125], rot: [-0.999508, 0.0, 0.031357, -0.00377, 0.992745, -0.120176, -0.031129, -0.120235, -0.992257]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: village1-waterfront-A-picked, continue: village1-hut, hour: 16, camera: {pos: [40960.0, 16384.0, 409600.0], rot: [-0.311039, 0.0, 0.950397, -0.057375, 0.998176, -0.018777, -0.948664, -0.06037, -0.310472]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: beach-rock-sun-A-picked, continue: beach-start, hour: 9, camera: {pos: [-1133695.3, 40960.0, -950538.8], rot: [-0.959637, 0.0, -0.281241, 0.049823, 0.984183, -0.170003, 0.276792, -0.177153, -0.944459]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: swamp-dock1-A-picked, continue: swamp-dock1, hour: 14.819, particles: off, settle_frames: 300, camera: {pos: [1314475.625, 26164.838, -8234152.5], rot: [0.3154, 0.0, -0.9489, 0.1134, 0.9928, 0.0376, 0.9421, -0.1195, 0.3131]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: beach-pillars-B1-high, continue: beach-start, hour: 13.852, jak_pos: [-751530.812, 12957.32, -1009293.625], camera: {pos: [-749927.875, 34029.004, -958119.125], rot: [-0.999508, 0.0, 0.031357, -0.00377, 0.992745, -0.120176, -0.031129, -0.120235, -0.992257]},
+     goals_after_load: *B1, wait_vista: true}
+  - {name: village1-waterfront-B1-high, continue: village1-hut, hour: 16, camera: {pos: [40960.0, 16384.0, 409600.0], rot: [-0.311039, 0.0, 0.950397, -0.057375, 0.998176, -0.018777, -0.948664, -0.06037, -0.310472]},
+     goals_after_load: *B1, wait_vista: true}
+  - {name: beach-rock-sun-B1-high, continue: beach-start, hour: 9, camera: {pos: [-1133695.3, 40960.0, -950538.8], rot: [-0.959637, 0.0, -0.281241, 0.049823, 0.984183, -0.170003, 0.276792, -0.177153, -0.944459]},
+     goals_after_load: *B1, wait_vista: true}
+  - {name: swamp-dock1-B1-high, continue: swamp-dock1, hour: 14.819, particles: off, settle_frames: 300, camera: {pos: [1314475.625, 26164.838, -8234152.5], rot: [0.3154, 0.0, -0.9489, 0.1134, 0.9928, 0.0376, 0.9421, -0.1195, 0.3131]},
+     goals_after_load: *B1, wait_vista: true}
+  - {name: beach-pillars-L1-mid, continue: beach-start, hour: 13.852, jak_pos: [-751530.812, 12957.32, -1009293.625], camera: {pos: [-749927.875, 34029.004, -958119.125], rot: [-0.999508, 0.0, 0.031357, -0.00377, 0.992745, -0.120176, -0.031129, -0.120235, -0.992257]},
+     goals_after_load: *L1, wait_vista: true}
+  - {name: village1-waterfront-L1-mid, continue: village1-hut, hour: 16, camera: {pos: [40960.0, 16384.0, 409600.0], rot: [-0.311039, 0.0, 0.950397, -0.057375, 0.998176, -0.018777, -0.948664, -0.06037, -0.310472]},
+     goals_after_load: *L1, wait_vista: true}
+  - {name: beach-rock-sun-L1-mid, continue: beach-start, hour: 9, camera: {pos: [-1133695.3, 40960.0, -950538.8], rot: [-0.959637, 0.0, -0.281241, 0.049823, 0.984183, -0.170003, 0.276792, -0.177153, -0.944459]},
+     goals_after_load: *L1, wait_vista: true}
+  - {name: swamp-dock1-L1-mid, continue: swamp-dock1, hour: 14.819, particles: off, settle_frames: 300, camera: {pos: [1314475.625, 26164.838, -8234152.5], rot: [0.3154, 0.0, -0.9489, 0.1134, 0.9928, 0.0376, 0.9421, -0.1195, 0.3131]},
+     goals_after_load: *L1, wait_vista: true}
+  - {name: beach-pillars-L2-low, continue: beach-start, hour: 13.852, jak_pos: [-751530.812, 12957.32, -1009293.625], camera: {pos: [-749927.875, 34029.004, -958119.125], rot: [-0.999508, 0.0, 0.031357, -0.00377, 0.992745, -0.120176, -0.031129, -0.120235, -0.992257]},
+     goals_after_load: *L2, wait_vista: true}
+  - {name: village1-waterfront-L2-low, continue: village1-hut, hour: 16, camera: {pos: [40960.0, 16384.0, 409600.0], rot: [-0.311039, 0.0, 0.950397, -0.057375, 0.998176, -0.018777, -0.948664, -0.06037, -0.310472]},
+     goals_after_load: *L2, wait_vista: true}
+  - {name: beach-rock-sun-L2-low, continue: beach-start, hour: 9, camera: {pos: [-1133695.3, 40960.0, -950538.8], rot: [-0.959637, 0.0, -0.281241, 0.049823, 0.984183, -0.170003, 0.276792, -0.177153, -0.944459]},
+     goals_after_load: *L2, wait_vista: true}
+  - {name: swamp-dock1-L2-low, continue: swamp-dock1, hour: 14.819, particles: off, settle_frames: 300, camera: {pos: [1314475.625, 26164.838, -8234152.5], rot: [0.3154, 0.0, -0.9489, 0.1134, 0.9928, 0.0376, 0.9421, -0.1195, 0.3131]},
+     goals_after_load: *L2, wait_vista: true}

@@ -1,8 +1,26 @@
 #include "Tie3.h"
 
+#include <algorithm>
+#include <cstring>
+#include <unordered_set>
+
 #include "common/global_profiler/GlobalProfiler.h"
 #include "common/log/log.h"
 #include "common/util/Assert.h"
+
+#include "game/graphics/opengl_renderer/VistaHiZ.h"
+#include "game/graphics/opengl_renderer/GlQueries.h"
+#include "game/graphics/opengl_renderer/InspectRenderer.h"
+#include "game/graphics/opengl_renderer/LavaField.h"
+#include "game/graphics/opengl_renderer/Materials.h"
+#include "game/graphics/opengl_renderer/WorldShadows.h"
+#include "game/graphics/opengl_renderer/background/Canopy.h"
+#include "game/graphics/opengl_renderer/PerfTimers.h"
+#include "game/graphics/opengl_renderer/SsaoRenderer.h"
+#include "game/graphics/opengl_renderer/Swamp.h"
+#include "game/graphics/opengl_renderer/background/Caustics.h"
+#include "game/graphics/opengl_renderer/background/PaletteGlow.h"
+#include "game/graphics/opengl_renderer/buckets.h"
 
 #include "third-party/imgui/imgui.h"
 
@@ -61,6 +79,8 @@ void Tie3::load_from_fr3_data(const LevelData* loader_data) {
   auto ul = scoped_prof("update-load");
   const tfrag3::Level* lev_data = loader_data->level.get();
   m_wind_vectors.clear();
+  // a same-size level must not get the previous level's springs restored
+  m_stereo_wind_vectors.clear();
 
   // We changed level! free opengl resources allocated for the previous
   discard_tree_cache();
@@ -170,6 +190,7 @@ void Tie3::load_from_fr3_data(const LevelData* loader_data) {
       // set up wind
       if (wind_idx_buffer_len > 0) {
         lod_tree[l_tree].wind_matrix_cache.resize(tree.wind_instance_info.size());
+        lod_tree[l_tree].wind_bent.clear();
         lod_tree[l_tree].wind_vertex_index_buffer =
             loader_data->tie_data[l_geo][l_tree].wind_indices;
         u32 off = 0;
@@ -181,6 +202,7 @@ void Tie3::load_from_fr3_data(const LevelData* loader_data) {
 
       // set up per-proto visibility. Jak 2 needs to enable/disable individual protos.
       lod_tree[l_tree].has_proto_visibility = tree.has_per_proto_visibility_toggle;
+      lod_tree[l_tree].proto_names = &tree.proto_names;
       if (tree.has_per_proto_visibility_toggle) {
         lod_tree[l_tree].proto_visibility.init(tree.proto_names);
       }
@@ -189,7 +211,7 @@ void Tie3::load_from_fr3_data(const LevelData* loader_data) {
       glActiveTexture(GL_TEXTURE10);
       glGenTextures(1, &lod_tree[l_tree].time_of_day_texture);
       glBindTexture(GL_TEXTURE_1D, lod_tree[l_tree].time_of_day_texture);
-      glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, TIME_OF_DAY_COLOR_COUNT, 0, GL_RGBA,
+      glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, kCausticEnvOffset + TIME_OF_DAY_COLOR_COUNT, 0, GL_RGBA,
                    GL_UNSIGNED_INT_8_8_8_8, nullptr);
       glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
       glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -225,6 +247,8 @@ bool Tie3::try_loading_level(const std::string& level, SharedRenderState* render
     // not loaded
     m_has_level = false;
     m_textures = nullptr;
+    m_level = nullptr;
+    m_unbake = nullptr;
     m_level_name = "";
     discard_tree_cache();
     return false;
@@ -240,6 +264,11 @@ bool Tie3::try_loading_level(const std::string& level, SharedRenderState* render
 
   // loading was successful. Link textures/load ID.
   m_textures = &lev_data->textures;
+  m_level = lev_data->level.get();
+  m_unbake = lev_data->unbake.get();
+  m_tex_class = &lev_data->tex_class;
+  m_tex_selflit = &lev_data->tex_selflit;
+  m_pbr_maps = lev_data->pbr_maps.get();
   m_load_id = lev_data->load_id;
 
   // see if this is the first time we've gotten the level
@@ -248,6 +277,9 @@ bool Tie3::try_loading_level(const std::string& level, SharedRenderState* render
     load_from_fr3_data(lev_data);
     m_has_level = true;
     m_level_name = level;
+    if (Gfx::g_global_settings.shadow_world) {
+      build_selflit_masks();
+    }
   } else {
     m_has_level = true;
   }
@@ -262,14 +294,22 @@ bool Tie3::try_loading_level(const std::string& level, SharedRenderState* render
 void Tie3::discard_tree_cache() {
   for (int geo = 0; geo < 4; ++geo) {
     for (auto& tree : m_trees[geo]) {
+      glq::invalidate_state();
+      caustic_forget_texture(tree.time_of_day_texture);
+      palette_glow_forget(tree.time_of_day_texture);
       glBindTexture(GL_TEXTURE_1D, tree.time_of_day_texture);
       glDeleteTextures(1, &tree.time_of_day_texture);
       // glDeleteBuffers(1, &tree.index_buffer);
       glDeleteBuffers(1, &tree.single_draw_index_buffer);
       glDeleteVertexArrays(1, &tree.vao);
+      if (tree.selflit_tex) {
+        glDeleteTextures(1, &tree.selflit_tex);
+        glDeleteBuffers(1, &tree.selflit_buf);
+      }
     }
 
     m_trees[geo].clear();
+    m_selflit_built = false;
   }
 }
 
@@ -317,12 +357,19 @@ bool Tie3::set_up_common_data_from_dma(DmaFollower& dma, SharedRenderState* rend
   auto pc_port_data = dma.read_and_advance();
   ASSERT(pc_port_data.size_bytes == sizeof(TfragPcPortData));
   memcpy(&m_pc_port_data, pc_port_data.data, sizeof(TfragPcPortData));
+  apply_stereo_eye(&m_pc_port_data.camera, render_state);
   m_pc_port_data.level_name[11] = '\0';
+  cave_dark_itimes(render_state, &m_pc_port_data);
+  caustic_itimes(render_state, &m_pc_port_data);
 
   if (render_state->version == GameVersion::Jak1) {
     auto wind_data = dma.read_and_advance();
     ASSERT(wind_data.size_bytes == sizeof(WindWork));
     memcpy(&m_wind_data, wind_data.data, sizeof(WindWork));
+    // 2 = capture mode reset (tie-methods.gc add-pc-wind-data); also counts as paused
+    if (m_wind_data.paused == 2) {
+      std::fill(m_wind_vectors.begin(), m_wind_vectors.end(), 0.f);
+    }
   }
 
   if (render_state->version >= GameVersion::Jak2) {
@@ -375,6 +422,21 @@ void Tie3::render(DmaFollower& dma, SharedRenderState* render_state, ScopedProfi
     return;
   }
 
+  if (render_state->stereo_active) {
+    // both eyes integrate wind from the same starting state
+    // a level load between passes resizes the vectors: keep them and snapshot again
+    if (render_state->stereo_repeat_pass &&
+        m_stereo_wind_vectors.size() == m_wind_vectors.size()) {
+      m_wind_vectors = m_stereo_wind_vectors;
+    } else {
+      m_stereo_wind_vectors = m_wind_vectors;
+    }
+  }
+
+  m_vista_hide_this_frame = vista_hide_active(render_state, m_level_id);
+  if (m_vista_hide_this_frame) {
+    m_vista_filter = active_vista_filter(render_state);
+  }
   if (set_up_common_data_from_dma(dma, render_state)) {
     setup_all_trees(lod(), m_common_data.settings, m_common_data.proto_vis_data,
                     m_common_data.proto_vis_data_size, !render_state->no_multidraw, prof);
@@ -391,6 +453,44 @@ void Tie3::render_from_another(SharedRenderState* render_state,
     return;
   }
   draw_matching_draws_for_all_trees(lod(), m_common_data.settings, render_state, prof, category);
+}
+
+void Tie3::render_vista(const std::string& level,
+                        const char* hide_filter,
+                        const TfragRenderSettings& settings,
+                        SharedRenderState* render_state,
+                        ScopedProfilerNode& prof) {
+  m_vista_hide_this_frame = hide_filter && hide_filter[0];
+  m_vista_filter = m_vista_hide_this_frame ? hide_filter : "";
+  m_wind_data.paused = 1;
+  m_has_level = try_loading_level(level, render_state);
+  if (!m_has_level) {
+    return;
+  }
+  m_common_data.settings = settings;
+  m_common_data.frame_idx = render_state->frame_idx;
+  m_vista_hiz = render_state->vista_hiz;
+  setup_all_trees(lod(), settings, nullptr, 0, !render_state->no_multidraw, prof);
+  m_vista_hiz = nullptr;
+  draw_matching_draws_for_all_trees(lod(), settings, render_state, prof,
+                                    tfrag3::TieCategory::NORMAL);
+  draw_matching_draws_for_all_trees(lod(), settings, render_state, prof,
+                                    tfrag3::TieCategory::NORMAL_ENVMAP);
+}
+
+const std::vector<u8>* Tie3::vista_proto_flags(Tree& tree) {
+  if (!tree.proto_names || tree.proto_names->empty()) {
+    return nullptr;
+  }
+  const char* filter = m_vista_filter;
+  if (tree.vista_proto_vis.size() != tree.proto_names->size() || tree.vista_filter != filter) {
+    tree.vista_filter = filter;
+    tree.vista_proto_vis.resize(tree.proto_names->size());
+    for (size_t i = 0; i < tree.proto_names->size(); i++) {
+      tree.vista_proto_vis[i] = !vista_name_matches(tree.proto_names->at(i), filter);
+    }
+  }
+  return &tree.vista_proto_vis;
 }
 
 void Tie3::draw_matching_draws_for_all_trees(int geom,
@@ -449,6 +549,15 @@ void Tie3::setup_tree(int idx,
     // need culling data
     cull_check_all_slow(settings.camera.planes, tree.vis->vis_nodes, settings.occlusion_culling,
                         tree.vis_temp.data());
+    if (m_my_id < 0 && m_vista_hiz && vista_hiz_applies(*tree.draws)) {
+      m_vista_hiz->cull(tree.vis->vis_nodes, tree.vis_temp.data());
+    }
+  }
+
+  const std::vector<u8>* proto_flags =
+      tree.has_proto_visibility ? &tree.proto_visibility.vis_flags : nullptr;
+  if (!proto_flags && m_vista_hide_this_frame) {
+    proto_flags = vista_proto_flags(tree);
   }
 
   u32 num_tris = 0;
@@ -459,11 +568,10 @@ void Tie3::setup_tree(int idx,
           tree.multidraw_index_offset_buffer.data(), *tree.draws);
     } else {
       Timer index_timer;
-      if (tree.has_proto_visibility) {
+      if (proto_flags) {
         num_tris = make_multidraws_from_vis_and_proto_string(
             tree.multidraw_offset_per_stripdraw.data(), tree.multidraw_count_buffer.data(),
-            tree.multidraw_index_offset_buffer.data(), *tree.draws, tree.vis_temp,
-            tree.proto_visibility.vis_flags);
+            tree.multidraw_index_offset_buffer.data(), *tree.draws, tree.vis_temp, *proto_flags);
       } else {
         num_tris = make_multidraws_from_vis_string(
             tree.multidraw_offset_per_stripdraw.data(), tree.multidraw_count_buffer.data(),
@@ -477,10 +585,10 @@ void Tie3::setup_tree(int idx,
           make_all_visible_index_list(tree.draw_idx_temp.data(), tree.index_temp.data(),
                                       *tree.draws, tree.index_data, &num_tris);
     } else {
-      if (tree.has_proto_visibility) {
+      if (proto_flags) {
         idx_buffer_size = make_index_list_from_vis_and_proto_string(
             tree.draw_idx_temp.data(), tree.index_temp.data(), *tree.draws, tree.vis_temp,
-            tree.proto_visibility.vis_flags, tree.index_data, &num_tris);
+            *proto_flags, tree.index_data, &num_tris);
       } else {
         idx_buffer_size =
             make_index_list_from_vis_string(tree.draw_idx_temp.data(), tree.index_temp.data(),
@@ -541,15 +649,73 @@ void Tie3::draw_matching_draws_for_tree(int idx,
     return;
   }
   bool use_envmap = tfrag3::is_envmap_first_draw_category(category);
-  auto shader_id = use_envmap ? ShaderId::ETIE_BASE : ShaderId::TFRAG3;
+  const UnbakeTree* sun = nullptr;
+  if (!use_envmap && geom == 0 && unbake_active(render_state, m_unbake) &&
+      idx < (int)m_unbake->tie.size() && m_unbake->tie[idx].valid) {
+    sun = &m_unbake->tie[idx];
+  }
+  auto shader_id =
+      use_envmap ? ShaderId::ETIE_BASE : (sun ? ShaderId::TFRAG3_SUN : ShaderId::TFRAG3);
 
   // setup OpenGL shader
   first_tfrag_draw_setup(settings.camera, render_state, shader_id);
+  if (sun) {
+    unbake_set_uniforms(render_state, *m_unbake, settings.camera, unbake_texture(*sun));
+  }
+  const UnbakeTree* nrm_tree = geom == 0 && SsaoRenderer::normals_active() && m_unbake &&
+                                       idx < (int)m_unbake->tie.size() && m_unbake->tie[idx].valid
+                                   ? &m_unbake->tie[idx]
+                                   : nullptr;
+  if (nrm_tree) {
+    unbake_bind_normals(render_state->shaders[shader_id].id(), *nrm_tree);
+  }
+  const bool emissive = render_state->emissive_mask &&
+                        m_my_id <= (int)jak1::BucketId::SHRUB_GENERIC_LEVEL1 &&
+                        !(Gfx::g_global_settings.pbr_probe & 256);
+  // actor shadows also read E, to keep shadows off emissive surfaces
+  const bool em_values = emissive || (render_state->shadow.active &&
+                                      m_my_id <= (int)jak1::BucketId::SHRUB_GENERIC_LEVEL1);
+  const UnbakeTree* em_tree =
+      geom == 0 && m_unbake && idx < (int)m_unbake->tie.size() ? &m_unbake->tie[idx] : nullptr;
+  if (em_values) {
+    unbake_set_emissive_uniforms(render_state->shaders[shader_id].id(), m_unbake, em_tree,
+                                 settings.camera, m_my_id >= 0);
+    if (emissive) {
+      SsaoRenderer::emissive_draw_buffers(true);
+    }
+  } else {
+    glUniform1i(GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[shader_id].id(), "em_on"), 0);
+  }
+  const GLint decal_loc =
+      use_envmap
+          ? m_etie_base_uniforms.decal
+          : (sun ? GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[shader_id].id(), "decal")
+                 : m_uniforms.decal);
 
   if (use_envmap) {
     // if we use envmap, use the envmap-style math for the base draw to avoid rounding issue.
     init_etie_cam_uniforms(m_etie_base_uniforms, m_common_data.settings.camera);
   }
+  caustic_setup_tree(render_state, render_state->shaders[shader_id].id(), m_level_name,
+                     settings.camera.itimes, *tree.colors, tree.time_of_day_texture,
+                     CausticKind::TIE);
+  palette_glow_setup_tree(render_state, render_state->shaders[shader_id].id(), m_unbake,
+                          *tree.colors, tree.time_of_day_texture);
+  const bool pbr = pbr_active(render_state);
+  PbrDrawState pbr_draw;
+  if (pbr) {
+    const GLuint id = render_state->shaders[shader_id].id();
+    const bool has = geom == 0 && m_unbake && idx < (int)m_unbake->tie.size();
+    pbr_setup_background(render_state, id, m_unbake, has ? &m_unbake->tie[idx] : nullptr,
+                         settings.camera);
+    // the rain cover binds the heightfield from unit 0, the renderer convention between passes
+    glActiveTexture(GL_TEXTURE0);
+    swamp_setup_background(render_state, id, m_level_name);
+    lava_field::setup_background(render_state, id, m_level_name);
+    pbr_draw.begin(id, m_tex_class, m_pbr_maps);
+  }
+  SelfLitDraw selflit;
+  selflit.begin(render_state, render_state->shaders[shader_id].id(), m_tex_selflit);
 
   glBindVertexArray(tree.vao);
   glBindBuffer(GL_ARRAY_BUFFER, tree.vertex_buffer);
@@ -563,7 +729,10 @@ void Tie3::draw_matching_draws_for_tree(int idx,
   glEnable(GL_PRIMITIVE_RESTART);
   glPrimitiveRestartIndex(UINT32_MAX);
 
+  int hl_blend = -1;  // material_blend_guard
   int last_texture = -1;
+  int depth_only = -1;
+  const bool prepass_set = category == tfrag3::TieCategory::NORMAL;
   for (size_t draw_idx = tree.category_draw_indices[(int)category];
        draw_idx < tree.category_draw_indices[(int)category + 1]; draw_idx++) {
     const auto& draw = tree.draws->operator[](draw_idx);
@@ -588,12 +757,36 @@ void Tie3::draw_matching_draws_for_tree(int idx,
       }
       last_texture = draw.tree_tex_id;
     }
+    if (pbr) {
+      pbr_draw.set(draw.tree_tex_id);
+    }
+    selflit.set(draw.tree_tex_id);
 
-    auto double_draw = setup_tfrag_shader(render_state, draw.mode,
-                                          use_envmap ? ShaderId::ETIE_BASE : ShaderId::TFRAG3);
+    auto double_draw = setup_tfrag_shader(render_state, draw.mode, shader_id);
+    if (prepass_set && !bg_prepass_draw(render_state, draw.mode, double_draw,
+                                        render_state->shaders[shader_id].id(), depth_only)) {
+      continue;
+    }
+    if (emissive && render_state->light_material &&
+        !(Gfx::g_global_settings.pbr_probe & 128)) {
+      SsaoRenderer::material_blend_guard(render_state->shaders[shader_id].id(),
+                                         SsaoRenderer::draw_blends(draw.mode), true, hl_blend);
+    }
 
-    glUniform1i(use_envmap ? m_etie_base_uniforms.decal : m_uniforms.decal,
-                draw.mode.get_decal() ? 1 : 0);
+    glUniform1i(decal_loc, draw.mode.get_decal() ? 1 : 0);
+    if (inspect::active()) {
+      inspect::DrawRecord rec;
+      rec.kind = inspect::TIE;
+      rec.level = m_level_name;
+      rec.geom = geom;
+      rec.tree = idx;
+      rec.draw = (int)draw_idx;
+      rec.tex = draw.tree_tex_id;
+      rec.mode = draw.mode;
+      std::copy(settings.camera.itimes, settings.camera.itimes + 4, rec.itimes);
+      rec.cam_trans = settings.camera.trans;
+      inspect::set(render_state->shaders[shader_id].id(), inspect::add(std::move(rec)));
+    }
 
     prof.add_draw_call();
 
@@ -605,6 +798,9 @@ void Tie3::draw_matching_draws_for_tree(int idx,
           tree.draw_mode, &tree.multidraw_count_buffer[multidraw_indices.first], GL_UNSIGNED_INT,
           &tree.multidraw_index_offset_buffer[multidraw_indices.first], multidraw_indices.second);
     }
+    if (render_state->bg_prepass) {
+      continue;
+    }
 
     switch (double_draw.kind) {
       case DoubleDrawKind::NONE:
@@ -612,9 +808,11 @@ void Tie3::draw_matching_draws_for_tree(int idx,
       case DoubleDrawKind::AFAIL_NO_DEPTH_WRITE:
         ASSERT(false);
         prof.add_draw_call();
-        glUniform1f(glGetUniformLocation(render_state->shaders[ShaderId::TFRAG3].id(), "alpha_min"),
+        glUniform1f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[ShaderId::TFRAG3].id(),
+                            "alpha_min"),
                     -10.f);
-        glUniform1f(glGetUniformLocation(render_state->shaders[ShaderId::TFRAG3].id(), "alpha_max"),
+        glUniform1f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[ShaderId::TFRAG3].id(),
+                            "alpha_max"),
                     double_draw.aref_second);
         glDepthMask(GL_FALSE);
         if (render_state->no_multidraw) {
@@ -632,6 +830,21 @@ void Tie3::draw_matching_draws_for_tree(int idx,
     }
   }
 
+  if (emissive) {
+    SsaoRenderer::emissive_draw_buffers(false);
+  }
+
+  if (render_state->bg_prepass) {
+    // wind draws come next in the shaded pass: one that ends the run ends it here too
+    if (!m_hide_wind && category == tfrag3::TieCategory::NORMAL) {
+      for (const auto& draw : *tree.wind_draws) {
+        bg_prepass_note(render_state, draw.mode);
+      }
+    }
+    glBindVertexArray(0);
+    return;
+  }
+
   if (!m_hide_wind && category == tfrag3::TieCategory::NORMAL) {
     auto wind_prof = prof.make_scoped_child("wind");
     render_tree_wind(idx, geom, settings, render_state, wind_prof);
@@ -640,17 +853,127 @@ void Tie3::draw_matching_draws_for_tree(int idx,
   glBindVertexArray(0);
 
   if (use_envmap && m_draw_envmap_second_draw) {
+    if (!m_selflit_built && ws_world_on(render_state)) {
+      build_selflit_masks();  // option 32 turned on after the level loaded
+    }
+    inspect::write_mask(false);
     envmap_second_pass_draw(tree, settings, render_state, prof,
-                            tfrag3::get_second_draw_category(category));
+                            tfrag3::get_second_draw_category(category),
+                            em_values ? em_tree : nullptr, nrm_tree);
+    inspect::write_mask(true);
   }
+}
+
+void Tie3::build_selflit_masks() {
+  m_selflit_built = true;
+  if (!m_tex_selflit || !m_level ||
+      std::find(m_tex_selflit->begin(), m_tex_selflit->end(), 1) == m_tex_selflit->end()) {
+    return;
+  }
+  Timer timer;
+  size_t marked = 0;
+  int trees = 0;
+  for (int geo = 0; geo < 4; ++geo) {
+    for (size_t i = 0; i < m_trees[geo].size(); i++) {
+      const size_t n = build_selflit_vertices(m_trees[geo][i], geo, (int)i);
+      marked += n;
+      trees += n ? 1 : 0;
+    }
+  }
+  lg::info("tie: {} self-lit envmap vertices {} in {} trees ({:.1f} ms)", m_level_name, marked,
+           trees, timer.getMs());
+}
+
+size_t Tie3::build_selflit_vertices(Tree& tree, int geom, int idx) {
+  if (tree.selflit_tex || !tree.draws || !tree.index_data ||
+      idx >= (int)m_level->tie_trees[geom].size()) {
+    return 0;
+  }
+  // second-pass draws are keyed by the envmap texture and use their own vertex copies: a
+  // second-pass vertex is self-lit where a self-lit base draw has a vertex at the same position
+  const auto& verts = m_level->tie_trees[geom][idx].unpacked.vertices;
+  auto key = [&](u32 v) {
+    std::array<u32, 3> k;
+    std::memcpy(k.data(), &verts[v].x, 12);
+    return k;
+  };
+  struct KeyHash {
+    size_t operator()(const std::array<u32, 3>& k) const {
+      return (size_t)k[0] * 0x9E3779B97F4A7C15ull ^ (size_t)k[1] * 0xC2B2AE3D27D4EB4Full ^ k[2];
+    }
+  };
+  std::unordered_set<std::array<u32, 3>, KeyHash> lit;
+  auto for_draw_indices = [&](const tfrag3::StripDraw& draw, auto&& fn) {
+    u32 n = 0;
+    for (const auto& g : draw.vis_groups) {
+      n += g.num_inds;
+    }
+    const u32* ind = tree.index_data + draw.unpacked.idx_of_first_idx_in_full_buffer;
+    for (u32 i = 0; i < n; i++) {
+      if (ind[i] != UINT32_MAX && ind[i] < verts.size()) {
+        fn(ind[i]);
+      }
+    }
+  };
+  for (size_t c = 0; c < tfrag3::kNumTieCategories; c++) {
+    if (tfrag3::is_envmap_second_draw_category((tfrag3::TieCategory)c)) {
+      continue;
+    }
+    for (u32 d = tree.category_draw_indices[c]; d < tree.category_draw_indices[c + 1]; d++) {
+      const auto& draw = tree.draws->at(d);
+      if (draw.tree_tex_id >= 0 && draw.tree_tex_id < (s32)m_tex_selflit->size() &&
+          (*m_tex_selflit)[draw.tree_tex_id]) {
+        for_draw_indices(draw, [&](u32 v) { lit.insert(key(v)); });
+      }
+    }
+  }
+  if (lit.empty()) {
+    return 0;
+  }
+  std::vector<u8> mask(verts.size(), 0);
+  size_t marked = 0;
+  for (size_t c = 0; c < tfrag3::kNumTieCategories; c++) {
+    if (!tfrag3::is_envmap_second_draw_category((tfrag3::TieCategory)c)) {
+      continue;
+    }
+    for (u32 d = tree.category_draw_indices[c]; d < tree.category_draw_indices[c + 1]; d++) {
+      for_draw_indices(tree.draws->at(d), [&](u32 v) {
+        if (!mask[v] && lit.count(key(v))) {
+          mask[v] = 1;
+          marked++;
+        }
+      });
+    }
+  }
+  if (!marked) {
+    return 0;
+  }
+  glGenBuffers(1, &tree.selflit_buf);
+  glBindBuffer(GL_TEXTURE_BUFFER, tree.selflit_buf);
+  glBufferData(GL_TEXTURE_BUFFER, mask.size(), mask.data(), GL_STATIC_DRAW);
+  glGenTextures(1, &tree.selflit_tex);
+  glActiveTexture(GL_TEXTURE0 + kSelfLitUnit);
+  glBindTexture(GL_TEXTURE_BUFFER, tree.selflit_tex);
+  glTexBuffer(GL_TEXTURE_BUFFER, GL_R8UI, tree.selflit_buf);
+  glActiveTexture(GL_TEXTURE0);
+  glBindBuffer(GL_TEXTURE_BUFFER, 0);
+  return marked;
 }
 
 void Tie3::envmap_second_pass_draw(const Tree& tree,
                                    const TfragRenderSettings& settings,
                                    SharedRenderState* render_state,
                                    ScopedProfilerNode& prof,
-                                   tfrag3::TieCategory category) {
+                                   tfrag3::TieCategory category,
+                                   const UnbakeTree* em_tree,
+                                   const UnbakeTree* nrm_tree) {
   first_tfrag_draw_setup(settings.camera, render_state, ShaderId::ETIE);
+  if (nrm_tree) {
+    unbake_bind_normals(render_state->shaders[ShaderId::ETIE].id(), *nrm_tree);
+  }
+  unbake_set_emissive_uniforms(render_state->shaders[ShaderId::ETIE].id(),
+                               em_tree ? m_unbake : nullptr, em_tree, settings.camera,
+                               m_my_id >= 0);
   glBindVertexArray(tree.vao);
   glBindBuffer(GL_ARRAY_BUFFER, tree.vertex_buffer);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,
@@ -658,6 +981,24 @@ void Tie3::envmap_second_pass_draw(const Tree& tree,
 
   init_etie_cam_uniforms(m_etie_uniforms, m_common_data.settings.camera);
   set_uniform(m_etie_uniforms.envmap_tod_tint, m_common_data.envmap_color);
+  {
+    // ws_selflit 2: the vertex mask on unit 58 (sampler bound at link), only under the map
+    const int sl = tree.selflit_tex && ws_world_on(render_state) ? 2 : 0;
+    if (sl) {
+      glActiveTexture(GL_TEXTURE0 + kSelfLitUnit);
+      glBindTexture(GL_TEXTURE_BUFFER, tree.selflit_tex);
+      glActiveTexture(GL_TEXTURE0);
+    }
+    // one program for every Tie3: the last value it was given
+    static GLuint last_prog = 0;
+    static int last_sl = 0;
+    const GLuint prog = render_state->shaders[ShaderId::ETIE].id();
+    if (prog != last_prog || sl != last_sl) {
+      glUniform1i(GLQ_LOC(PERF_OPT_GEOMETRY + 2, prog, "ws_selflit"), sl);
+      last_prog = prog;
+      last_sl = sl;
+    }
+  }
 
   int last_texture = -1;
   for (size_t draw_idx = tree.category_draw_indices[(int)category];
@@ -890,49 +1231,108 @@ void Tie3::render_tree_wind(int idx,
     return;
   }
 
-  // note: this isn't the most efficient because we might compute wind matrices for invisible
-  // instances. TODO: add vis ids to the instance info to avoid this
-  memset(tree.wind_matrix_cache.data(), 0, sizeof(float) * 16 * tree.wind_matrix_cache.size());
   auto& cam_bad = settings.camera.camera;
   std::array<math::Vector4f, 4> cam;
   for (int i = 0; i < 4; i++) {
     cam[i] = cam_bad[i];
   }
-
-  for (size_t inst_id = 0; inst_id < tree.instance_info->size(); inst_id++) {
-    auto& info = tree.instance_info->operator[](inst_id);
-    auto& out = tree.wind_matrix_cache[inst_id];
-    // auto& mat = tree.instance_info->operator[](inst_id).matrix;
-    auto mat = info.matrix;
-
-    ASSERT(info.wind_idx * 4 <= m_wind_vectors.size());
-    do_wind_math(info.wind_idx, m_wind_vectors.data(), m_wind_data,
-                 info.stiffness * m_wind_multiplier, mat);
-
-    // vmulax.xyzw acc, vf20, vf10
-    // vmadday.xyzw acc, vf21, vf10
-    // vmaddz.xyzw vf10, vf22, vf10
+  auto apply_cam = [&](const std::array<math::Vector4f, 4>& mat, std::array<math::Vector4f, 4>& out) {
     out[0] = cam[0] * mat[0].x() + cam[1] * mat[0].y() + cam[2] * mat[0].z();
-
-    // vmulax.xyzw acc, vf20, vf11
-    // vmadday.xyzw acc, vf21, vf11
-    // vmaddz.xyzw vf11, vf22, vf11
     out[1] = cam[0] * mat[1].x() + cam[1] * mat[1].y() + cam[2] * mat[1].z();
-
-    // vmulax.xyzw acc, vf20, vf12
-    // vmadday.xyzw acc, vf21, vf12
-    // vmaddz.xyzw vf12, vf22, vf12
     out[2] = cam[0] * mat[2].x() + cam[1] * mat[2].y() + cam[2] * mat[2].z();
-
-    // vmulax.xyzw acc, vf20, vf13
-    // vmadday.xyzw acc, vf21, vf13
-    // vmaddaz.xyzw acc, vf22, vf13
-    // vmaddw.xyzw vf13, vf23, vf0
     out[3] = cam[0] * mat[3].x() + cam[1] * mat[3].y() + cam[2] * mat[3].z() + cam[3];
+  };
+  // vista: the bend never changes, so it is computed once and only visible instances get the camera
+  const bool canopy = render_state->version == GameVersion::Jak1 && render_state->shadow.active &&
+                      Gfx::g_global_settings.shadow_canopy > 0.f;
+  const auto& gs = Gfx::g_global_settings;
+  const bool pbr = pbr_active(render_state) && gs.pbr_background && gs.pbr_wind_tie;
+  const bool ws = render_state->world_shadow.active && render_state->world_shadow.world;
+  const bool world = canopy || pbr || ws;  // keep the bent world matrix per instance
+  const bool vista_cache = m_my_id < 0 && m_wind_data.paused == 1 && Gfx::perf_opt(PERF_OPT_VISTA + 2);
+  if (vista_cache) {
+    // a cached matrix is reused only under the bit-identical camera it was made with
+    if (tree.wind_cam_epoch == 0 ||
+        std::memcmp(tree.wind_cam.data(), cam.data(), sizeof(cam)) != 0) {
+      tree.wind_cam = cam;
+      tree.wind_cam_epoch++;
+    }
+    if (tree.wind_bent.size() != tree.instance_info->size() ||
+        tree.wind_bent_mult != m_wind_multiplier) {
+      tree.wind_bent_mult = m_wind_multiplier;
+      tree.wind_bent.resize(tree.instance_info->size());
+      for (size_t inst_id = 0; inst_id < tree.instance_info->size(); inst_id++) {
+        auto& info = tree.instance_info->operator[](inst_id);
+        auto mat = info.matrix;
+        do_wind_math(info.wind_idx, m_wind_vectors.data(), m_wind_data,
+                     info.stiffness * m_wind_multiplier, mat);
+        tree.wind_bent[inst_id] = mat;
+      }
+      tree.wind_inst_epoch.assign(tree.instance_info->size(), 0);
+    }
+  } else {
+    tree.wind_bent.clear();  // the loop below overwrites wind_matrix_cache
+    if (world) {
+      tree.wind_world.resize(tree.instance_info->size());
+    }
+    // note: this isn't the most efficient because we might compute wind matrices for invisible
+    // instances. TODO: add vis ids to the instance info to avoid this
+    memset(tree.wind_matrix_cache.data(), 0, sizeof(float) * 16 * tree.wind_matrix_cache.size());
+
+    for (size_t inst_id = 0; inst_id < tree.instance_info->size(); inst_id++) {
+      auto& info = tree.instance_info->operator[](inst_id);
+      auto& out = tree.wind_matrix_cache[inst_id];
+      // auto& mat = tree.instance_info->operator[](inst_id).matrix;
+      auto mat = info.matrix;
+
+      ASSERT(info.wind_idx * 4 <= m_wind_vectors.size());
+      do_wind_math(info.wind_idx, m_wind_vectors.data(), m_wind_data,
+                   info.stiffness * m_wind_multiplier, mat);
+      if (world) {
+        tree.wind_world[inst_id] = mat;
+      }
+
+      // vmulax.xyzw acc, vf20, vf10
+      // vmadday.xyzw acc, vf21, vf10
+      // vmaddz.xyzw vf10, vf22, vf10
+      out[0] = cam[0] * mat[0].x() + cam[1] * mat[0].y() + cam[2] * mat[0].z();
+
+      // vmulax.xyzw acc, vf20, vf11
+      // vmadday.xyzw acc, vf21, vf11
+      // vmaddz.xyzw vf11, vf22, vf11
+      out[1] = cam[0] * mat[1].x() + cam[1] * mat[1].y() + cam[2] * mat[1].z();
+
+      // vmulax.xyzw acc, vf20, vf12
+      // vmadday.xyzw acc, vf21, vf12
+      // vmaddz.xyzw vf12, vf22, vf12
+      out[2] = cam[0] * mat[2].x() + cam[1] * mat[2].y() + cam[2] * mat[2].z();
+
+      // vmulax.xyzw acc, vf20, vf13
+      // vmadday.xyzw acc, vf21, vf13
+      // vmaddaz.xyzw acc, vf22, vf13
+      // vmaddw.xyzw vf13, vf23, vf0
+      out[3] = cam[0] * mat[3].x() + cam[1] * mat[3].y() + cam[2] * mat[3].z() + cam[3];
+    }
   }
 
   auto shader_id = ShaderId::TIE_WIND;
   first_tfrag_draw_setup(settings.camera, render_state, shader_id);
+  const GLuint wind_prog = render_state->shaders[shader_id].id();
+  if (canopy) {
+    canopy_set_uniforms(wind_prog, false);
+  } else {
+    canopy_disable(wind_prog);
+  }
+  world_shadows_set_uniforms(render_state, wind_prog, false);
+  glUniform1f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, wind_prog, "shadow_strength"),
+              render_state->shadow.active ? render_state->shadow.strength : 0.f);
+  PbrDrawState pbr_draw;
+  if (pbr) {
+    // no sidecar records for wind instances: the sun share comes from the bake
+    pbr_setup_background(render_state, wind_prog, m_unbake, nullptr, settings.camera);
+    swamp_setup_background(render_state, wind_prog, m_level_name);
+    pbr_draw.begin(wind_prog, m_tex_class, m_pbr_maps);
+  }
   glBindVertexArray(tree.vao);
   glBindBuffer(GL_ARRAY_BUFFER, tree.vertex_buffer);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,
@@ -940,6 +1340,8 @@ void Tie3::render_tree_wind(int idx,
 
   glActiveTexture(GL_TEXTURE10);
   glBindTexture(GL_TEXTURE_1D, tree.time_of_day_texture);
+  palette_glow_setup_tree(render_state, wind_prog, m_unbake, *tree.colors,
+                          tree.time_of_day_texture);
 
   glActiveTexture(GL_TEXTURE0);
   glEnable(GL_PRIMITIVE_RESTART);
@@ -947,6 +1349,15 @@ void Tie3::render_tree_wind(int idx,
 
   int last_texture = -1;
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, tree.wind_vertex_index_buffer);
+  const GLint cam_loc =
+      GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[shader_id].id(), "camera");
+  int canopy_emitter = -1;
+  // no highlight on wind TIE (the class shading here writes no highlight material): clear it
+  const bool material =
+      render_state->light_material && m_my_id <= (int)jak1::BucketId::SHRUB_GENERIC_LEVEL1;
+  if (material) {
+    SsaoRenderer::emissive_draw_buffers(true, false, true);
+  }
 
   for (size_t draw_idx = 0; draw_idx < tree.wind_draws->size(); draw_idx++) {
     const auto& draw = tree.wind_draws->operator[](draw_idx);
@@ -959,7 +1370,16 @@ void Tie3::render_tree_wind(int idx,
       }
       last_texture = draw.tree_tex_id;
     }
+    if (pbr) {
+      pbr_draw.set(draw.tree_tex_id);
+    }
     auto double_draw = setup_tfrag_shader(render_state, draw.mode, shader_id);
+    if (canopy) {
+      const bool tex_ok = m_level && draw.tree_tex_id >= 0 &&
+                          draw.tree_tex_id < (int)m_level->textures.size();
+      const s64 combo = tex_ok ? (s64)m_level->textures[draw.tree_tex_id].combo_id : -1;
+      canopy_set_emitter(wind_prog, canopy_keeps_light(draw.mode, combo), &canopy_emitter);
+    }
 
     int off = 0;
     for (auto& grp : draw.instance_groups) {
@@ -968,8 +1388,23 @@ void Tie3::render_tree_wind(int idx,
         continue;  // invisible, skip.
       }
 
-      glUniformMatrix4fv(glGetUniformLocation(render_state->shaders[shader_id].id(), "camera"), 1,
-                         GL_FALSE, tree.wind_matrix_cache.at(grp.instance_idx)[0].data());
+      if (vista_cache && tree.wind_inst_epoch[grp.instance_idx] != tree.wind_cam_epoch) {
+        tree.wind_inst_epoch[grp.instance_idx] = tree.wind_cam_epoch;
+        apply_cam(tree.wind_bent[grp.instance_idx], tree.wind_matrix_cache[grp.instance_idx]);
+      }
+      glUniformMatrix4fv(cam_loc, 1, GL_FALSE,
+                         tree.wind_matrix_cache.at(grp.instance_idx)[0].data());
+      if (world) {
+        const auto& w = vista_cache ? tree.wind_bent[grp.instance_idx]
+                                    : tree.wind_world[grp.instance_idx];
+        if (canopy || ws) {
+          canopy_set_instance(wind_prog, w[0].data());
+        }
+        if (pbr) {
+          glUniformMatrix4fv(GLQ_LOC(PERF_OPT_GEOMETRY + 2, wind_prog, "pbr_inst"), 1, GL_FALSE,
+                             w[0].data());
+        }
+      }
 
       prof.add_draw_call();
       prof.add_tri(grp.num);
@@ -984,10 +1419,12 @@ void Tie3::render_tree_wind(int idx,
         case DoubleDrawKind::AFAIL_NO_DEPTH_WRITE:
           prof.add_draw_call();
           prof.add_tri(grp.num);
-          glUniform1f(glGetUniformLocation(render_state->shaders[shader_id].id(), "alpha_min"),
-                      -10.f);
-          glUniform1f(glGetUniformLocation(render_state->shaders[shader_id].id(), "alpha_max"),
-                      double_draw.aref_second);
+          glUniform1f(
+              GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[shader_id].id(), "alpha_min"),
+              -10.f);
+          glUniform1f(
+              GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[shader_id].id(), "alpha_max"),
+              double_draw.aref_second);
           glDepthMask(GL_FALSE);
           glDrawElements(tree.draw_mode, draw.vertex_index_stream.size(), GL_UNSIGNED_INT,
                          (void*)0);
@@ -996,6 +1433,9 @@ void Tie3::render_tree_wind(int idx,
           ASSERT(false);
       }
     }
+  }
+  if (material) {
+    SsaoRenderer::emissive_draw_buffers(false);
   }
 }
 
@@ -1028,8 +1468,44 @@ Tie3WithEnvmapJak1::Tie3WithEnvmapJak1(const std::string& name, int my_id, int l
 void Tie3WithEnvmapJak1::render(DmaFollower& dma,
                                 SharedRenderState* render_state,
                                 ScopedProfilerNode& prof) {
-  Tie3::render(dma, render_state, prof);
+  if (render_state->bg_prepass) {
+    Tie3::render(dma, render_state, prof);
+    return;
+  }
+  constexpr GLenum kFragInvocations = 0x82F4;  // GL_FRAGMENT_SHADER_INVOCATIONS_ARB
+  bool frags = false;
+  if (Gfx::g_global_settings.ssao_gpu_timing) {
+    if (!m_frag_q[0]) {
+      glGenQueries(4, m_frag_q);
+    }
+    for (int i = 0; i < 4; i++) {
+      GLint ready = 0;
+      if (m_frag_pending[i]) {
+        glGetQueryObjectiv(m_frag_q[i], GL_QUERY_RESULT_AVAILABLE, &ready);
+      }
+      if (ready) {
+        GLuint64 n = 0;
+        glGetQueryObjectui64v(m_frag_q[i], GL_QUERY_RESULT, &n);
+        m_frag_pending[i] = false;
+        perf::count_add(perf::Counter::TIE_MFRAGS, (double)n / 1e6);
+      }
+    }
+    if (!m_frag_pending[m_frag_next]) {
+      glBeginQuery(kFragInvocations, m_frag_q[m_frag_next]);
+      frags = true;
+    }
+  }
+  {
+    perf::Scope ps(perf::Group::TIE);
+    Tie3::render(dma, render_state, prof);
+  }
+  if (frags) {
+    glEndQuery(kFragInvocations);
+    m_frag_pending[m_frag_next] = true;
+    m_frag_next = (m_frag_next + 1) % 4;
+  }
   if (m_enable_envmap) {
+    perf::Scope ps(perf::Group::ETIE);
     render_from_another(render_state, prof, tfrag3::TieCategory::NORMAL_ENVMAP);
   }
 }

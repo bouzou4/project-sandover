@@ -1,0 +1,101 @@
+# Temple rings (towertop) seen from the village1 hut roof: the loader-only stand-in (hut-temple-*)
+# against the game's own actor from the same camera with jungle loaded (ref-hut-temple-*) and from
+# the temple top (temple-top-*). Run with --play-look --wait-vista; kb/findings/2026-10-15-fix-temple-rings.md.
+schema: 1
+set: temple-rings
+defaults:
+  resolution: [3840, 2160]
+  msaa: 2
+  settle_frames: 600
+  effects: 'off'
+  wind: 'off'
+  particles: 'on'
+  jak: hide
+shots:
+- name: hut-temple-noon
+  continue: village1-hut
+  hour: 12
+  camera:
+    pos: [-614400.0, 450560.0, 614400.0]
+    rot: [-0.606805, 0.0, -0.794851, -0.045064, 0.998392, 0.034403, 0.793572, 0.056695, -0.605829]
+- name: hut-temple-dusk
+  continue: village1-hut
+  hour: 18
+  camera:
+    pos: [-614400.0, 450560.0, 614400.0]
+    rot: [-0.606805, 0.0, -0.794851, -0.045064, 0.998392, 0.034403, 0.793572, 0.056695, -0.605829]
+- name: ref-hut-temple-noon
+  continue: jungle-start
+  hour: 12
+  camera:
+    pos: [-614400.0, 450560.0, 614400.0]
+    rot: [-0.606805, 0.0, -0.794851, -0.045064, 0.998392, 0.034403, 0.793572, 0.056695, -0.605829]
+- name: ref-hut-temple-dusk
+  continue: jungle-start
+  hour: 18
+  camera:
+    pos: [-614400.0, 450560.0, 614400.0]
+    rot: [-0.606805, 0.0, -0.794851, -0.045064, 0.998392, 0.034403, 0.793572, 0.056695, -0.605829]
+- name: temple-top-noon
+  continue: jungle-start
+  hour: 12
+  camera:
+    pos: [1483980.8, 638976.0, -987545.6]
+    rot: [0.802639, 0.0, 0.596466, -0.052259, 0.996154, 0.070323, -0.594172, -0.087615, 0.799552]
+- name: temple-top-dusk
+  continue: jungle-start
+  hour: 18
+  camera:
+    pos: [1483980.8, 638976.0, -987545.6]
+    rot: [0.802639, 0.0, 0.596466, -0.052259, 0.996154, 0.070323, -0.594172, -0.087615, 0.799552]
+# near-*: the same view axis 130 m and 70 m from the rings; standin from village1-hut (jungle
+# loader-only), ref from jungle-start (the game's own actor). near130-standin-* show the game's
+# art, not the stand-in (most likely jungle is GOAL-resident there): no regression shot.
+- name: near130-standin-noon
+  continue: village1-hut
+  hour: 12
+  camera:
+    pos: [1061274.0, 570163.0, -664781.0]
+    rot: [-0.606805, 0.0, -0.794851, -0.045064, 0.998392, 0.034403, 0.793572, 0.056695, -0.605829]
+- name: near130-standin-dusk
+  continue: village1-hut
+  hour: 18
+  camera:
+    pos: [1061274.0, 570163.0, -664781.0]
+    rot: [-0.606805, 0.0, -0.794851, -0.045064, 0.998392, 0.034403, 0.793572, 0.056695, -0.605829]
+- name: near70-standin-noon
+  continue: village1-hut
+  hour: 12
+  camera:
+    pos: [1256653.0, 584090.0, -813875.0]
+    rot: [-0.606805, 0.0, -0.794851, -0.045064, 0.998392, 0.034403, 0.793572, 0.056695, -0.605829]
+- name: near70-standin-dusk
+  continue: village1-hut
+  hour: 18
+  camera:
+    pos: [1256653.0, 584090.0, -813875.0]
+    rot: [-0.606805, 0.0, -0.794851, -0.045064, 0.998392, 0.034403, 0.793572, 0.056695, -0.605829]
+- name: near130-ref-noon
+  continue: jungle-start
+  hour: 12
+  camera:
+    pos: [1061274.0, 570163.0, -664781.0]
+    rot: [-0.606805, 0.0, -0.794851, -0.045064, 0.998392, 0.034403, 0.793572, 0.056695, -0.605829]
+- name: near130-ref-dusk
+  continue: jungle-start
+  hour: 18
+  camera:
+    pos: [1061274.0, 570163.0, -664781.0]
+    rot: [-0.606805, 0.0, -0.794851, -0.045064, 0.998392, 0.034403, 0.793572, 0.056695, -0.605829]
+- name: near70-ref-noon
+  continue: jungle-start
+  hour: 12
+  camera:
+    pos: [1256653.0, 584090.0, -813875.0]
+    rot: [-0.606805, 0.0, -0.794851, -0.045064, 0.998392, 0.034403, 0.793572, 0.056695, -0.605829]
+- name: near70-ref-dusk
+  continue: jungle-start
+  hour: 18
+  camera:
+    pos: [1256653.0, 584090.0, -813875.0]
+    rot: [-0.606805, 0.0, -0.794851, -0.045064, 0.998392, 0.034403, 0.793572, 0.056695, -0.605829]

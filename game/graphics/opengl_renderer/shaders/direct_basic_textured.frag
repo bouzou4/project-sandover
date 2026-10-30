@@ -16,6 +16,7 @@ uniform int scissor_enable;
 uniform bool greater;
 // game width, game height, viewport width, viewport height
 uniform vec4 game_sizes;
+uniform int saturate_out;  // FP16 target: clamp like an 8-bit target
 
 uniform vec4 fog_color;
 
@@ -101,6 +102,9 @@ void main() {
   }
   if (tex_info.w == 1) {
     color.xyz = mix(color.xyz, fog_color.rgb, clamp(fog_color.a * fog, 0, 1));
+  }
+  if (saturate_out == 1) {
+    color = clamp(color, 0.0, 1.0);
   }
 
 }

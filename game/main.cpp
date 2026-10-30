@@ -19,7 +19,9 @@
 #include "common/versions/versions.h"
 
 #include "game/common/game_common_types.h"
+#include "graphics/gfx.h"
 #include "graphics/gfx_test.h"
+#include "sound/989snd/spatial.h"
 
 #include "third-party/CLI11.hpp"
 
@@ -100,6 +102,7 @@ int main(int argc, char** argv) {
   bool disable_save_location_override = false;
   std::string profile_until_event = "";
   std::string gpu_test = "";
+  std::string audio_spatial = "off";
   std::string gpu_test_out_path = "";
   int port_number = -1;
   fs::path project_path_override;
@@ -109,11 +112,17 @@ int main(int argc, char** argv) {
   app.add_flag("--version", show_version, "Display the built revision");
   app.add_option("-g,--game", game_name, "The game name: 'jak1' or 'jak2'");
   app.add_flag("-v,--verbose", verbose_logging, "Enable verbose logging on stdout");
-  app.add_flag(
+  app.add_option(
       "--port", port_number,
       "Specify port number for listener connection (default is 8112 for Jak 1 and 8113 for Jak 2)");
   app.add_flag("--no-avx2", disable_avx2, "Disable AVX2 for testing");
   app.add_flag("--no-display", disable_display, "Disable video display");
+  app.add_flag("--xr", Gfx::g_global_settings.xr_enable,
+               "Jak 1: submit stereo frames to the active OpenXR runtime");
+  app.add_flag("--xr-fake", Gfx::g_global_settings.xr_fake,
+               "Jak 1, with --xr: scripted head pose (pc-set-xr-fake-option) instead of tracking");
+  app.add_option("--audio-spatial", audio_spatial,
+                 "Jak 1 positional sound output: off, binaural, surround or objects");
   app.add_flag("--profile", enable_profiling, "Enables profiling immediately from startup");
   app.add_flag("--portable", enable_portable,
                "Save settings and saves relative to the game's executable, takes precedence over "
@@ -137,6 +146,15 @@ int main(int argc, char** argv) {
   define_common_cli_arguments(app);
   app.allow_extras();
   CLI11_PARSE(app, argc, argv);
+
+  if (auto mode = snd::SpatialModeFromName(audio_spatial)) {
+    if (game_name == "jak1") {
+      snd::g_spatial_mode_request = *mode;
+      snd::g_spatial_mode_from_cli = app.count("--audio-spatial") > 0;
+    }
+  } else {
+    lg::error("--audio-spatial: unknown mode '{}'", audio_spatial);
+  }
 
   // Log the version the game is compiled against so we don't have to guess
   lg::info("Compiled Version: {}", build_revision());
@@ -239,6 +257,25 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     lg::error("Failed to setup logging: {}", e.what());
     return 1;
+  }
+
+  // The Audio page's Spatial output is OpenAL Soft's config, read on its first call: set it
+  // here, before the sound system starts. --audio-spatial overrides the saved row.
+  if (game_name == "jak1" && !snd::g_spatial_mode_from_cli) {
+    const auto path = file_util::get_user_settings_dir(GameVersion::Jak1) /
+                      snd::SavedAudioFileName(Gfx::g_global_settings.xr_enable);
+    try {
+      if (fs::exists(path)) {
+        const auto saved = snd::ParseSavedAudio(file_util::read_text_file(path));
+        lg::info("[audio] saved output read from {}: {}", path.filename().string(),
+                 snd::SavedOutputName(saved.output));
+        if (saved.output == snd::AudioOutput::Objects) {
+          snd::ConfigureObjectsAtStart(saved.device);
+        }
+      }
+    } catch (const std::exception& e) {
+      lg::warn("[audio] could not read the saved audio output: {}", e.what());
+    }
   }
 
   bool force_debug_next_time = false;

@@ -1,0 +1,247 @@
+# Emissive tuning. Read by `sandover-materials emitter-score`
+# (sandover/tools/sandover/materials/emitter_score.py); see kb/howto/materials.md "Emitter score".
+#
+# The score separates true emitters (lamps, lava, crystals, screens) from lit receivers (walls,
+# logs, stones that the bake lit with a lamp's light). It is a logistic of a weighted sum:
+#
+#   p = 1 / (1 + exp(-(bias + sum_i weight_i * component_i)))
+#
+# Every component is in [0, 1] except `correlation`, which is in [-1, 1]. Positive weights push
+# towards "emitter", negative towards "receiver".
+
+[emitter_score]
+bias = -1.0
+# Texels at or above this E count as covered (same as the emissive maps' COVERED).
+covered = 0.1
+# Texels with alpha at or below this are ignored (PS2 alpha 128 = opaque, stored as 128/255).
+alpha_min = 0.05
+# Score at or above which a texture is an emitter. `--validate` lowers it if a human-confirmed
+# emitter scores below it (kb/findings/2026-09-24-emitter-score.md).
+threshold = 0.5
+
+[emitter_score.weights]
+# (a) Pearson correlation between the E map and the albedo luma over opaque texels.
+correlation = 2.0
+# (b) Fraction of texels with E >= covered. Receivers under a lamp are lit all over.
+coverage = -1.5
+# (c) Mean corner falloff (max - min) / max of E over the lit triangles drawing the texture.
+gradient = -3.0
+# (d) Fraction of the texture's triangles, over every level, that are lit.
+consistency = 3.0
+# (e) Prior of the dominant E source (table below).
+slot = 2.0
+# (f) E-weighted mean albedo luma: emitters are bright where they glow.
+brightness = 3.0
+
+[emitter_score.slot_prior]
+# Dominant mood slot role of the texture's E (emissive-maps index `role`).
+flames = 0.8
+lava = 0.9
+light = 0.6
+fade-lights = 0.6
+static = 0.6
+night = 0.4
+lightning = 0.1
+caustics = 0.1
+fade = 0.1
+# Luminance-sourced maps: a human marked the texture emissive, or it is a named lava fallback.
+luminance = 1.0
+
+[emitter_score.ladder]
+# Queue defaults: receivers start at this strength (the ladder's lowest step).
+receiver_default = 0.015625
+
+[emitter_score.export]
+# `sandover-unbake export-sidecar` multiplies the E of every receiver (score below the
+# threshold, not an anchor, no human row) by this. 0 = receivers stop glowing, 1 = as baked.
+# Human ladder rows and overrides always win; anchors and human emitters are never scaled.
+receiver_scale = 0.0
+
+[actor_emissive]
+# E for textures the bake cannot flag: particles (sprite renderer) and merc models.
+# Read by `sandover-materials actor-emissive` (sandover/tools/sandover/materials/actor_emissive.py),
+# which seeds override and ladder rows and exports the engine table; see kb/howto/materials.md
+# "Actor emissive table" and kb/findings/2026-09-24-eco-brightness.md.
+#
+# Rule: bloom adds about strength x w x (peak - threshold) inside an element, w = smoothstep(ramp, E).
+# The ladder step is the highest quarter octave that keeps the element's baked peak under `cap`.
+ramp = [0.1, 0.4]   # the engine's E ramp (pc-set-ssao-param 16/17 defaults)
+threshold = 0.3     # bloom threshold (pc-set-bloom 3 default)
+strength = 1.0      # bloom strength (pc-set-bloom 1 default)
+cap = 0.98
+# The look on top of the rule, in octaves of E: 1 = rule + 1 octave (eco-001 pick D).
+# Safe for colour only with the engine's hue-preserving bloom clip (pc-set-bloom 4, on by default).
+octaves = 1.0
+
+# peak: the element's baked peak (90th percentile of the brightest channel over its brightest
+# unclipped pixels) at 23:00 in vanilla, from the eco-emitters shots; the brightest element using the
+# texture wins. peak = 1.0: the element already clips in vanilla (vent 30%, power cell 10% of its
+# box at 1.0 at night, about half at noon), so no step above the ramp keeps it under the cap;
+# `step` then sets it directly.
+# min_chroma (sprites only): particle textures are shared (bigpuff is also dust and smoke), so a
+# sprite writes E only where its vertex colour is at least this saturated.
+# lights (default 1): share of the texture's E that feeds the screen-space tile lights. Bloom and
+# the SSAO fade always take the full E. 0 = glows and blooms but lights nothing (precursor orbs,
+# design decision 2026-09-26). Engine: emissive mask green, see kb/howto/ssao.md.
+[[actor_emissive.textures]]
+name = "bigpuff"
+combo_id = "0x00020000"
+tpage = "effects"
+element = "eco puffs, fire"
+peak = 0.61
+min_chroma = 0.5
+
+[[actor_emissive.textures]]
+name = "hotdot"
+combo_id = "0x0002000f"
+tpage = "effects"
+element = "eco cores"
+peak = 0.61
+min_chroma = 0.5
+
+[[actor_emissive.textures]]
+name = "middot"
+combo_id = "0x00020004"
+tpage = "effects"
+element = "vent sparks"
+peak = 1.0
+step = 0.105
+min_chroma = 0.5
+
+[[actor_emissive.textures]]
+name = "starflash"
+combo_id = "0x00020012"
+tpage = "effects"
+element = "vent and power cell flashes"
+peak = 1.0
+step = 0.105
+min_chroma = 0.3
+
+[[actor_emissive.textures]]
+name = "flare"
+combo_id = "0x00020002"
+tpage = "effects"
+element = "power cell flares"
+peak = 1.0
+step = 0.105
+# cell flares are 0 or 255 per channel; pale-yellow haze (grotto shafts, 192,192,128) stays out
+min_chroma = 0.5
+
+[[actor_emissive.textures]]
+name = "lightning"
+combo_id = "0x0002001f"
+tpage = "effects"
+element = "vent and eco platform arcs"
+peak = 0.94
+min_chroma = 0.3
+
+[[actor_emissive.textures]]
+name = "lightning2"
+combo_id = "0x00020023"
+tpage = "effects"
+element = "vent and eco platform arcs"
+peak = 0.94
+min_chroma = 0.3
+
+[[actor_emissive.textures]]
+name = "lightning3"
+combo_id = "0x00020024"
+tpage = "effects"
+element = "vent and eco platform arcs"
+peak = 0.94
+min_chroma = 0.3
+
+[[actor_emissive.textures]]
+name = "citadel-shield"
+combo_id = "0x0002000c"
+tpage = "effects"
+element = "eco beams (mirror beam, shields)"
+peak = 0.53
+min_chroma = 0.3
+
+[[actor_emissive.textures]]
+name = "hud-egg"
+combo_id = "0x0002002c"
+tpage = "effects"
+element = "precursor orb glow sprite"
+peak = 0.71
+min_chroma = 0.0
+lights = 0.0
+
+[[actor_emissive.textures]]
+name = "egg-ndimadman"
+combo_id = "0x01cf002c"
+tpage = "common"
+element = "precursor orb model (merc)"
+peak = 0.71
+min_chroma = 0.0
+lights = 0.0
+
+[[actor_emissive.textures]]
+name = "fuel-cell-inside"
+combo_id = "0x01cf0007"
+tpage = "common"
+element = "power cell core (merc)"
+peak = 1.0
+step = 0.105
+min_chroma = 0.0
+
+[emissive_lights]
+# Screen-space emissive tile lights: emissive pixels (E mask x frame colour) are
+# pooled into a 64-wide tile grid, the 32 brightest tiles become point lights, and opaque
+# pixels within `radius_m` get a soft coloured glow. Needs SSAO on. Engine:
+# game/graphics/opengl_renderer/EmissiveLights.h; forms from `sandover-preset apply emissive <name>`
+# (`default` is this table, `off` disables). Finding: kb/findings/2026-09-25-emissive-tile-lights.md.
+intensity = 8.0     # pc-set-emissive-lights 1: scale of the added light
+radius_m = 4.0      # pc-set-emissive-lights 2: metres from a light at which its glow ends
+falloff = 2.0       # pc-set-emissive-lights 3: exponent of (1 - d / radius)
+threshold = 0.02    # pc-set-emissive-lights 4: mean tile flux (luma) below which a tile is no light
+# Fixed in EmissiveLights.cpp, not knobs: a tile is thin (arcs, sparks; keeps 15% of its power)
+# once its fill drops under 0.2 and compact again above 0.5; summed light soft-limited to 0.35 luma.
+# World light list: the nearest `world_count` census emitters that are on
+# become lights too, so vents, cells, lamps and crystals keep lighting when off screen or small.
+# Table: `sandover-lights bake` (kb/howto/lights.md). Power = colour x class intensity x gain;
+# world lights have priority: the tiles near one give no light (world_suppress below).
+world_count = 16            # pc-set-emissive-lights 5: lights per frame, 0 = off (max 32)
+world_strong = 0.08         # 6: vents, power cells, crystals, lava, lit precursor trim
+world_weak = 0.01           # 7: eco, crate contents, race rings (orbs are not in the table)
+world_arc = 0.005           # 8: lightning arcs (fixed; the tiles near them give no light)
+world_particle = 0.05       # 9: part spawners, times the group's light strength
+world_radius_scale = 1.0    # 10: times the baked radius
+world_radius_max_m = 8.0    # 11: cap on a world light's radius
+world_lamp = 0.12           # 12: lamps and torches (static E on night / flame slots)
+world_glow = 0.3            # 18: props lit by design (snow ice crystals); 8 tile slots of their own
+eco_strength = 2.5          # 28: eco shots and blasts, power per unit of the group's colour; 4 tile slots; 27 = on/off
+# Highlights: every tile, world and actor light also adds a GGX lobe from the material
+# shading's roughness and F0 (carried in the emissive mask's b, a). Needs material shading.
+highlights = 1.0            # 20: on / off
+highlight_strength = 2.0    # 21: scale of the lobe
+highlight_max = 1.5         # 22: soft limit of the summed highlight (brightest channel)
+highlight_damp = 0.5        # 23: roughness cut on porous classes in enclosed (one-slot) levels
+# Temporal stability (snapshot run 2026-09-25: lava and orb light flickered with camera motion).
+# Candidate tiles are matched to 32 fixed world-space light slots (LightTracker.h); per frame, not
+# per second. A world light takes over every tile within world_suppress x its radius.
+temporal_blend = 0.25       # 13: share of the new tile position/colour/power taken per frame (1 = none)
+temporal_frames = 3         # 14: frames a tile light must be seen to appear, or missed to go
+fade_frames = 8             # 15: frames of fade in and out
+world_suppress = 1.0        # 16: tiles within this x a world light's radius give no light (0 = off)
+
+# `sandover-lights bake` settings (not engine knobs); the table is compiled into gk.
+[emissive_lights.bake]
+static_cap = 48             # static clusters kept per level, biggest energy (E x lit area) first
+lava_cap = 256              # lava clusters (role lava) per level, their own cap: lava lights from the table
+static_energy_ref = 1.0     # a static's gain = min(1, energy / this)
+radius_cap_m = 12.0         # baked radius = min(cap, max(census hint, class floor))
+radius_min = { lamp = 7.0 } # class floors: a lamp hangs 2-3 m over the street it lights
+named_cap = 128             # statics on textures named as lights (rol-light, fin-light) per level, their own cap
+glass_cap = 512             # statics on lamp glass per level, their own cap (all of them: citadel has 260)
+glass_gain = 4608.0         # lamp glass bakes as class weak x this (no actor light): lights the wall as the tiles it replaced
+prop_cap = 256              # prop lights (prop_lights.json) per level; lavatube has 247 vent-fire tiles
+
+# Rig debug baseline for `sandover-lights flicker --baseline`: no smoothing, no hysteresis, no
+# fade, no world priority. Not the pre-tracking build; that baseline is a master build.
+[emissive_lights.presets.unsmoothed]
+temporal_blend = 1.0
+temporal_frames = 1
+fade_frames = 1
+world_suppress = 0.0

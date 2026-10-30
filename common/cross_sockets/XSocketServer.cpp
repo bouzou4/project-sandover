@@ -1,6 +1,8 @@
 // clang-format off
 #include "XSocketServer.h"
 
+#include <cstdlib>
+
 #include "common/cross_sockets/XSocket.h"
 #include "common/common_types.h"
 
@@ -72,7 +74,16 @@ bool XSocketServer::init_server(bool failure_may_occur) {
   }
 
   addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = INADDR_ANY;
+  // Loopback-only by default so Windows Firewall doesn't prompt; set OPENGOAL_LISTEN_ALL to
+  // bind all interfaces instead.
+  const char* listen_all = getenv("OPENGOAL_LISTEN_ALL");
+  if (listen_all && listen_all[0] != '\0') {
+    addr.sin_addr.s_addr = INADDR_ANY;
+  } else if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) <= 0) {
+    lg::error("[XSocketServer:{}] inet_pton() failed", tcp_port);
+    close_server_socket();
+    return false;
+  }
   addr.sin_port = htons(tcp_port);
 
   if (bind(listening_socket, (sockaddr*)&addr, sizeof(addr)) < 0) {

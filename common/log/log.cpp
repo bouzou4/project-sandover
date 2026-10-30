@@ -1,9 +1,12 @@
 #include "log.h"
 
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <deque>
 #include <mutex>
+#include <string_view>
 
 #include "fmt/color.h"
 #ifdef _WIN32  // see lg::initialize
@@ -14,6 +17,7 @@
 #include "common/util/Assert.h"
 #include "common/util/FileUtil.h"
 #include "common/util/string_util.h"
+#include "common/util/unicode_util.h"
 
 namespace lg {
 struct Logger {
@@ -26,6 +30,9 @@ struct Logger {
   level flush_level = level::trace;
   std::mutex mutex;
   bool disable_colors = false;
+  // last lines of output for bug reports (lg::recent_lines); `partial` holds an unfinished print
+  std::deque<std::string> recent;
+  std::string partial;
 
   ~Logger() {
     // will run when program exits.
@@ -36,6 +43,22 @@ struct Logger {
 };
 
 Logger gLogger;
+
+constexpr size_t kRecentMax = 400;
+
+// caller holds gLogger.mutex
+static void remember(std::string_view text) {
+  gLogger.partial.append(text);
+  size_t start = 0, nl;
+  while ((nl = gLogger.partial.find('\n', start)) != std::string::npos) {
+    gLogger.recent.emplace_back(gLogger.partial, start, nl - start);
+    if (gLogger.recent.size() > kRecentMax) {
+      gLogger.recent.pop_front();
+    }
+    start = nl + 1;
+  }
+  gLogger.partial.erase(0, start);
+}
 
 namespace internal {
 const char* log_level_names[] = {"trace", "debug", "info", "warn", "error", "die", "die"};
@@ -58,6 +81,7 @@ void log_message(level log_level, LogTime& now, const char* message) {
 
   {
     std::lock_guard<std::mutex> lock(gLogger.mutex);
+    remember(fmt::format("{} [{}] {}\n", time_string, log_level_names[int(log_level)], message));
     if (gLogger.fp && log_level >= gLogger.file_log_level) {
       // log to file
       std::string file_string =
@@ -99,6 +123,7 @@ void log_print(const char* message) {
     // We always immediately flush prints because since it has no associated level
     // it could be anything from a fatal error to a useless debug log.
     std::lock_guard<std::mutex> lock(gLogger.mutex);
+    remember(message);
     if (gLogger.fp) {
       // Log to File
       std::string msg(message);
@@ -121,6 +146,16 @@ void log_vprintf(const char* format, va_list arg_list) {
     std::lock_guard<std::mutex> lock(gLogger.mutex);
     va_list arg_list_2;
     va_copy(arg_list_2, arg_list);
+    {
+      va_list arg_list_3;
+      va_copy(arg_list_3, arg_list);
+      char buf[1024];
+      int n = vsnprintf(buf, sizeof(buf), format, arg_list_3);
+      va_end(arg_list_3);
+      if (n > 0) {
+        remember(std::string_view(buf, std::min<size_t>(n, sizeof(buf) - 1)));
+      }
+    }
     if (gLogger.fp) {
       // Log to File
       vfprintf(gLogger.fp, format, arg_list);
@@ -149,8 +184,12 @@ void set_file(const std::string& filename,
               const std::string& dir) {
   ASSERT(!gLogger.fp);
   std::string file_path;
+  // OPENGOAL_LOG_DIR moves the logs out of <project>/log, e.g. one directory per instance
+  const std::string env_dir = dir.empty() ? get_env("OPENGOAL_LOG_DIR") : "";
   if (!dir.empty()) {
     file_path = file_util::combine_path(dir, filename);
+  } else if (!env_dir.empty()) {
+    file_path = file_util::combine_path(env_dir, filename);
   } else {
     file_path = file_util::get_file_path({"log", filename});
   }
@@ -162,9 +201,11 @@ void set_file(const std::string& filename,
     auto old_log_files =
         file_util::find_files_in_dir(fs::path(complete_filename).parent_path(),
                                      std::regex(fmt::format("{}\\.(\\d\\.)?log", filename)));
+    // a log another running instance still holds open cannot be removed on Windows: skip it
+    std::error_code ec;
     for (const auto& file : old_log_files) {
       lg::debug("removing {}", file.string());
-      fs::remove(file);
+      fs::remove(file, ec);
     }
     // remove the oldest log file if there are more than LOG_ROTATE_MAX
     auto existing_log_files = file_util::find_files_in_dir(
@@ -175,7 +216,7 @@ void set_file(const std::string& filename,
       lg::debug("removing {} log files", existing_log_files.size() - (LOG_ROTATE_MAX - 1));
       for (int i = 0; i < (int)existing_log_files.size() - (LOG_ROTATE_MAX - 1); i++) {
         lg::debug("removing {}", existing_log_files.at(i).string());
-        fs::remove(existing_log_files.at(i));
+        fs::remove(existing_log_files.at(i), ec);
       }
     }
   } else {
@@ -190,6 +231,12 @@ void set_file(const std::string& filename,
     gLogger.fp = file_util::open_file(complete_filename.c_str(), "w");
   }
   ASSERT(gLogger.fp);
+}
+
+std::vector<std::string> recent_lines(size_t n) {
+  std::lock_guard<std::mutex> lock(gLogger.mutex);
+  const size_t first = gLogger.recent.size() > n ? gLogger.recent.size() - n : 0;
+  return {gLogger.recent.begin() + first, gLogger.recent.end()};
 }
 
 void set_flush_level(level log_level) {

@@ -45,19 +45,18 @@ void ProfilerNode::sort(ProfilerSort mode) {
   if (mode == ProfilerSort::NONE) {
     return;
   }
-  std::sort(m_children.begin(), m_children.end(),
-            [=](const ProfilerNode& a, const ProfilerNode& b) {
-              switch (mode) {
-                case ProfilerSort::DRAW_CALLS:
-                  return a.m_stats.draw_calls > b.m_stats.draw_calls;
-                case ProfilerSort::TIME:
-                  return a.m_stats.duration > b.m_stats.duration;
-                case ProfilerSort::TRIANGLES:
-                  return a.m_stats.triangles > b.m_stats.triangles;
-                default:
-                  ASSERT(false);
-              }
-            });
+  m_children.sort([=](const ProfilerNode& a, const ProfilerNode& b) {
+    switch (mode) {
+      case ProfilerSort::DRAW_CALLS:
+        return a.m_stats.draw_calls > b.m_stats.draw_calls;
+      case ProfilerSort::TIME:
+        return a.m_stats.duration > b.m_stats.duration;
+      case ProfilerSort::TRIANGLES:
+        return a.m_stats.triangles > b.m_stats.triangles;
+      default:
+        ASSERT(false);
+    }
+  });
   for (auto& child : m_children) {
     child.sort(mode);
   }

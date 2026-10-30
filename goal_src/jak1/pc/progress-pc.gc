@@ -103,6 +103,16 @@
 
 (define *carousell-frame-rate* *carousell-frame-rate-150fps*)
 
+(def-progress-carousell *carousell-sandover-upscaler* (sandover-up-fsr3))
+
+(def-progress-carousell *carousell-sandover-upscaler-dlss* (sandover-up-fsr3 sandover-up-dlss))
+
+;; the value is the index: FSR 4 (2) needs the DLSS entry before it, skipped where DLSS cannot run
+(def-progress-carousell *carousell-sandover-upscaler-all* (sandover-up-fsr3 sandover-up-dlss sandover-up-fsr4))
+
+;; the Windows default, then the engine's device list (its length is set when the row opens)
+(def-progress-carousell *carousell-sandover-audio-device* (sandover-audio-default sandover-audio-dev-1 sandover-audio-dev-2 sandover-audio-dev-3 sandover-audio-dev-4 sandover-audio-dev-5 sandover-audio-dev-6 sandover-audio-dev-7 sandover-audio-dev-8 sandover-audio-dev-9 sandover-audio-dev-10 sandover-audio-dev-11 sandover-audio-dev-12 sandover-audio-dev-13 sandover-audio-dev-14 sandover-audio-dev-15 sandover-audio-dev-16))
+
 ;; pad remap stuff
 (define *progress-pad-timeout* (the-as time-frame 0)) ;; timeout for remap buttons
 
@@ -133,6 +143,12 @@
             :name (text-id sound-options)
             :scale #t
             :param3 (game-option-menu sound-settings))
+       (new 'static
+            'game-option
+            :option-type (game-option-type menu)
+            :name (text-id sandover-options)
+            :scale #t
+            :param3 (game-option-menu sandover))
        (new 'static
             'game-option
             :option-type (game-option-type menu)
@@ -182,6 +198,12 @@
             :name (text-id sound-options)
             :scale #t
             :param3 (game-option-menu sound-settings))
+       (new 'static
+            'game-option
+            :option-type (game-option-type menu)
+            :name (text-id sandover-options)
+            :scale #t
+            :param3 (game-option-menu sandover))
        (new 'static
             'game-option
             :option-type (game-option-type menu)
@@ -672,6 +694,461 @@
        (new 'static 'game-option :option-type (game-option-type on-off) :name (text-id cutscene-skips) :scale #t)
        (new 'static 'game-option :option-type (game-option-type on-off) :name (text-id speedrunner-mode) :scale #t)
        (new 'static 'game-option :option-type (game-option-type button) :name (text-id back) :scale #t)))
+
+(defun sandover-calibration-available? ()
+  "HDR output is requested and the engine presents HDR (not the SDR fallback)."
+  (and (-> *pc-settings* sandover hdr-target?)
+       (!= (-> *pc-settings* sandover hdr-output) 2)
+       (nonzero? (pc-get-hdr-output 0))))
+
+;; The Sandover rows that edit a field of *sandover-fields* (pckernel-impl.gc, loaded before the menu's
+;; text ids and carousels exist): the field, the list values of a list row, and the parent field whose
+;; off state (a switch #f, a list 0) greys the row, as vanilla rendering greys every row.
+(deftype sandover-menu-row (structure)
+  ((name     text-id)
+   (field    string)
+   (parent   string)
+   (carousel (array text-id))))
+
+(define *sandover-menu*
+  (new 'static 'boxed-array :type sandover-menu-row
+    (new 'static 'sandover-menu-row :name (text-id sandover-vanilla) :field "vanilla-rendering?")
+    (new 'static 'sandover-menu-row :name (text-id sandover-ssao) :field "ssao?")
+    (new 'static 'sandover-menu-row :name (text-id sandover-ssao-quality) :field "ssao-quality" :parent "ssao?"
+      :carousel (new 'static 'boxed-array :type text-id (text-id sandover-quality-low) (text-id sandover-quality-medium) (text-id sandover-quality-high) (text-id sandover-quality-ultra)))
+    ;; tile lights read the SSAO pass's camera-space depth and normals
+    (new 'static 'sandover-menu-row :name (text-id sandover-tile-lights) :field "tile-lights?" :parent "ssao?")
+    (new 'static 'sandover-menu-row :name (text-id sandover-bloom) :field "bloom?")
+    (new 'static 'sandover-menu-row :name (text-id sandover-shadows) :field "shadows?")
+    (new 'static 'sandover-menu-row :name (text-id sandover-shadow-quality) :field "shadow-quality" :parent "shadows?"
+      :carousel (new 'static 'boxed-array :type text-id (text-id sandover-quality-low) (text-id sandover-quality-medium) (text-id sandover-quality-high)))
+    (new 'static 'sandover-menu-row :name (text-id sandover-materials) :field "materials?")
+    (new 'static 'sandover-menu-row :name (text-id sandover-fur) :field "fur?")
+    (new 'static 'sandover-menu-row :name (text-id sandover-water) :field "water?")
+    (new 'static 'sandover-menu-row :name (text-id sandover-glint) :field "glint?")
+    (new 'static 'sandover-menu-row :name (text-id sandover-neighbours) :field "neighbours?")
+    (new 'static 'sandover-menu-row :name (text-id sandover-sun) :field "sun?")
+    (new 'static 'sandover-menu-row :name (text-id sandover-motion-blur) :field "motion-blur"
+      :carousel (new 'static 'boxed-array :type text-id (text-id off) (text-id sandover-mb-weak) (text-id sandover-quality-medium) (text-id sandover-mb-strong)))
+    (new 'static 'sandover-menu-row :name (text-id sandover-camera-blur) :field "camera-blur" :parent "motion-blur"
+      :carousel (new 'static 'boxed-array :type text-id (text-id off) (text-id sandover-cb-vehicles) (text-id sandover-cb-always)))
+    (new 'static 'sandover-menu-row :name (text-id sandover-contact-shadows) :field "contact-shadows?")
+    (new 'static 'sandover-menu-row :name (text-id sandover-fp16) :field "fp16-target?")
+    (new 'static 'sandover-menu-row :name (text-id sandover-hdr-output) :field "hdr-output"
+      :carousel (new 'static 'boxed-array :type text-id (text-id sandover-hdr-scrgb) (text-id sandover-hdr-pq) (text-id off)))
+    (new 'static 'sandover-menu-row :name (text-id sandover-paper-white) :field "paper-white-nits")
+    (new 'static 'sandover-menu-row :name (text-id sandover-hdr-peak) :field "hdr-peak-nits")
+    (new 'static 'sandover-menu-row :name (text-id sandover-hdr-black) :field "hdr-black-nits")
+    (new 'static 'sandover-menu-row :name (text-id sandover-upscaler) :field "upscaler")
+    (new 'static 'sandover-menu-row :name (text-id sandover-render-scale) :field "render-scale"
+      :carousel (new 'static 'boxed-array :type text-id (text-id sandover-scale-100) (text-id sandover-scale-77) (text-id sandover-scale-67) (text-id sandover-scale-59) (text-id sandover-scale-50) (text-id sandover-scale-33)))
+    (new 'static 'sandover-menu-row :name (text-id sandover-audio-output) :field "audio-output"
+      :carousel (new 'static 'boxed-array :type text-id (text-id sandover-audio-auto) (text-id sandover-audio-stereo) (text-id sandover-audio-51) (text-id sandover-audio-71) (text-id sandover-audio-headphones) (text-id sandover-audio-spatial)))))
+
+(defun sandover-menu-find ((name text-id))
+  "The menu row of a text id, or #f."
+  (let ((found (the-as sandover-menu-row #f)))
+    (dotimes (i (-> *sandover-menu* length))
+      (if (and (not found) (= name (-> *sandover-menu* i name)))
+        (set! found (-> *sandover-menu* i))))
+    found))
+
+(defun sandover-row-disabled? ((name text-id))
+  "A row is greyed by vanilla rendering and while its parent field is off."
+  (or (sandover-vanilla? (-> *pc-settings* sandover))
+      (let ((row (sandover-menu-find name)))
+        (and row
+             (nonzero? (the-as int (-> row parent)))
+             (sandover-field-off? (-> *pc-settings* sandover) (-> *sandover-fields* (sandover-field-find (-> row parent))))))))
+
+(defmacro sandover-row (type name)
+  "A menu row greyed by sandover-row-disabled?."
+  `(new 'static 'game-option
+        :option-type (game-option-type ,type)
+        :name (text-id ,name)
+        :scale #t
+        :option-disabled-func (lambda () (sandover-row-disabled? (text-id ,name)))))
+
+;; Sandover enhancements. Rows bind by name (sandover-option-pointer), not by index. Vanilla rendering
+;; (upstream's path) greys every other row.
+(define *sandover-options*
+  (new 'static
+       'boxed-array
+       :type
+       game-option
+       (new 'static 'game-option :option-type (game-option-type on-off) :name (text-id sandover-vanilla) :scale #t)
+       (sandover-row on-off sandover-ssao)
+       (sandover-row sandover-list sandover-ssao-quality)
+       ;; tile lights read the SSAO pass's camera-space depth and normals
+       (sandover-row on-off sandover-tile-lights)
+       (sandover-row on-off sandover-bloom)
+       (sandover-row on-off sandover-shadows)
+       (sandover-row sandover-list sandover-shadow-quality)
+       (sandover-row on-off sandover-materials)
+       (sandover-row on-off sandover-fur)
+       (sandover-row on-off sandover-water)
+       (sandover-row on-off sandover-glint)
+       (sandover-row on-off sandover-neighbours)
+       (sandover-row on-off sandover-sun)
+       (sandover-row sandover-list sandover-motion-blur)
+       (sandover-row sandover-list sandover-camera-blur)
+       (new 'static
+            'game-option
+            :option-type (game-option-type on-off)
+            :name (text-id sandover-contact-shadows)
+            :scale #t
+            :option-disabled-func
+            ;; the ray darkens the shadow maps' direct share and converges in the temporal AA pass
+            (lambda ()
+              (or (sandover-vanilla? (-> *pc-settings* sandover))
+                  (not (-> *pc-settings* sandover shadows?))
+                  (not (sandover-temporal-upscaler?))
+                  (sandover-stereo-engine?))))
+       (sandover-row on-off sandover-fp16)
+       (new 'static
+            'game-option
+            :option-type (game-option-type sandover-list)
+            :name (text-id sandover-hdr-output)
+            :scale #t
+            :option-disabled-func
+            ;; VR: the eyes are SDR and the window mirror presents SDR
+            (lambda ()
+              (or (sandover-vanilla? (-> *pc-settings* sandover))
+                  (not (-> *pc-settings* sandover hdr-target?))
+                  (sandover-xr-session?))))
+       (new 'static
+            'game-option
+            :option-type (game-option-type menu)
+            :name (text-id sandover-hdr-calibration)
+            :scale #t
+            :param3 (game-option-menu sandover-calibration)
+            :option-disabled-func
+            (lambda ()
+              (or (sandover-vanilla? (-> *pc-settings* sandover))
+                  (not (sandover-calibration-available?))
+                  (sandover-xr-session?))))
+       ;; the upscaler first: it decides what the render scale row's entries are named; in stereo
+       ;; and XR it runs per eye (no DLSS there), and the render scale sizes each eye's frame
+       (new 'static
+            'game-option
+            :option-type (game-option-type sandover-list)
+            :name (text-id sandover-upscaler)
+            :scale #t
+            :option-disabled-func
+            (lambda ()
+              (or (sandover-vanilla? (-> *pc-settings* sandover)) (not (sandover-temporal-upscaler?)))))
+       (new 'static
+            'game-option
+            :option-type (game-option-type sandover-list)
+            :name (text-id sandover-render-scale)
+            :scale #t
+            :option-disabled-func
+            (lambda ()
+              (or (sandover-vanilla? (-> *pc-settings* sandover))
+                  (not (or (sandover-temporal-upscaler?) (sandover-xr-session?))))))
+       ;; sound is not rendering: vanilla rendering leaves the page available
+       (new 'static
+            'game-option
+            :option-type (game-option-type menu)
+            :name (text-id sandover-audio)
+            :scale #t
+            :param3 (game-option-menu sandover-audio))
+       (new 'static 'game-option :option-type (game-option-type button) :name (text-id sandover-bug-report) :scale #t)
+       (new 'static 'game-option :option-type (game-option-type button) :name (text-id back) :scale #t)))
+
+;; HDR calibration, under the Sandover page. Each slider shows a test pattern while focused.
+(define *sandover-calibration-options*
+  (new 'static
+       'boxed-array
+       :type
+       game-option
+       (new 'static
+            'game-option
+            :option-type (game-option-type slider)
+            :name (text-id sandover-hdr-peak)
+            :scale #t
+            :param1 400.0
+            :param2 10000.0
+            :slider-step-size 10.0
+            :slider-show-decimal? #f)
+       (new 'static
+            'game-option
+            :option-type (game-option-type slider)
+            :name (text-id sandover-paper-white)
+            :scale #t
+            :param1 80.0
+            :param2 400.0
+            :slider-step-size 1.0
+            :slider-show-decimal? #f)
+       (new 'static
+            'game-option
+            :option-type (game-option-type slider)
+            :name (text-id sandover-hdr-black)
+            :scale #t
+            :param1 0.0
+            :param2 1.0
+            :slider-step-size 0.002
+            :slider-show-decimal? #t)
+       (new 'static 'game-option :option-type (game-option-type button) :name (text-id sandover-hdr-reset) :scale #t)
+       (new 'static 'game-option :option-type (game-option-type button) :name (text-id back) :scale #t)))
+
+;; the Device row edits an index into the engine's list; the settings keep the device's name
+(deftype sandover-audio-menu (structure)
+  ((device-index int32)
+   (mode         int32))) ;; pc-get-audio-state 0 when the page last drew (-1: no sound system)
+
+(define *sandover-audio-menu* (new 'static 'sandover-audio-menu))
+
+(define *sandover-audio-text* (new 'global 'string 128 (the-as string #f)))
+(define *sandover-audio-text-2* (new 'global 'string 128 (the-as string #f)))
+
+(defun sandover-audio-device-sync! ()
+  "Read the engine's device list again; the Device row's cursor goes to the saved device, or to
+   the Windows default when that is not in the list."
+  (let ((n (min 16 (pc-get-audio-state 5))))
+    (set! (-> *carousell-sandover-audio-device* length) (+ n 1))
+    (set! (-> *sandover-audio-menu* device-index) 0)
+    (string<-charp *sandover-audio-device-str* (-> *pc-settings* sandover audio-device))
+    (when (nonzero? (length *sandover-audio-device-str*))
+      (dotimes (i n)
+        (if (and (pc-get-audio-string 1 i *sandover-audio-text*) (string= *sandover-audio-text* *sandover-audio-device-str*))
+          (set! (-> *sandover-audio-menu* device-index) (+ i 1))))))
+  0)
+
+(defun sandover-audio-device-pick! ()
+  "The Device row is confirmed: save the picked device's name (empty for the Windows default)."
+  (let ((i (-> *sandover-audio-menu* device-index)))
+    (if (and (> i 0) (pc-get-audio-string 1 (+ i -1) *sandover-audio-text*))
+      (charp<-string (-> *pc-settings* sandover audio-device) *sandover-audio-text*)
+      (set! (-> *pc-settings* sandover audio-device 0) 0)))
+  0)
+
+(defun sandover-audio-device-row-string ()
+  "Device row text: the Windows default, or the device the engine runs (the default when the saved
+   one cannot be opened)."
+  (string-format "~S: ~S"
+                 (lookup-text! *common-text* (text-id sandover-audio-device) #f)
+                 (cond
+                   ((zero? (-> *pc-settings* sandover audio-device 0))
+                    (lookup-text! *common-text* (text-id sandover-audio-default) #f))
+                   ((pc-get-audio-string 8 0 *sandover-audio-text*) *sandover-audio-text*)
+                   (else "?"))))
+
+;; Audio, under the Sandover page: output layout, device and a speaker test
+(define *sandover-audio-options*
+  (new 'static
+       'boxed-array
+       :type
+       game-option
+       (new 'static
+            'game-option
+            :option-type (game-option-type sandover-list)
+            :name (text-id sandover-audio-output)
+            :scale #t
+            :option-disabled-func
+            (lambda ()
+              (sandover-audio-held?))
+            :on-confirm
+            (lambda ()
+              ;; a pick here ends the command line's output for the session
+              (set! *sandover-audio-cli* -1)
+              (none)))
+       (new 'static
+            'game-option
+            :option-type (game-option-type sandover-list)
+            :name (text-id sandover-audio-device)
+            :scale #t
+            :option-disabled-func
+            (lambda ()
+              (sandover-audio-held?))
+            :on-confirm
+            (lambda ()
+              (sandover-audio-device-pick!)
+              (none)))
+       (new 'static
+            'game-option
+            :option-type (game-option-type button)
+            :name (text-id sandover-audio-test)
+            :scale #t
+            :option-disabled-func
+            (lambda ()
+              (< (-> *sandover-audio-menu* mode) 0)))
+       (new 'static 'game-option :option-type (game-option-type button) :name (text-id back) :scale #t)))
+
+(defun sandover-option-pointer ((name text-id))
+  "The *pc-settings* field a Sandover row edits: symbol for on-off rows, int32 for list rows."
+  (let ((row (sandover-menu-find name)))
+    (cond
+      (row
+       (the-as pointer
+               (sandover-field-addr (-> *pc-settings* sandover) (-> *sandover-fields* (sandover-field-find (-> row field))))))
+      ((= name (text-id sandover-audio-device)) (&-> *sandover-audio-menu* device-index))
+      (else (the-as pointer 0)))))
+
+;; render scale entries: percent, and the quality name for FSR 3.1's ratios
+(define *sandover-render-millionths* (new 'static 'boxed-array :type int32 1000000 769231 666667 588235 500000 333333))
+(define *sandover-render-quality*
+  (new 'static 'boxed-array :type text-id
+    (text-id sandover-uq-native) (text-id zero) (text-id sandover-uq-quality) (text-id sandover-uq-balanced)
+    (text-id sandover-uq-performance) (text-id sandover-uq-ultra)))
+;; DLSS's modes for the same ratios: each percent lies in that mode's render size range (NGX)
+(define *sandover-render-quality-dlss*
+  (new 'static 'boxed-array :type text-id
+    (text-id sandover-uq-dlaa) (text-id sandover-uq-quality) (text-id sandover-uq-quality) (text-id sandover-uq-balanced)
+    (text-id sandover-uq-performance) (text-id sandover-uq-ultra)))
+
+(define *sandover-scale-text* (new 'global 'string 64 (the-as string #f)))
+
+(defun sandover-display-size ((w (pointer int64)) (h (pointer int64)))
+  "The size the game draws at before the render scale: what pc-set-game-resolution gets."
+  (cond
+    ((= (pc-get-display-mode) 'windowed)
+     (set! (-> w) (-> *pc-settings* framebuffer-scissor-width))
+     (set! (-> h) (-> *pc-settings* framebuffer-scissor-height)))
+    (else
+     (set! (-> w) (-> *pc-settings* width))
+     (set! (-> h) (-> *pc-settings* height))))
+  0)
+
+(defun sandover-carousell-text ((id text-id))
+  "A list value's text. Render scale entries carry the quality name and the render size at the current
+   display size: 67% (QUALITY, 2560X1440). Audio device entries are the engine's device names."
+  (let ((k (- (the int id) (the int (text-id sandover-audio-dev-1)))))
+    (when (and (>= k 0) (< k 16))
+      (return (if (pc-get-audio-string 0 k *sandover-audio-text-2*)
+                *sandover-audio-text-2*
+                (lookup-text! *common-text* id #f)))))
+  (let ((i (case id
+             (((text-id sandover-scale-100)) 0)
+             (((text-id sandover-scale-77)) 1)
+             (((text-id sandover-scale-67)) 2)
+             (((text-id sandover-scale-59)) 3)
+             (((text-id sandover-scale-50)) 4)
+             (((text-id sandover-scale-33)) 5)
+             (else -1))))
+    (cond
+      ((< i 0) (lookup-text! *common-text* id #f))
+      ((sandover-xr-session?)
+       ;; the share of the eye frame (pc-get-xr-state), no upscaler names
+       (let ((m (* 0.000001 (the float (-> *sandover-render-millionths* i))))
+             (w (pc-get-xr-state 1))
+             (h (pc-get-xr-state 2)))
+         (clear *sandover-scale-text*)
+         (if (and (> w 0) (> h 0))
+           (format *sandover-scale-text*
+                   (lookup-text! *common-text* (text-id sandover-scale-eye) #f)
+                   (lookup-text! *common-text* id #f)
+                   (max 64 (the int (+ 0.5 (* (the float w) m))))
+                   (max 64 (the int (+ 0.5 (* (the float h) m)))))
+           (format *sandover-scale-text* "~S" (lookup-text! *common-text* id #f)))
+         *sandover-scale-text*))
+      (else
+       (let ((w 0)
+             (h 0)
+             (m (-> *sandover-render-millionths* i))
+             (q (-> (if (= (-> *pc-settings* sandover upscaler) 1) *sandover-render-quality-dlss* *sandover-render-quality*) i)))
+         (sandover-display-size (& w) (& h))
+         ;; in floats as the engine does (pipelines/opengl.cpp): w * m overflows 32-bit GOAL ints at 4K
+         (let ((rw (max 64 (the int (+ 0.5 (* (the float w) (* 0.000001 (the float m)))))))
+               (rh (max 64 (the int (+ 0.5 (* (the float h) (* 0.000001 (the float m))))))))
+           ;; its own buffer: the caller formats the row label with string-format's shared one
+           (clear *sandover-scale-text*)
+           (if (!= q (text-id zero))
+             (format *sandover-scale-text* "~S (~S, ~DX~D)" (lookup-text! *common-text* id #f) (lookup-text! *common-text* q #f) rw rh)
+             (format *sandover-scale-text* "~S (~DX~D)" (lookup-text! *common-text* id #f) rw rh))
+           *sandover-scale-text*))))))
+
+(defun sandover-option-list ((name text-id))
+  "The value names of a Sandover list row."
+  (let ((row (sandover-menu-find name)))
+    (cond
+      ((and row (nonzero? (the-as int (-> row carousel)))) (-> row carousel))
+      ((= name (text-id sandover-audio-device)) *carousell-sandover-audio-device*)
+      ;; DLSS and FSR 4 are offered only where they can run (a file can still name one; the engine
+      ;; then falls back to FSR 3.1)
+      ((or (nonzero? (pc-get-aa-available 2)) (= (-> *pc-settings* sandover upscaler) 2))
+       *carousell-sandover-upscaler-all*)
+      ((or (nonzero? (pc-get-aa-available 1)) (= (-> *pc-settings* sandover upscaler) 1))
+       *carousell-sandover-upscaler-dlss*)
+      (else *carousell-sandover-upscaler*))))
+
+(defun sandover-list-skip? ((name text-id) (idx int))
+  "A list entry the row cannot pick on this machine: the upscalers that cannot run here."
+  (and (= name (text-id sandover-upscaler))
+       (or (and (= idx 1) (zero? (pc-get-aa-available 1)))
+           (and (= idx 2) (zero? (pc-get-aa-available 2))))))
+
+(defun sandover-calibration-detected ((name text-id))
+  "What the display reports for a calibration row, in nits (the engine's fallback before it is queried)."
+  (case name
+    (((text-id sandover-hdr-peak))
+     (let ((v (* 0.001 (the float (pc-get-hdr-output 1))))) (if (< v 0.0) 800.0 v)))
+    (((text-id sandover-hdr-black))
+     (let ((v (* 0.001 (the float (pc-get-hdr-output 2))))) (if (< v 0.0) 0.0 v)))
+    (else 200.0)))
+
+(defun sandover-calibration-row? ((name text-id))
+  (case name
+    (((text-id sandover-hdr-peak) (text-id sandover-paper-white) (text-id sandover-hdr-black)) #t)
+    (else #f)))
+
+(defun sandover-calibration-value ((name text-id))
+  "A calibration row's value in nits; a field that follows the display reads as the detected value."
+  (let ((v (-> (the-as (pointer float) (sandover-option-pointer name)))))
+    (if (< v 0.0) (sandover-calibration-detected name) v)))
+
+(define *sandover-calibration-string* (new 'global 'string 64 (the-as string #f)))
+
+(defun sandover-calibration-value-string ((name text-id))
+  "The value with its unit, in a buffer of its own (string-format's would be cleared by the caller's)."
+  (let ((v (sandover-calibration-value name)))
+    (if (= name (text-id sandover-hdr-black))
+      (format (clear *sandover-calibration-string*) (lookup-text! *common-text* (text-id sandover-hdr-black-nits) #f) v)
+      (format (clear *sandover-calibration-string*)
+              (lookup-text! *common-text* (text-id sandover-hdr-nits) #f)
+              (the int (+ 0.5 v)))))
+  *sandover-calibration-string*)
+
+(defun sandover-calibration-row-string ((name text-id))
+  "Row text: name, value, and DETECTED while the value follows the display."
+  (if (< (-> (the-as (pointer float) (sandover-option-pointer name))) 0.0)
+    (string-format "~S: ~S (~S)"
+                   (lookup-text! *common-text* name #f)
+                   (sandover-calibration-value-string name)
+                   (lookup-text! *common-text* (text-id sandover-hdr-detected) #f))
+    (string-format "~S: ~S" (lookup-text! *common-text* name #f) (sandover-calibration-value-string name))))
+
+(defun sandover-calibration-reset ()
+  "Back to what the display reports, and paper white to its default."
+  (set! (-> *pc-settings* sandover hdr-peak) -1.0)
+  (set! (-> *pc-settings* sandover hdr-black) -1.0)
+  (set! (-> *pc-settings* sandover paper-white) 200.0)
+  (none))
+
+(defun sandover-calibration-focus ()
+  "The calibration row under the cursor while the page is up and settled, else 0."
+  (let ((proc (if *progress-process* (-> *progress-process* 0))))
+    (if (or (not proc)
+            (!= (-> proc display-state) (progress-screen sandover-calibration))
+            (-> proc in-transition))
+      (return (the-as text-id 0)))
+    (-> *sandover-calibration-options* (max 0 (min (1- (-> *sandover-calibration-options* length)) (-> proc option-index))) name)))
+
+(defun sandover-calibration-pattern ()
+  "The test pattern for the focused calibration row: 1 peak, 2 paper white, 3 black, 0 none."
+  (case (sandover-calibration-focus)
+    (((text-id sandover-hdr-peak)) 1)
+    (((text-id sandover-paper-white)) 2)
+    (((text-id sandover-hdr-black)) 3)
+    (else 0)))
+
+(set! *sandover-calibration-pattern-func* sandover-calibration-pattern)
+
+(defun sandover-menu-editing? ()
+  "A menu row is being edited: its backup belongs to the active profile, so the profile holds."
+  (if (and *progress-process* (-> *progress-process* 0 selected-option)) #t #f))
+
+(set! *sandover-menu-editing-func* sandover-menu-editing?)
 
 (define *gfx-ps2-options*
   (new 'static
@@ -1407,7 +1884,7 @@
   (let ((s5-0 (if arg3 arg2 (- arg2))))
     (+! (-> arg1 origin x) (the float s5-0))
     (let ((f30-0 (- 1.0 (* 0.0033333334 (the float arg2)))))
-      (print-game-text-scaled (lookup-text! *common-text* arg0 #f) f30-0 arg1 (the int (* 128.0 f30-0))))
+      (print-game-text-scaled (sandover-carousell-text arg0) f30-0 arg1 (the int (* 128.0 f30-0))))
     (set! (-> arg1 origin x) (- (-> arg1 origin x) (the float s5-0))))
   (set! (-> arg1 color) (font-color default))
   arg1)
@@ -2110,6 +2587,9 @@
   (set! (-> *options-remap* (progress-screen speedrun-options)) *speedrun-options*)
   (set! (-> *options-remap* (progress-screen speedrun-il-options)) *speedrun-il-options*)
   (set! (-> *options-remap* (progress-screen speedrun-cat-ext-options)) *speedrun-cat-ext-options*)
+  (set! (-> *options-remap* (progress-screen sandover)) *sandover-options*)
+  (set! (-> *options-remap* (progress-screen sandover-calibration)) *sandover-calibration-options*)
+  (set! (-> *options-remap* (progress-screen sandover-audio)) *sandover-audio-options*)
   ;; set default params
   (set! (-> *progress-state* aspect-ratio-choice) (get-aspect-ratio))
   (set! (-> *progress-state* video-mode-choice) (get-video-mode))
@@ -2170,6 +2650,13 @@
   (set! (-> *sound-options-pc* 0 value-to-modify) (&-> *pc-settings* memcard-volume-sfx))
   (set! (-> *sound-options-pc* 1 value-to-modify) (&-> *pc-settings* memcard-volume-music))
   (set! (-> *sound-options-pc* 2 value-to-modify) (&-> *pc-settings* memcard-volume-dialog))
+  (dotimes (i (-> *sandover-options* length))
+    (set! (-> *sandover-options* i value-to-modify) (sandover-option-pointer (-> *sandover-options* i name))))
+  (dotimes (i (-> *sandover-calibration-options* length))
+    (set! (-> *sandover-calibration-options* i value-to-modify)
+          (sandover-option-pointer (-> *sandover-calibration-options* i name))))
+  (dotimes (i (-> *sandover-audio-options* length))
+    (set! (-> *sandover-audio-options* i value-to-modify) (sandover-option-pointer (-> *sandover-audio-options* i name))))
   (dotimes (i (1- (-> *cheats* length)))
     (set! (-> *cheats* i value-to-modify) (&-> *progress-carousell* symbol-backup)))
   ;(set! (-> *sound-options-pc* 3 value-to-modify) (&-> *pc-settings* music-fadein?))
@@ -2289,6 +2776,19 @@
                    ;; updated.
                    (set! (-> *progress-carousell* transition) #t)
                    (set! (-> *progress-carousell* direction) #t)
+                   (set! sound? #t))
+                  (((game-option-type sandover-list))
+                   ;; edits the backup; the field is written on confirm. Entries this machine cannot
+                   ;; run are stepped over (sandover-list-skip?)
+                   (let ((n (length (-> *progress-carousell* current-carousell)))
+                         (row (-> options (-> obj option-index) name)))
+                     (dotimes (k n)
+                       (when (or (zero? k) (sandover-list-skip? row (-> *progress-carousell* int-backup)))
+                         (if (> (-> *progress-carousell* int-backup) 0)
+                           (+! (-> *progress-carousell* int-backup) -1)
+                           (set! (-> *progress-carousell* int-backup) (1- n))))))
+                   (set! (-> *progress-carousell* transition) #t)
+                   (set! (-> *progress-carousell* direction) #t)
                    (set! sound? #t)))
                 (if sound? (sound-play "cursor-l-r")))))
            (else
@@ -2372,6 +2872,17 @@
                           (1- (length (-> *progress-carousell* current-carousell))))
                      (1+! (-> (the-as (pointer int) (-> options (-> obj option-index) value-to-modify))))
                      (set! (-> (the-as (pointer int) (-> options (-> obj option-index) value-to-modify))) 0))
+                   (set! (-> *progress-carousell* transition) #t)
+                   (set! (-> *progress-carousell* direction) #f)
+                   (set! sound? #t))
+                  (((game-option-type sandover-list))
+                   (let ((n (length (-> *progress-carousell* current-carousell)))
+                         (row (-> options (-> obj option-index) name)))
+                     (dotimes (k n)
+                       (when (or (zero? k) (sandover-list-skip? row (-> *progress-carousell* int-backup)))
+                         (if (< (-> *progress-carousell* int-backup) (1- n))
+                           (+! (-> *progress-carousell* int-backup) 1)
+                           (set! (-> *progress-carousell* int-backup) 0)))))
                    (set! (-> *progress-carousell* transition) #t)
                    (set! (-> *progress-carousell* direction) #f)
                    (set! sound? #t)))
@@ -2471,6 +2982,17 @@
                   ;; exit demo!
                   (set! *master-exit* 'force)
                   (set-master-mode 'game))
+                 (((text-id sandover-hdr-reset))
+                  (sandover-calibration-reset)
+                  (commit-to-file *pc-settings*)
+                  (sound-play "cursor-options"))
+                 (((text-id sandover-audio-test))
+                  ;; no menu sound: the bursts start at once
+                  (pc-audio-speaker-test))
+                 (((text-id sandover-bug-report))
+                  (sound-play "select-option")
+                  (sandover-bug-report-from-menu)
+                  (hide-progress-screen))
                  (((text-id back))
                   ;; go back!
                   (if (= (-> obj display-state) (progress-screen settings)) (sound-play "menu-stats") (sound-play "cursor-options"))
@@ -2647,7 +3169,14 @@
                (case (-> options (-> obj option-index) option-type)
                  (((game-option-type slider))
                   (set! (-> *progress-state* slider-backup)
-                        (-> (the-as (pointer float) (-> options (-> obj option-index) value-to-modify)))))
+                        (-> (the-as (pointer float) (-> options (-> obj option-index) value-to-modify))))
+                  ;; a calibration field that follows the display starts from the detected value
+                  (when (and (sandover-calibration-row? (-> options (-> obj option-index) name))
+                             (< (-> *progress-state* slider-backup) 0.0))
+                    (set! (-> (the-as (pointer float) (-> options (-> obj option-index) value-to-modify)))
+                          (fmax (-> options (-> obj option-index) param1)
+                                (fmin (-> options (-> obj option-index) param2)
+                                      (sandover-calibration-detected (-> options (-> obj option-index) name)))))))
                  (((game-option-type language))
                   (set! (-> *progress-state* language-backup)
                         (-> (the-as (pointer language-enum) (-> options (-> obj option-index) value-to-modify)))))
@@ -2706,7 +3235,13 @@
                  (((game-option-type language-text))
                   (let ((cur-lang (get-language-name (-> *pc-settings* text-language))))
                     (dotimes (i (-> *text-languages* length))
-                      (if (= (-> *text-languages* i) cur-lang) (set! (-> *progress-carousell* int-backup) i))))))
+                      (if (= (-> *text-languages* i) cur-lang) (set! (-> *progress-carousell* int-backup) i)))))
+                 (((game-option-type sandover-list))
+                  ;; the device list is read when its row opens
+                  (if (= (-> options (-> obj option-index) name) (text-id sandover-audio-device))
+                    (sandover-audio-device-sync!))
+                  (set! (-> *progress-carousell* int-backup)
+                        (-> (the-as (pointer int32) (-> options (-> obj option-index) value-to-modify))))))
                (sound-play "select-option")
                (cpad-clear! 0 x)
                (cpad-clear! 0 circle)
@@ -2730,7 +3265,9 @@
                     (((game-option-type speaker)) (set! (-> *progress-carousell* current-carousell) *carousell-speaker*))
                     (((game-option-type frame-rate)) (set! (-> *progress-carousell* current-carousell) *carousell-frame-rate*))
                     (((game-option-type language-subtitles)) (set! (-> *progress-carousell* current-carousell) *subtitle-languages*))
-                    (((game-option-type language-text)) (set! (-> *progress-carousell* current-carousell) *text-languages*))))))))
+                    (((game-option-type language-text)) (set! (-> *progress-carousell* current-carousell) *text-languages*))
+                    (((game-option-type sandover-list))
+                     (set! (-> *progress-carousell* current-carousell) (sandover-option-list (-> options (-> obj option-index) name))))))))))
            (else
             ;; an option was selected. write stuff!
             (if (= (-> options (-> obj option-index) option-type) (game-option-type confirmation))
@@ -2796,7 +3333,10 @@
                  ((0) (set-frame-rate! *pc-settings* 60 #t))
                  ((1) (set-frame-rate! *pc-settings* 100 #t))
                  ((2) (set-frame-rate! *pc-settings* 150 #t)))
-               (set-video-mode (-> *setting-control* default video-mode))))
+               (set-video-mode (-> *setting-control* default video-mode)))
+              (((game-option-type sandover-list))
+               (set! (-> (the-as (pointer int32) (-> options (-> obj option-index) value-to-modify)))
+                     (-> *progress-carousell* int-backup))))
             ;; if the option has a `on-confirm` function, run it
             (when (nonzero? (-> options (-> obj option-index) on-confirm))
               ((-> options (-> obj option-index) on-confirm)))
@@ -3010,6 +3550,18 @@
                             font
                             #f
                             (the int (* 128.0 (-> obj transition-percentage-invert)))
+                            22))
+          ;; the profile the page edits
+          (((progress-screen sandover))
+           (set-color! font (font-color progress-yellow))
+           (set-origin! font (- 17 (-> obj left-x-offset)) 14)
+           (set-scale! font (* 0.5 (-> obj transition-percentage-invert)))
+           (print-game-text (lookup-text! *common-text*
+                                          (if (= *sandover-profile* 'vr) (text-id sandover-profile-vr) (text-id sandover-profile-flat))
+                                          #f)
+                            font
+                            #f
+                            (the int (* 128.0 (-> obj transition-percentage-invert)))
                             22)))
         (dotimes (index (length options))
           (let ((option-str (the string #f)) ;; the option text
@@ -3110,9 +3662,13 @@
                             (color (logior (logand a0-34 -65281) (shr (shl (shr (shl a0-34 56) 56) 56) 48))))
                        (draw-percent-bar (- 75 (-> obj left-x-offset)) (+ y-off 8) percentage (the-as rgba color))
                        (set! option-x (+ (the int (* 2.5 (* 100.0 percentage))) -100)))
-                     (if (= (-> options index slider-show-decimal?) #t)
-                       (set! option-str (string-format "~,,1f" (-> (the-as (pointer float) (-> options index value-to-modify)))))
-                       (set! option-str (string-format "~D" (the int (-> (the-as (pointer float) (-> options index value-to-modify))))))))
+                     (cond
+                       ((sandover-calibration-row? (-> options index name))
+                        (set! option-str (sandover-calibration-value-string (-> options index name))))
+                       ((= (-> options index slider-show-decimal?) #t)
+                        (set! option-str (string-format "~,,1f" (-> (the-as (pointer float) (-> options index value-to-modify))))))
+                       (else
+                        (set! option-str (string-format "~D" (the int (-> (the-as (pointer float) (-> options index value-to-modify)))))))))
                     (((game-option-type on-off) (game-option-type normal-inverted) (game-option-type aspect-native))
                      ;; on-off option or some other toggle. same logic as yes-no. changed to cut down code duping.
                      (let ((on-str (case (-> options index option-type)
@@ -3165,6 +3721,11 @@
                                                                font
                                                                y-off
                                                                (-> (the-as (pointer int) (-> options index value-to-modify)))))
+                    (((game-option-type sandover-list))
+                     (progress-draw-carousell-from-string-list (-> *progress-carousell* current-carousell)
+                                                               font
+                                                               y-off
+                                                               (-> *progress-carousell* int-backup)))
                     (((game-option-type language))
                      ;; language carousell. who knew this could be so complicated.
                      (let ((old-lang (-> obj language-selection))
@@ -3227,7 +3788,9 @@
                       (game-option-type normal-inverted)
                       (game-option-type confirmation))
                      ;; slider and aspect ratio options just show their text
-                     (set! option-str (lookup-text! *common-text* (-> options index name) #f)))
+                     (if (sandover-calibration-row? (-> options index name))
+                       (set! option-str (sandover-calibration-row-string (-> options index name)))
+                       (set! option-str (lookup-text! *common-text* (-> options index name) #f))))
                     (((game-option-type on-off) (game-option-type aspect-native))
                      ;; on-off options show their text + on or off
                      (set! option-str
@@ -3300,7 +3863,19 @@
                      (set! option-str
                            (string-format "~S: ~S"
                                           (lookup-text! *common-text* (-> options index name) #f)
-                                          (lookup-text! *common-text* (get-language-name (-> *pc-settings* text-language)) #f)))))))))
+                                          (lookup-text! *common-text* (get-language-name (-> *pc-settings* text-language)) #f))))
+                    (((game-option-type sandover-list))
+                     (let ((texts (sandover-option-list (-> options index name))))
+                       (set! option-str
+                             (if (= (-> options index name) (text-id sandover-audio-device))
+                             (sandover-audio-device-row-string)
+                             (string-format "~S: ~S"
+                                            (lookup-text! *common-text* (-> options index name) #f)
+                                            (sandover-carousell-text
+                                              (-> texts
+                                                  (max 0
+                                                       (min (1- (length texts))
+                                                            (-> (the-as (pointer int32) (-> options index value-to-modify)))))))))))))))))
             (when (or (<= (length options) PROGRESS_PC_PAGE_HEIGHT)
                       (and (not (progress-scrolling?)) (>= index *progress-scroll-start*) (< index *progress-scroll-end*))
                       (and (progress-scrolling-down?) (>= index (1- *progress-scroll-start*)) (< index *progress-scroll-end*))
@@ -3354,6 +3929,175 @@
                           (-> obj transition-percentage-invert)
                           arg0
                           128)
+  0)
+
+(defun draw-sandover-calibration-hint ((obj progress))
+  "Under the calibration rows: what the display reports and how to set the focused row, and a
+   note when the frame is SDR (the patterns are then only a preview)."
+  (let ((font (new 'stack 'font-context *font-default-matrix* 0 0 0.0 (font-color default) (font-flags shadow kerning)))
+        (name (sandover-calibration-focus))
+        (alpha (the int (* 128.0 (-> obj transition-percentage-invert))))
+        (y 132))
+    (set-width! font 370)
+    (set-height! font 20)
+    (set! (-> font flags) (font-flags shadow kerning middle middle-vert large))
+    (set-scale! font (* 0.5 (-> obj transition-percentage-invert)))
+    (set-origin! font (- 17 (-> obj left-x-offset)) y)
+    (when (sandover-calibration-row? name)
+      (set-color! font (font-color default))
+      (print-game-text (case name
+                         (((text-id sandover-hdr-peak))
+                          (string-format (lookup-text! *common-text* (text-id sandover-hdr-display) #f)
+                                         (the int (+ 0.5 (sandover-calibration-detected name)))))
+                         (((text-id sandover-hdr-black))
+                          (string-format (lookup-text! *common-text* (text-id sandover-hdr-display-black) #f)
+                                         (sandover-calibration-detected name)))
+                         (else
+                          (let ((white (* 0.001 (the float (pc-get-hdr-output 6)))))
+                            (if (> white 0.0)
+                              (string-format (lookup-text! *common-text* (text-id sandover-hdr-desktop-white) #f)
+                                             (the int (+ 0.5 white)))
+                              (lookup-text! *common-text* (text-id sandover-hdr-default-paper) #f)))))
+                       font
+                       #f
+                       alpha
+                       22)
+      (set! (-> font origin y) (the float (+ y 12)))
+      (set-color! font (font-color progress-yellow))
+      (print-game-text (lookup-text! *common-text*
+                                     (case name
+                                       (((text-id sandover-hdr-peak)) (text-id sandover-hdr-hint-peak))
+                                       (((text-id sandover-hdr-black)) (text-id sandover-hdr-hint-black))
+                                       (else (text-id sandover-hdr-hint-paper)))
+                                     #f)
+                       font
+                       #f
+                       alpha
+                       22))
+    (when (zero? (pc-get-hdr-output 0))
+      (set! (-> font origin y) (the float (+ y 24)))
+      (set-color! font (font-color menu-invalid))
+      (print-game-text (lookup-text! *common-text* (text-id sandover-hdr-sdr) #f) font #f alpha 22)))
+  0)
+
+(defun sandover-audio-line ((font font-context) (color font-color) (text string) (y int) (alpha int))
+  "One status message from y down; returns the y after it. The font wraps at about 52 characters
+   and centres the lines on the origin, so a wrapped message starts half a line per extra line lower."
+  (let ((lines (+ 1 (/ (max 0 (+ (length text) -1)) 52))))
+    (set-color! font color)
+    (set! (-> font origin y) (the float (+ y (* 6 (+ lines -1)))))
+    (print-game-text text font #f alpha 22)
+    (+ y (* 12 lines))))
+
+(defun sandover-audio-spatial-shown? ((obj progress))
+  "The Output row is highlighted and shows Spatial (the saved value, or the entry being picked)."
+  (and (= (-> *sandover-audio-options* (max 0 (min (1- (-> *sandover-audio-options* length)) (-> obj option-index))) name)
+          (text-id sandover-audio-output))
+       ;; a list row edits int-backup until it is confirmed
+       (if (and (-> obj selected-option) (= (-> *progress-carousell* current-carousell) (sandover-option-list (text-id sandover-audio-output))))
+         (= (-> *progress-carousell* int-backup) 5)
+         (= (-> *pc-settings* sandover audio-output) 5))))
+
+(defun draw-sandover-audio-status ((obj progress))
+  "Under the Audio rows: the speaker being tested, the device, the game's output layout and mode,
+   what Windows reports for the device, and a warning when they disagree."
+  (let ((font (new 'stack 'font-context *font-default-matrix* 0 0 0.0 (font-color default) (font-flags shadow kerning)))
+        (alpha (the int (* 128.0 (-> obj transition-percentage-invert))))
+        (mode (pc-get-audio-state 0))
+        (y 124))
+    (set! (-> *sandover-audio-menu* mode) mode)
+    (set-width! font 370)
+    (set-height! font 20)
+    (set! (-> font flags) (font-flags shadow kerning middle middle-vert large))
+    (set-scale! font (* 0.5 (-> obj transition-percentage-invert)))
+    (set-origin! font (- 17 (-> obj left-x-offset)) y)
+    (cond
+      ((< mode 0)
+       (sandover-audio-line font (font-color menu-invalid) (lookup-text! *common-text* (text-id sandover-audio-no-sound) #f) y alpha))
+      (else
+       (let ((burst (pc-get-audio-state 6)))
+         (when (>= burst 0)
+           (pc-get-audio-string 5 burst *sandover-audio-text*)
+           (set! y (sandover-audio-line font
+                                        (font-color progress-yellow)
+                                        (string-format (lookup-text! *common-text* (text-id sandover-audio-playing) #f)
+                                                       *sandover-audio-text*
+                                                       (+ burst 1)
+                                                       (pc-get-audio-state 7))
+                                        y
+                                        alpha))))
+       (if (sandover-audio-held?)
+         (set! y (sandover-audio-line font (font-color progress-yellow) (lookup-text! *common-text* (text-id sandover-audio-cli) #f) y alpha)))
+       (if (>= *sandover-audio-cli* 0)
+         (set! y (sandover-audio-line font (font-color progress-yellow) (lookup-text! *common-text* (text-id sandover-audio-note-cli) #f) y alpha)))
+       ;; Spatial is set up when the game starts: the row's value differs from what this process runs
+       (if (= (pc-get-audio-state 10) 1)
+         (set! y (sandover-audio-line font (font-color progress-yellow) (lookup-text! *common-text* (text-id sandover-audio-note-restart) #f) y alpha)))
+       ;; picking Spatial in a process that does not run it, on a device with a spatial format
+       (if (and (sandover-audio-spatial-shown? obj) (zero? (pc-get-audio-state 9)) (zero? (pc-get-audio-state 10))
+                (> (pc-get-audio-state 12) 0))
+         (set! y (sandover-audio-line font (font-color progress-yellow) (lookup-text! *common-text* (text-id sandover-audio-hint-spatial) #f) y alpha)))
+       (if (not (pc-get-audio-string 2 0 *sandover-audio-text*)) (format (clear *sandover-audio-text*) "?"))
+       (set! y (sandover-audio-line font
+                                    (font-color default)
+                                    (string-format (lookup-text! *common-text* (text-id sandover-audio-status-device) #f) *sandover-audio-text*)
+                                    y
+                                    alpha))
+       (pc-get-audio-string 3 0 *sandover-audio-text*)
+       (pc-get-audio-string 7 0 *sandover-audio-text-2*)
+       (set! y (sandover-audio-line font
+                                    (font-color default)
+                                    (string-format (lookup-text! *common-text* (text-id sandover-audio-status-layout) #f)
+                                                   *sandover-audio-text*
+                                                   *sandover-audio-text-2*)
+                                    y
+                                    alpha))
+       ;; auto on a stereo default device: the original stereo mix plays
+       (if (pc-get-audio-string 6 0 *sandover-audio-text-2*)
+         (set! y (sandover-audio-line font (font-color default) (lookup-text! *common-text* (text-id sandover-audio-note-auto) #f) y alpha)))
+       ;; stereo through OpenAL (a chosen device): not the vanilla stream
+       (if (and (= mode 2) (<= (pc-get-audio-state 1) 2))
+         (set! y (sandover-audio-line font (font-color default) (lookup-text! *common-text* (text-id sandover-audio-note-openal-stereo) #f) y alpha)))
+       (when (pc-get-audio-string 4 0 *sandover-audio-text-2*)
+         (set! y (sandover-audio-line font
+                                      (font-color default)
+                                      (string-format (lookup-text! *common-text* (text-id sandover-audio-status-windows) #f) *sandover-audio-text-2*)
+                                      y
+                                      alpha))
+         ;; the spatial format Windows has enabled on the device (hidden when Windows did not say)
+         (when (pc-get-audio-string 9 0 *sandover-audio-text-2*)
+           (set! y (sandover-audio-line font
+                                        (font-color default)
+                                        (string-format (lookup-text! *common-text* (text-id sandover-audio-status-spatial) #f) *sandover-audio-text-2*)
+                                        y
+                                        alpha)))
+         ;; Spatial asked for or being picked on a device without a format: why it cannot run
+         (if (and (or (= (pc-get-audio-state 8) 5) (sandover-audio-spatial-shown? obj)) (<= (pc-get-audio-state 12) 0))
+           (set! y (sandover-audio-line font (font-color progress-yellow) (lookup-text! *common-text* (text-id sandover-audio-warn-no-spatial) #f) y alpha)))
+         (let ((game (pc-get-audio-state 1))
+               (windows (pc-get-audio-state 2)))
+           (cond
+             ;; the spatial stream hands Windows a 7.1.4 bed; the format renders it for the device
+             ((= mode 3) #f)
+             ;; Windows downmixes what the endpoint cannot carry
+             ((and (> windows 0) (> game windows))
+              (set! y (sandover-audio-line font
+                                           (font-color menu-invalid)
+                                           (string-format (lookup-text! *common-text* (text-id sandover-audio-warn-down) #f)
+                                                          *sandover-audio-text-2*
+                                                          *sandover-audio-text*)
+                                           y
+                                           alpha)))
+             ;; red when auto chose stereo; yellow when stereo or headphones was picked
+             ((and (<= game 2) (> windows 2))
+              (set! y (sandover-audio-line font
+                                           (if (zero? (pc-get-audio-state 8)) (font-color menu-invalid) (font-color progress-yellow))
+                                           (string-format (lookup-text! *common-text* (text-id sandover-audio-warn-stereo) #f) *sandover-audio-text*)
+                                           y
+                                           alpha))))))
+       (if (= (-> *sandover-audio-options* (max 0 (min (1- (-> *sandover-audio-options* length)) (-> obj option-index))) name)
+              (text-id sandover-audio-test))
+         (sandover-audio-line font (font-color progress-yellow) (lookup-text! *common-text* (text-id sandover-audio-hint-test) #f) y alpha)))))
   0)
 
 (defun draw-memcard-auto-save-disabled ((obj progress) (arg0 font-context))
@@ -3488,9 +4232,18 @@
               (progress-screen mouse-binds)
               (progress-screen controller-options)
               (progress-screen mouse-options)
-              (progress-screen reassign-binds-options))
+              (progress-screen reassign-binds-options)
+              (progress-screen sandover))
              (hide-progress-icons)
              (draw-options self 115 25 0.65))
+            (((progress-screen sandover-calibration))
+             (hide-progress-icons)
+             (draw-options self 80 25 0.65)
+             (draw-sandover-calibration-hint self))
+            (((progress-screen sandover-audio))
+             (hide-progress-icons)
+             (draw-options self 80 25 0.65)
+             (draw-sandover-audio-status self))
             (((progress-screen gfx-ps2-options)) (hide-progress-icons) (draw-options self 115 25 0.67))
             (((progress-screen game-settings)) (hide-progress-icons) (draw-options self 115 25 0.70))
             (((progress-screen memcard-removed) (progress-screen memcard-auto-save-error))

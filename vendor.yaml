@@ -56,3 +56,22 @@ third-party/draco:
     - "PR #3723 (https://github.com/open-goal/jak-project/pull/3723)"
 third-party/json.hpp
   git: https://github.com/nlohmann/json/blob/eba0a92bfb1abf242f30e894b96ba11c9f4048c7/single_include/nlohmann/json.hpp
+third-party/openxr:
+  git: https://github.com/KhronosGroup/OpenXR-SDK/tree/release-1.1.63
+  license: Apache License 2.0
+  modifications:
+    - "Only the loader, headers, jsoncpp and their licenses are kept; specification/, CI files and the Android-only jnipp and android-jni-wrappers are dropped"
+third-party/openal-soft:
+  git: https://github.com/kcat/openal-soft/tree/1.25.2
+  license: LGPL 2 or later (BSD-3-Clause and pffft portions; see the license files)
+  modifications:
+    - "Only the library sources, bundled fmt/gsl, the default HRTF, docs and license files are kept; examples/ (except examples/common, which the CMake file always references), utils/ and CI files are dropped"
+    - "Built as a shared library (OpenAL32.dll next to gk)"
+    - "common/opthelpers.h: NONBLOCKING is empty with the MSVC STL (clang-cl ABI), whose std::invoke rejects nonblocking member function pointers"
+    - "alc/backends/wasapi.cpp: the spatial stream activation blob points at a stack object; the PROPVARIANT is emptied before PropVariantClear frees it (heap corruption on endpoints with spatial sound on)"
+third-party/fidelityfx:
+  git: https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/tree/v1.1.4
+  commit: c6efa6bf7f2027b3ec94f28578bb5965eabb9e55
+  license: MIT (LICENSE.txt)
+  modifications:
+    - "None: only sdk/include/FidelityFX/gpu (core, fsr3upscaler without the HLSL and Vulkan GLSL callbacks, spd, fsr1) and the licence are kept, as published; the OpenGL callbacks and pass entry points are the engine's own (game/graphics/opengl_renderer/shaders/fsr3)"

@@ -1,0 +1,38 @@
+# Screen-space contact shadows: Jak and sunlit contacts the 4096 world map misses
+# (scout under FSR 3 native, factor view). One instance; every shot carries its arm:
+#   off / moderate (option 41 1) / strong (41 2). Run with --play-look: the play look is temporal
+#   AA (FSR 3.1) at 100 %, which contact shadows need; its forms go first.
+# The probe (factor view, option 42 3) comes first: the runner checks it shows the term and aborts
+# on a failed probe or any black frame (scratch runner: framecheck.py).
+# - foliage-jak: fsr3-stills (Jak's feet on the sunlit ledge, foliage)
+# - village1-edge-1500: world-sun-shadows-002 (grass clumps beside Jak)
+# - village1-grass-close: the fur manifest's daxter-close camera (grass bases at 1-3 m)
+# - beach-morning-jak: the water manifests' beach-base camera (low sun, Jak and rocks on sand)
+set: contact-shadows-001
+x-arms:
+  off: &off ["(pc-set-shadow-option 41 0)", "(pc-set-shadow-option 42 0)", "(pc-set-shadow-option 43 0)"]
+  moderate: &moderate ["(pc-set-shadow-option 41 1000000)", "(pc-set-shadow-option 42 0)", "(pc-set-shadow-option 43 0)"]
+  strong: &strong ["(pc-set-shadow-option 41 2000000)", "(pc-set-shadow-option 42 0)", "(pc-set-shadow-option 43 0)"]
+  probe: &probe ["(pc-set-shadow-option 41 2000000)", "(pc-set-shadow-option 42 3000000)", "(pc-set-shadow-option 43 0)"]
+defaults:
+  resolution: [3840, 2160]
+  msaa: 2
+  settle_frames: 120
+  effects: on
+  wind: off
+  particles: on
+  jak: show
+shots:
+  - {name: probe-cs-foliage, continue: jungle-start, hour: 12, jak_pos: [1456966.9, 454246.4, -972185.6], camera: {pos: [1471631.1, 457932.8, -987746.5], rot: [0.7278, 0.0, 0.6858, -0.2454, 0.9338, 0.2604, -0.6404, -0.3578, 0.6796]}, goals_after_load: *probe}
+  - {name: foliage-jak-off, continue: jungle-start, hour: 12, jak_pos: [1456966.9, 454246.4, -972185.6], camera: {pos: [1471631.1, 457932.8, -987746.5], rot: [0.7278, 0.0, 0.6858, -0.2454, 0.9338, 0.2604, -0.6404, -0.3578, 0.6796]}, goals_after_load: *off}
+  - {name: foliage-jak-moderate, continue: jungle-start, hour: 12, jak_pos: [1456966.9, 454246.4, -972185.6], camera: {pos: [1471631.1, 457932.8, -987746.5], rot: [0.7278, 0.0, 0.6858, -0.2454, 0.9338, 0.2604, -0.6404, -0.3578, 0.6796]}, goals_after_load: *moderate}
+  - {name: foliage-jak-strong, continue: jungle-start, hour: 12, jak_pos: [1456966.9, 454246.4, -972185.6], camera: {pos: [1471631.1, 457932.8, -987746.5], rot: [0.7278, 0.0, 0.6858, -0.2454, 0.9338, 0.2604, -0.6404, -0.3578, 0.6796]}, goals_after_load: *strong}
+  - {name: village1-edge-1500-off, continue: village1-hut, hour: 15, jak_pos: [260096.0, 58368.0, -250880.0], camera: {pos: [278921.5, 67809.3, -273943.3], rot: [0.858, 0.0, 0.5137, -0.1076, 0.9778, 0.1798, -0.5023, -0.2095, 0.8389]}, goals_after_load: *off}
+  - {name: village1-edge-1500-moderate, continue: village1-hut, hour: 15, jak_pos: [260096.0, 58368.0, -250880.0], camera: {pos: [278921.5, 67809.3, -273943.3], rot: [0.858, 0.0, 0.5137, -0.1076, 0.9778, 0.1798, -0.5023, -0.2095, 0.8389]}, goals_after_load: *moderate}
+  - {name: village1-edge-1500-strong, continue: village1-hut, hour: 15, jak_pos: [260096.0, 58368.0, -250880.0], camera: {pos: [278921.5, 67809.3, -273943.3], rot: [0.858, 0.0, 0.5137, -0.1076, 0.9778, 0.1798, -0.5023, -0.2095, 0.8389]}, goals_after_load: *strong}
+  - {name: village1-grass-close-off, continue: village1-hut, hour: 12, camera: {pos: [-638860.06, 151696.73, 763846.62], rot: [1.0, 0.0, -0.0, 0.0, 0.99123, 0.13216, 0.0, -0.13216, 0.99123]}, goals_after_load: *off}
+  - {name: village1-grass-close-moderate, continue: village1-hut, hour: 12, camera: {pos: [-638860.06, 151696.73, 763846.62], rot: [1.0, 0.0, -0.0, 0.0, 0.99123, 0.13216, 0.0, -0.13216, 0.99123]}, goals_after_load: *moderate}
+  - {name: village1-grass-close-strong, continue: village1-hut, hour: 12, camera: {pos: [-638860.06, 151696.73, 763846.62], rot: [1.0, 0.0, -0.0, 0.0, 0.99123, 0.13216, 0.0, -0.13216, 0.99123]}, goals_after_load: *strong}
+  - {name: beach-morning-jak-off, continue: beach-start, hour: 7.772, jak_pos: [-580650.812, 8700.754, -298296.312], camera: {pos: [-542860.062, 27657.885, -277138.25], rot: [-0.487705, 2e-06, 0.873008, -0.116803, 0.991009, -0.065254, -0.865159, -0.133794, -0.48332]}, goals_after_load: *off}
+  - {name: beach-morning-jak-moderate, continue: beach-start, hour: 7.772, jak_pos: [-580650.812, 8700.754, -298296.312], camera: {pos: [-542860.062, 27657.885, -277138.25], rot: [-0.487705, 2e-06, 0.873008, -0.116803, 0.991009, -0.065254, -0.865159, -0.133794, -0.48332]}, goals_after_load: *moderate}
+  - {name: beach-morning-jak-strong, continue: beach-start, hour: 7.772, jak_pos: [-580650.812, 8700.754, -298296.312], camera: {pos: [-542860.062, 27657.885, -277138.25], rot: [-0.487705, 2e-06, 0.873008, -0.116803, 0.991009, -0.065254, -0.865159, -0.133794, -0.48332]}, goals_after_load: *strong}

@@ -1,0 +1,21 @@
+# receiver export: lamp-lit spots at night, before/after scaling the
+# E of lit receivers. Run with --preset ssao=deep and bloom on; see kb/howto/materials.md.
+set: receivers
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 60
+  camera: from_continue
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - {name: beach-lamp-night, continue: beach-start, hour: 23}
+  - {name: village1-hut-night, continue: village1-hut, hour: 23}
+  - {name: sunken-start-night, continue: sunken-start, hour: 23}
+  - name: village1-lamps-night
+    continue: village1-hut
+    hour: 23
+    settle_frames: 90
+    camera: { pos: [-559085.2, 202996.53, 826054.25], rot: [0.7868, 0.0, -0.6171, 0.0775, 0.992, 0.0989, 0.6122, -0.1257, 0.7806] }

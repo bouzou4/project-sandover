@@ -11,6 +11,7 @@ struct Fbo {
   // optional rgba/zbuffer/stencil data.
   std::optional<GLuint> tex_id;
   std::optional<GLuint> zbuf_stencil_id;
+  bool zbuf_is_texture = false;  // zbuf_stencil_id names a texture, not a renderbuffer
 
   bool multisampled = false;
   int multisample_count = 0;  // Should be 1 if multisampled is disabled
@@ -41,7 +42,11 @@ struct Fbo {
       }
 
       if (zbuf_stencil_id) {
-        glDeleteRenderbuffers(1, &zbuf_stencil_id.value());
+        if (zbuf_is_texture) {
+          glDeleteTextures(1, &zbuf_stencil_id.value());
+        } else {
+          glDeleteRenderbuffers(1, &zbuf_stencil_id.value());
+        }
         zbuf_stencil_id.reset();
       }
 

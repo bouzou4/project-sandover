@@ -132,7 +132,9 @@ class DisplayManager {
   std::vector<Resolution> m_available_window_sizes;
 
   void initialize_window_position_from_settings();
-  void update_curr_display_info();
+  SDL_DisplayID active_sdl_display_id();
+  int find_display_index(SDL_DisplayID sdl_display_id);
+  void update_curr_display_info(SDL_DisplayID previous_sdl_display_id);
   void update_video_modes();
   void update_resolutions();
 

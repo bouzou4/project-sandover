@@ -1,0 +1,23 @@
+# Eco brightness: eco collectables, vents, power cells, orbs and fire, noon and night.
+# Particles on. Run vanilla, then bloom before/after the actor emissive table; see
+# kb/findings/2026-09-24-eco-brightness.md.
+set: eco-emitters
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 90
+  camera: from_continue
+  effects: on
+  wind: off
+  particles: on
+  jak: hide
+shots:
+  - {name: jungle-top-cell-noon, continue: jungle-start, hour: 12, camera: {pos: [1462272.0, 462848.0, -974848.0], rot: [-0.7674, 0.0, -0.6411, 0.134, 0.9779, -0.1604, 0.627, -0.209, -0.7505]}}
+  - {name: jungle-top-cell-night, continue: jungle-start, hour: 23, camera: {pos: [1462272.0, 462848.0, -974848.0], rot: [-0.7674, 0.0, -0.6411, 0.134, 0.9779, -0.1604, 0.627, -0.209, -0.7505]}}
+  - {name: jungle-vent-noon, continue: jungle-start, hour: 12, camera: {pos: [1417216.0, 245760.0, -851968.0], rot: [-0.5952, 0.0, -0.8036, 0.2636, 0.9447, -0.1952, 0.7591, -0.328, -0.5623]}}
+  - {name: jungle-vent-night, continue: jungle-start, hour: 23, camera: {pos: [1417216.0, 245760.0, -851968.0], rot: [-0.5952, 0.0, -0.8036, 0.2636, 0.9447, -0.1952, 0.7591, -0.328, -0.5623]}}
+  - {name: jungle-orbs-noon, continue: jungle-start, hour: 12, camera: {pos: [1732608.0, 198656.0, -929792.0], rot: [0.8631, 0.0, -0.505, 0.1215, 0.9706, 0.2077, 0.4902, -0.2406, 0.8378]}}
+  - {name: jungle-orbs-night, continue: jungle-start, hour: 23, camera: {pos: [1732608.0, 198656.0, -929792.0], rot: [0.8631, 0.0, -0.505, 0.1215, 0.9706, 0.2077, 0.4902, -0.2406, 0.8378]}}
+  - {name: village1-eco-noon, continue: village1-hut, hour: 12, camera: {pos: [0.0, 90112.0, 12288.0], rot: [0.8517, 0.0, -0.5241, 0.0847, 0.9869, 0.1377, 0.5172, -0.1616, 0.8405]}}
+  - {name: village1-eco-night, continue: village1-hut, hour: 23, camera: {pos: [0.0, 90112.0, 12288.0], rot: [0.8517, 0.0, -0.5241, 0.0847, 0.9869, 0.1377, 0.5172, -0.1616, 0.8405]}}
+  - {name: citadel-torch, continue: citadel-start, hour: 12}

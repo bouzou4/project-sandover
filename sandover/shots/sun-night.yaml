@@ -1,0 +1,17 @@
+# moving-sun experiment B: night (hour 23) with three moon variants.
+# Run per variant with --goal forms; see kb/howto/lighting.md.
+set: sun-night
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 60
+  camera: from_continue
+  effects: off
+  wind: off
+  particles: off
+  jak: show
+generate:
+  from: continue_points
+  continues: [village1-hut, beach-start, jungle-start]
+  hours: { night: 23 }
+shots: []

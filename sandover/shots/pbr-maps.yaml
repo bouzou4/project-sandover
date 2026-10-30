@@ -1,0 +1,22 @@
+# per-texture maps: the pbr-classes spots (village1, beach, jungle, jungle tower, village1
+# oracle; noon and dusk) plus the jungle temple top (eco-emitters camera) at noon and night.
+# Run with SSAO, bloom and actor shadows on; see kb/howto/materials.md "Per-texture maps".
+set: pbr-maps
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 60
+  camera: from_continue
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+generate:
+  from: continue_points
+  continues: [village1-hut, beach-start, jungle-start, jungle-tower]
+  hours: { noon: 12, dusk: 18 }
+shots:
+  - {name: village1-oracle-noon, continue: village1-hut, hour: 12, camera: {pos: [270336.0, 135168.0, 16384.0], rot: [0.571064, 0.0, -0.820905, 0.275944, 0.94181, 0.191961, 0.773137, -0.336146, 0.537834]}}
+  - {name: village1-oracle-dusk, continue: village1-hut, hour: 18, camera: {pos: [270336.0, 135168.0, 16384.0], rot: [0.571064, 0.0, -0.820905, 0.275944, 0.94181, 0.191961, 0.773137, -0.336146, 0.537834]}}
+  - {name: jungle-temple-top-noon, continue: jungle-start, hour: 12, camera: {pos: [1462272.0, 462848.0, -974848.0], rot: [-0.7674, 0.0, -0.6411, 0.134, 0.9779, -0.1604, 0.627, -0.209, -0.7505]}}
+  - {name: jungle-temple-top-night, continue: jungle-start, hour: 23, camera: {pos: [1462272.0, 462848.0, -974848.0], rot: [-0.7674, 0.0, -0.6411, 0.134, 0.9779, -0.1604, 0.627, -0.209, -0.7505]}}

@@ -1,0 +1,24 @@
+# emissive mask and bloom: lamps, flames, lava, crystals, plus daylight
+# checks; the jungle temple top is lit precursor metal that must stay a receiver.
+# Effects on so the effect slots carry their runtime weights. See kb/howto/ssao.md.
+set: emissive
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 60
+  camera: from_continue
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - {name: beach-lamp-night, continue: beach-start, hour: 23}
+  - {name: village1-hut-night, continue: village1-hut, hour: 23}
+  - {name: firecanyon-start-noon, continue: firecanyon-start, hour: 12}
+  - {name: firecanyon-end-noon, continue: firecanyon-end, hour: 12}
+  - {name: darkcave-start, continue: darkcave-start, hour: 12}
+  - {name: village1-hut-noon, continue: village1-hut, hour: 12}
+  - {name: firecanyon-end-noon-particles, continue: firecanyon-end, hour: 12, particles: on}
+  - {name: village1-hut-night-particles, continue: village1-hut, hour: 23, particles: on}
+  - {name: jungle-temple-top-noon, continue: jungle-start, hour: 12,
+     jak_pos: [1456966.9, 454246.4, -972185.6], camera: {pos: [1471631.1, 457932.8, -987746.5], rot: [0.7278, 0.0, 0.6858, -0.2454, 0.9338, 0.2604, -0.6404, -0.3578, 0.6796]}}

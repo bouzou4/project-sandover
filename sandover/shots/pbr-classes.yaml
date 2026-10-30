@@ -1,0 +1,20 @@
+# material-class spike: stone/wood (village1), sand and props (beach), foliage (jungle),
+# precursor metal indoors (jungle tower) and in sun (village1 oracle), noon and dusk.
+# See kb/howto/materials.md.
+set: pbr-classes
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 60
+  camera: from_continue
+  effects: off
+  wind: off
+  particles: off
+  jak: show
+generate:
+  from: continue_points
+  continues: [village1-hut, beach-start, jungle-start, jungle-tower]
+  hours: { noon: 12, dusk: 18 }
+shots:
+  - {name: village1-oracle-noon, continue: village1-hut, hour: 12, camera: {pos: [270336.0, 135168.0, 16384.0], rot: [0.571064, 0.0, -0.820905, 0.275944, 0.94181, 0.191961, 0.773137, -0.336146, 0.537834]}}
+  - {name: village1-oracle-dusk, continue: village1-hut, hour: 18, camera: {pos: [270336.0, 135168.0, 16384.0], rot: [0.571064, 0.0, -0.820905, 0.275944, 0.94181, 0.191961, 0.773137, -0.336146, 0.537834]}}

@@ -301,6 +301,36 @@ include_directories(third-party/glad/include)
 include_directories(third-party/SDL/include)
 build_third_party_lib(imgui imgui)
 
+# OpenXR loader, static (Jak 1 VR path, Windows only for now)
+if(WIN32)
+    set(DYNAMIC_LOADER OFF CACHE BOOL "" FORCE)
+    set(BUILD_WITH_SYSTEM_JSONCPP OFF CACHE BOOL "" FORCE)
+    build_third_party_lib(openxr openxr_loader)
+    # llvm-rc cannot parse the loader's version resource, and a static loader does not need it
+    set_source_files_properties(${PROJECT_SOURCE_DIR}/third-party/openxr/src/loader/loader.rc
+        DIRECTORY third-party/openxr/src/loader PROPERTIES HEADER_FILE_ONLY ON)
+endif()
+
+# OpenAL Soft (LGPL-2.0-or-later), shared library: the spatial audio backend (Jak 1, Windows)
+if(WIN32)
+    set(LIBTYPE SHARED)
+    foreach(opt ALSOFT_UTILS ALSOFT_EXAMPLES ALSOFT_TESTS ALSOFT_INSTALL ALSOFT_INSTALL_CONFIG
+            ALSOFT_INSTALL_HRTF_DATA ALSOFT_INSTALL_AMBDEC_PRESETS ALSOFT_INSTALL_EXAMPLES
+            ALSOFT_INSTALL_UTILS ALSOFT_UPDATE_BUILD_VERSION ALSOFT_ENABLE_MODULES ALSOFT_EAX
+            ALSOFT_BACKEND_DSOUND ALSOFT_BACKEND_WINMM ALSOFT_BACKEND_JACK ALSOFT_BACKEND_PIPEWIRE
+            ALSOFT_BACKEND_PULSEAUDIO ALSOFT_BACKEND_PORTAUDIO ALSOFT_BACKEND_SDL2
+            ALSOFT_BACKEND_SDL3 ALSOFT_BACKEND_WAVE)
+        set(${opt} OFF CACHE BOOL "" FORCE)
+    endforeach()
+    build_third_party_lib(openal-soft OpenAL)
+    configure_file(game/sound/989snd/sandover-alsoft-objects.ini
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/sandover-alsoft-objects.ini COPYONLY)
+    foreach(notice COPYING BSD-3Clause LICENSE-pffft)
+        configure_file(third-party/openal-soft/${notice}
+            ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/OpenAL-Soft-${notice}.txt COPYONLY)
+    endforeach()
+endif()
+
 # build the game code in C++
 add_subdirectory(game)
 

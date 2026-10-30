@@ -1,0 +1,17 @@
+# moving-sun experiment A: day hours on two village1-table levels.
+# Run per variant with --goal forms; see kb/howto/lighting.md.
+set: sun-day
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 60
+  camera: from_continue
+  effects: off
+  wind: off
+  particles: off
+  jak: show
+generate:
+  from: continue_points
+  continues: [village1-hut, beach-start]
+  hours: { h08: 8, h10: 10, h12: 12, h14: 14, h16: 16 }
+shots: []

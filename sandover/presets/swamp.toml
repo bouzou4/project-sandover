@@ -1,0 +1,52 @@
+# The swamp look: B water, C wet and D mist were chosen together.
+# The engine defaults (gfx.h swamp_*) are this preset, so play needs no forms; `off` turns all
+# three off for an A/B. Rig: the forms of `sandover-preset apply swamp <swamp|off>` as
+# --goal-after-load. Engine side: Swamp.h/.cpp, pbr_bg_frag.glsl (sw_*), shaders/swamp_mist.frag.
+# Applies only in the swamp level. water and wet ride on the class shading (PBR on); mist reads
+# SSAO's depth (SSAO on).
+#
+# [presets.<name>.water]  the swamp water (tfrag texture swp-water, flat at y = 0, opaque)
+#   dark     body colour multiplier (murk), 0..1
+#   refl     mood-environment reflection strength (stylized fresnel)
+#   ripple   rain-ripple ring slope
+#   glint    sun glint on the ripples
+# [presets.<name>.wet]    wet background surfaces while it rains
+#   dark     albedo multiplier of fully porous classes (stone, wood, cloth), 0..1
+#   coat     water-film reflection and glint strength
+#   puddle   puddle coverage on flat ground, 0..1
+# [presets.<name>.mist]   ground mist, exponential in height above the water line
+#   density  extinction at the water line (1/m)
+#   height_m scale height (m)
+#   start_m  no mist closer than this (m)
+#   max      largest mist opacity, 0..1
+#   sun      forward-scatter glow toward the sun
+#   bright   mist colour: the mood fog colour lifted toward white by this much, 0..1
+# caption    one line for the screening grid: what visibly differs, never parameters
+
+[meta]
+schema = 1
+phase = "swamp"
+round = 3
+
+[presets.swamp]
+label = "Swamp"
+caption = "murky water with rain rings, soaked roots and planks with puddles, low mist over the water"
+
+[presets.swamp.water]
+dark = 0.5
+refl = 1.0
+ripple = 1.0
+glint = 2.0
+
+[presets.swamp.wet]
+dark = 0.5
+coat = 1.0
+puddle = 0.5
+
+[presets.swamp.mist]
+density = 0.05
+height_m = 2.5
+start_m = 3.0
+max = 0.8
+sun = 1.0
+bright = 0.35

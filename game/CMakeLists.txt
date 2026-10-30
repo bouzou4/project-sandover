@@ -41,11 +41,19 @@ set(RUNTIME_SOURCE
         graphics/jak3_texture_remap.cpp
         graphics/jakx_texture_remap.cpp
         graphics/screenshot.cpp
+        graphics/bug_report.cpp
         graphics/opengl_renderer/background/background_common.cpp
+        graphics/opengl_renderer/background/Caustics.cpp
+        graphics/opengl_renderer/background/PaletteGlow.cpp
         graphics/opengl_renderer/background/Hfrag.cpp
         graphics/opengl_renderer/background/Shrub.cpp
         graphics/opengl_renderer/background/TFragment.cpp
         graphics/opengl_renderer/background/Tie3.cpp
+        graphics/opengl_renderer/background/Canopy.cpp
+        graphics/opengl_renderer/background/CanopyVol.cpp
+        graphics/opengl_renderer/background/Unbake.cpp
+        graphics/opengl_renderer/LevelHeightfield.cpp
+        graphics/opengl_renderer/Materials.cpp
         graphics/opengl_renderer/BlitDisplays.cpp
         graphics/opengl_renderer/BucketRenderer.cpp
         graphics/opengl_renderer/CollideMeshRenderer.cpp
@@ -76,6 +84,7 @@ set(RUNTIME_SOURCE
         graphics/opengl_renderer/ocean/OceanTexture.cpp
         graphics/opengl_renderer/opengl_utils.cpp
         graphics/opengl_renderer/OpenGLRenderer.cpp
+        graphics/opengl_renderer/OpenGLRendererXr.cpp
         graphics/opengl_renderer/Profiler.cpp
         graphics/opengl_renderer/ProgressRenderer.cpp
         graphics/opengl_renderer/Shader.cpp
@@ -85,6 +94,37 @@ set(RUNTIME_SOURCE
         graphics/opengl_renderer/SkyBlendGPU.cpp
         graphics/opengl_renderer/SkyRenderer.cpp
         graphics/opengl_renderer/SlowTimeEffect.cpp
+        graphics/opengl_renderer/PerfTimers.cpp
+        graphics/opengl_renderer/GlQueries.cpp
+        graphics/opengl_renderer/SsaoDepth.cpp
+        graphics/opengl_renderer/ContactShadows.cpp
+        graphics/opengl_renderer/ScreenHistory.cpp
+        graphics/opengl_renderer/SsaoRenderer.cpp
+        graphics/opengl_renderer/StencilMarks.cpp
+        graphics/opengl_renderer/TemporalAccum.cpp
+        graphics/opengl_renderer/Swamp.cpp
+        graphics/opengl_renderer/SunDisc.cpp
+        graphics/opengl_renderer/BloomRenderer.cpp
+        graphics/opengl_renderer/MotionBlur.cpp
+        graphics/opengl_renderer/MotionVectors.cpp
+        graphics/opengl_renderer/Fsr3Upscaler.cpp
+        graphics/opengl_renderer/DlssUpscaler.cpp
+        graphics/opengl_renderer/D3d12Bridge.cpp
+        graphics/opengl_renderer/GpuAdapterLog.cpp
+        graphics/opengl_renderer/Fsr4Upscaler.cpp
+        graphics/opengl_renderer/UpscalerStage.cpp
+        graphics/opengl_renderer/EmissiveLights.cpp
+        graphics/opengl_renderer/LavaField.cpp
+        graphics/opengl_renderer/LightTracker.cpp
+        graphics/opengl_renderer/EmissiveTable.cpp
+        graphics/opengl_renderer/InlandWater.cpp
+        graphics/opengl_renderer/WorldLights.cpp
+        graphics/opengl_renderer/Neighbours.cpp
+        graphics/opengl_renderer/ActorShadows.cpp
+        graphics/opengl_renderer/WorldShadows.cpp
+        graphics/opengl_renderer/InspectRenderer.cpp
+        graphics/opengl_renderer/VistaRenderer.cpp
+        graphics/opengl_renderer/VistaHiZ.cpp
         graphics/opengl_renderer/sprite/GlowRenderer.cpp
         graphics/opengl_renderer/sprite/Sprite3_Distort.cpp
         graphics/opengl_renderer/sprite/Sprite3_Glow.cpp
@@ -94,7 +134,9 @@ set(RUNTIME_SOURCE
         graphics/opengl_renderer/TextureUploadHandler.cpp
         graphics/opengl_renderer/VisDataHandler.cpp
         graphics/opengl_renderer/Warp.cpp
+        graphics/hdr/HdrPresent.cpp
         graphics/pipelines/opengl.cpp
+        graphics/xr/OpenXr.cpp
         graphics/sceGraphicsInterface.cpp
         graphics/texture/jak1_tpage_dir.cpp
         graphics/texture/jak2_tpage_dir.cpp
@@ -115,6 +157,19 @@ set(RUNTIME_SOURCE
         kernel/common/kscheme.cpp
         kernel/common/ksocket.cpp
         kernel/common/ksound.cpp
+        kernel/common/sandover/bridge.cpp
+        kernel/common/sandover/bridge_ao.cpp
+        kernel/common/sandover/bridge_audio.cpp
+        kernel/common/sandover/bridge_capture.cpp
+        kernel/common/sandover/bridge_debug.cpp
+        kernel/common/sandover/bridge_hdr.cpp
+        kernel/common/sandover/bridge_lights.cpp
+        kernel/common/sandover/bridge_materials.cpp
+        kernel/common/sandover/bridge_sun_shadows.cpp
+        kernel/common/sandover/bridge_temporal.cpp
+        kernel/common/sandover/bridge_vista.cpp
+        kernel/common/sandover/bridge_water.cpp
+        kernel/common/sandover/bridge_xr.cpp
         kernel/jak1/fileio.cpp
         kernel/jak1/kboot.cpp
         kernel/jak1/kdgo.cpp
@@ -391,7 +446,23 @@ add_library(runtime STATIC ${RUNTIME_SOURCE} "../third-party/glad/src/glad.c")
 
 target_link_libraries(runtime common fmt SDL3::SDL3 imgui discord-rpc sound stb_image libco libcurl)
 if(WIN32)
-    target_link_libraries(runtime mman)
+    target_link_libraries(runtime mman openxr_loader d3d11 d3d12 dxgi)
+    target_compile_definitions(runtime PRIVATE SANDOVER_XR)
+    option(SANDOVER_DLSS "NVIDIA DLSS mode; fetches the SDK (third-party/nvidia-dlss)" ON)
+    if(SANDOVER_DLSS)
+        include(${CMAKE_SOURCE_DIR}/third-party/nvidia-dlss/fetch.cmake)
+    endif()
+    if(SANDOVER_DLSS AND DLSS_SDK_FOUND)
+        target_include_directories(runtime PRIVATE ${DLSS_SDK_INCLUDE_DIR})
+        target_link_libraries(runtime ${DLSS_SDK_LIBRARY} version)
+        target_compile_definitions(runtime PRIVATE SANDOVER_DLSS)
+    endif()
+    # FSR 4: headers vendored (MIT), the signed runtime DLLs fetched (third-party/amd-fsr4)
+    target_include_directories(runtime PRIVATE ${CMAKE_SOURCE_DIR}/third-party/amd-fsr4/include)
+    option(SANDOVER_FSR4 "AMD FSR 4 runtime; fetches the signed DLLs (third-party/amd-fsr4)" ON)
+    if(SANDOVER_FSR4)
+        include(${CMAKE_SOURCE_DIR}/third-party/amd-fsr4/fetch.cmake)
+    endif()
 else()
     target_link_libraries(runtime pthread dl)
 endif()
@@ -400,4 +471,12 @@ add_executable(gk main.cpp)
 target_link_libraries(gk runtime)
 if(WIN32)
     set_target_properties(gk PROPERTIES VS_DPI_AWARE "PerMonitor")
+    if(SANDOVER_DLSS AND DLSS_SDK_FOUND)
+        add_custom_command(TARGET gk POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${DLSS_SDK_RUNTIME} $<TARGET_FILE_DIR:gk>)
+    endif()
+    if(SANDOVER_FSR4 AND FSR4_SDK_FOUND)
+        add_custom_command(TARGET gk POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FSR4_SDK_RUNTIMES} $<TARGET_FILE_DIR:gk>)
+    endif()
 endif()

@@ -330,9 +330,10 @@ void ShadowRenderer::render(DmaFollower& dma,
 }
 
 void ShadowRenderer::draw(SharedRenderState* render_state, ScopedProfilerNode& prof) {
-  // enable stencil!
+  // enable stencil! With SSAO on, bits 6-7 belong to its mask.
+  const GLuint stencil_bits = render_state->ssao_stencil ? 0x3F : 0xFF;
   glEnable(GL_STENCIL_TEST);
-  glStencilMask(0xFF);
+  glStencilMask(stencil_bits);
 
   u32 clear_vertices = m_next_vertex;
   m_vertices[m_next_vertex++] = Vertex{math::Vector3f(0.3, 0.3, 0), 0};
@@ -355,6 +356,12 @@ void ShadowRenderer::draw(SharedRenderState* render_state, ScopedProfilerNode& p
   glDepthFunc(GL_GEQUAL);
 
   render_state->shaders.at(ShaderId::SHADOW).activate();
+  {
+    auto sg = stereo_gs_parallax(*render_state);
+    glUniform2f(glGetUniformLocation(render_state->shaders[ShaderId::SHADOW].id(), "stereo_gs"),
+                sg.x(), sg.y());
+    set_xr_gs_uniforms(render_state->shaders[ShaderId::SHADOW].id(), *render_state, 1);
+  }
 
   glDepthMask(GL_FALSE);  // no depth writes.
   if (m_debug_draw_volume) {
@@ -424,7 +431,7 @@ void ShadowRenderer::draw(SharedRenderState* render_state, ScopedProfilerNode& p
               m_color.x(), m_color.y(), m_color.z(), m_color.w());
   glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
   // glStencilFunc(GL_GREATER, 0, 0);
-  glStencilFunc(GL_NOTEQUAL, 0, 0xFF);
+  glStencilFunc(GL_NOTEQUAL, 0, stencil_bits);
   glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
   glDepthFunc(GL_ALWAYS);
 
@@ -438,4 +445,7 @@ void ShadowRenderer::draw(SharedRenderState* render_state, ScopedProfilerNode& p
   glDepthMask(GL_TRUE);
 
   glDisable(GL_STENCIL_TEST);
+  if (render_state->ssao_stencil) {
+    glStencilMask(0xFF);
+  }
 }

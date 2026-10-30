@@ -1,0 +1,390 @@
+{
+ "doc": "Background props that look like lights but have no baked E: census kind 'prop', bake class 'glow' (their own tile slots; one per character in the actor lights). Candidates from `sandover-lights inventory` (kb/findings/2026-09-27-light-inventory.md). A prop gives light only where the game draws it brighter than its surroundings: `vanilla` holds `sandover-lights glowcheck` on vanilla rig frames (frame names under the $SANDOVER_DATA capture sets, provenance only; contrast = median luma over the surroundings' within 5 m, ceiling = share of its / their pixels at 250+), saturation = (max - min) / max of its mean colour; the bake applies props.glows_in_vanilla (contrast >= 1.3 and saturation >= 0.6, or ceiling >= 0.5 and twice the surroundings'; a texture with non-zero baked E on the level (a census static: the game treats it as an emitter, at some hour) needs only the contrast, and its statics are dropped before the caps). No frame: no light. Colour: texture x vertex colour (`colour_from: texture` = texture alone). Patches are clustered on `cell_m` grids: a patch is one light, so its one shadow map shadows all of its light.",
+ "textures": {
+  "snow-crystals": {
+   "levels": [
+    "snow"
+   ],
+   "radius_hint_m": 7.0,
+   "gain": 1.0,
+   "cell_m": 1.0,
+   "split_m": 8.0,
+   "note": "pale blue ice crystal clusters (snow-vis-shrub); no baked E; drawn at the SDR ceiling in vanilla (93-96% of their pixels, `vanilla`); a soft cool light and a very weak shadow (runs/20260926-1011-play 0019); colour from the texture alone: the level's blue vertex tint is its ambient, not the crystal's",
+   "source": "light inventory",
+   "colour_from": "texture",
+   "crystal": true,
+   "vanilla": [
+    {
+     "frame": "crystals-004/C/0019",
+     "contrast": 1.75,
+     "saturation": 0.68,
+     "ceiling": [
+      0.93,
+      0.14
+     ]
+    },
+    {
+     "frame": "probe-8-vanilla/snow-crystal-crate",
+     "contrast": 1.15,
+     "saturation": 0.7,
+     "ceiling": [
+      0.96,
+      0.37
+     ]
+    }
+   ]
+  },
+  "cv-bluecrystal": {
+   "levels": [
+    "maincave",
+    "robocave"
+   ],
+   "radius_hint_m": 7.0,
+   "gain": 1.0,
+   "cell_m": 2.0,
+   "split_m": 12.0,
+   "note": "pale blue crystal clusters on the cave walls; drawn at the SDR ceiling in vanilla (97-99% of their pixels, `vanilla`); colour from the texture alone: the caves' teal vertex tint is their ambient (crystals-004 read green-cyan, R 0)",
+   "source": "light inventory",
+   "colour_from": "texture",
+   "crystal": true,
+   "vanilla": [
+    {
+     "frame": "crystals-005/C/maincave-cv-bluecrystal",
+     "contrast": 2.36,
+     "saturation": 0.37,
+     "ceiling": [
+      0.97,
+      0.07
+     ]
+    },
+    {
+     "frame": "crystals-006/C/maincave-cv-bluecrystal",
+     "contrast": 1.89,
+     "saturation": 0.34,
+     "ceiling": [
+      0.99,
+      0.31
+     ]
+    },
+    {
+     "frame": "crystals-007/C/maincave-bluecrystal",
+     "contrast": 6.68,
+     "saturation": 0.31,
+     "ceiling": [
+      0.98,
+      0.0
+     ]
+    }
+   ]
+  },
+  "ogr-cave-crystal-01": {
+   "levels": [
+    "ogre"
+   ],
+   "radius_hint_m": 7.0,
+   "gain": 1.0,
+   "cell_m": 2.0,
+   "split_m": 12.0,
+   "note": "red-pink crystal clusters along the Mountain Pass (ogre tie); census statics too, but their baked E sits on the night source only, so the static rows lit them only at night; drawn 3x brighter than the rock around them at noon in vanilla (pale: saturation 0.32-0.42; the emitter branch of glows_in_vanilla applies because the level bakes E for the texture); colour from the texture alone",
+   "source": "Mountain Pass crystals (feat/mountain-pass-crystal-lights)",
+   "colour_from": "texture",
+   "crystal": true,
+   "vanilla": [
+    {
+     "frame": "shots/ogre-crystals/vanilla/pass-end-crystals",
+     "contrast": 3.18,
+     "saturation": 0.42,
+     "ceiling": [
+      0.37,
+      0.0
+     ]
+    },
+    {
+     "frame": "shots/ogre-crystals/vanilla/pass-mid-crystal",
+     "contrast": 3.04,
+     "saturation": 0.41,
+     "ceiling": [
+      0.39,
+      0.04
+     ]
+    },
+    {
+     "frame": "shots/ogre-crystals/vanilla/pass-ledge-crystal",
+     "contrast": 3.41,
+     "saturation": 0.32,
+     "ceiling": [
+      0.44,
+      0.01
+     ]
+    }
+   ]
+  },
+  "cv-mushroom-01-decal-01": {
+   "levels": [
+    "maincave",
+    "robocave"
+   ],
+   "radius_hint_m": 7.0,
+   "gain": 0.8,
+   "cell_m": 2.0,
+   "split_m": 12.0,
+   "note": "glowing green cave mushrooms (bright green in 0021); green from the vertex colours",
+   "source": "light inventory",
+   "vanilla": [
+    {
+     "frame": "crystals-004/C/maincave-cv-mushroom-01-decal-01",
+     "contrast": 1.65,
+     "saturation": 0.78,
+     "ceiling": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "frame": "probe-8-vanilla/maincave-tallshroom-crate",
+     "contrast": 1.43,
+     "saturation": 0.88,
+     "ceiling": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "frame": "shots/eco-reference/vanilla/dark-crystal-noon",
+     "contrast": 1.34,
+     "saturation": 0.86,
+     "ceiling": [
+      0.0,
+      0.0
+     ]
+    }
+   ]
+  },
+  "cv-tallshroom-decal-01": {
+   "levels": [
+    "maincave",
+    "robocave"
+   ],
+   "radius_hint_m": 7.0,
+   "gain": 0.8,
+   "cell_m": 2.0,
+   "split_m": 12.0,
+   "note": "tall glowing green cave mushrooms, as cv-mushroom-01-decal-01",
+   "source": "light inventory",
+   "vanilla": [
+    {
+     "frame": "crystals-004/C/maincave-cv-bluecrystal",
+     "contrast": 2.15,
+     "saturation": 0.92,
+     "ceiling": [
+      0.26,
+      0.0
+     ]
+    },
+    {
+     "frame": "crystals-004/C/maincave-cv-mushroom-01-decal-01",
+     "contrast": 3.07,
+     "saturation": 0.89,
+     "ceiling": [
+      0.03,
+      0.0
+     ]
+    },
+    {
+     "frame": "probe-8-vanilla/maincave-tallshroom-crate",
+     "contrast": 1.55,
+     "saturation": 0.85,
+     "ceiling": [
+      0.0,
+      0.0
+     ]
+    }
+   ]
+  },
+  "ogr-mushroom-whole-01": {
+   "levels": [
+    "ogre"
+   ],
+   "radius_hint_m": 7.0,
+   "gain": 1.0,
+   "cell_m": 2.0,
+   "split_m": 12.0,
+   "note": "teal-capped mushrooms; drawn brighter than 99% of the level",
+   "source": "light inventory"
+  },
+  "ya-mushroom-whole-01": {
+   "levels": [
+    "rolling"
+   ],
+   "radius_hint_m": 7.0,
+   "gain": 1.0,
+   "cell_m": 2.0,
+   "split_m": 12.0,
+   "note": "teal-capped mushrooms (same art as ogre's); brighter than 93% of the level",
+   "source": "light inventory",
+   "vanilla": [
+    {
+     "frame": "crystals-004/C/rolling-ya-mushroom-whole-01",
+     "contrast": 1.46,
+     "saturation": 0.46,
+     "ceiling": [
+      0.0,
+      0.0
+     ]
+    }
+   ]
+  },
+  "vil3-mushroom-01": {
+   "levels": [
+    "village3"
+   ],
+   "radius_hint_m": 7.0,
+   "gain": 1.0,
+   "cell_m": 1.0,
+   "split_m": 8.0,
+   "note": "pale blue cave mushrooms; brighter than 80% of the level; kept on a 1 m grid: village3's mushrooms stand apart, and a 12 m patch put the light 6-7 m from them",
+   "source": "light inventory",
+   "vanilla": [
+    {
+     "frame": "crystals-004/C/village3-vil3-mushroom-01",
+     "contrast": 1.46,
+     "saturation": 0.49,
+     "ceiling": [
+      0.23,
+      0.04
+     ]
+    },
+    {
+     "frame": "probe-8-vanilla/village3-bluemushroom",
+     "contrast": 1.55,
+     "saturation": 0.45,
+     "ceiling": [
+      0.0,
+      0.0
+     ]
+    }
+   ]
+  },
+  "vil3-mushroom-02": {
+   "levels": [
+    "village3"
+   ],
+   "radius_hint_m": 7.0,
+   "gain": 1.0,
+   "cell_m": 1.0,
+   "split_m": 8.0,
+   "note": "pale blue cave mushrooms; brighter than 88% of the level; kept on a 1 m grid: village3's mushrooms stand apart, and a 12 m patch put the light 6-7 m from them",
+   "source": "light inventory",
+   "vanilla": [
+    {
+     "frame": "crystals-004/C/village3-vil3-mushroom-01",
+     "contrast": 0.51,
+     "saturation": 0.83,
+     "ceiling": [
+      0.01,
+      0.04
+     ]
+    },
+    {
+     "frame": "probe-8-vanilla/village3-bluemushroom",
+     "contrast": 0.64,
+     "saturation": 0.78,
+     "ceiling": [
+      0.0,
+      0.0
+     ]
+    }
+   ]
+  },
+  "vil3-giant-crystal-nt-01": {
+   "levels": [
+    "village3"
+   ],
+   "radius_hint_m": 7.0,
+   "gain": 1.0,
+   "cell_m": 1.0,
+   "split_m": 8.0,
+   "note": "teal giant crystals without baked E (their vil3-crystal-01 neighbours are statics already)",
+   "source": "light inventory",
+   "crystal": true
+  },
+  "vil3-giant-crystal-nt-03": {
+   "levels": [
+    "village3"
+   ],
+   "radius_hint_m": 7.0,
+   "gain": 1.0,
+   "cell_m": 1.0,
+   "split_m": 8.0,
+   "note": "pale translucent giant crystals, as vil3-giant-crystal-nt-01",
+   "source": "light inventory",
+   "crystal": true
+  },
+  "jngb-precursor-circuitpattern-andwall-02-glow": {
+   "levels": [
+    "jungleb"
+   ],
+   "radius_hint_m": 4.0,
+   "gain": 0.3,
+   "cell_m": 2.0,
+   "split_m": 12.0,
+   "note": "precursor glow circuitry (white glow overlay); brighter than 87% of the level",
+   "source": "light inventory"
+  },
+  "jngb-precursor-spheres-glow": {
+   "levels": [
+    "jungleb"
+   ],
+   "radius_hint_m": 4.0,
+   "gain": 0.3,
+   "cell_m": 2.0,
+   "split_m": 12.0,
+   "note": "precursor glow spikes on the spheres; brighter than 93% of the level",
+   "source": "light inventory"
+  },
+  "cit-pinkbeam": {
+   "levels": [
+    "citadel"
+   ],
+   "radius_hint_m": 4.0,
+   "gain": 0.3,
+   "cell_m": 2.0,
+   "split_m": 12.0,
+   "note": "pink light beams; brighter than 98% of the level; long, so 12 m tiles at half gain",
+   "source": "light inventory"
+  },
+  "lava-vent-fire": {
+   "levels": [
+    "lavatube"
+   ],
+   "radius_hint_m": 4.0,
+   "gain": 0.5,
+   "cell_m": 2.0,
+   "split_m": 12.0,
+   "note": "fire in the lava vents; brighter than 99% of the level",
+   "source": "light inventory"
+  },
+  "lava-precursor-bluelight": {
+   "levels": [
+    "lavatube"
+   ],
+   "radius_hint_m": 4.0,
+   "gain": 1.0,
+   "cell_m": 1.0,
+   "split_m": 8.0,
+   "note": "blue precursor lights; brighter than 99.9% of the level",
+   "source": "light inventory",
+   "vanilla": [
+    {
+     "frame": "goldens/auto-v1/f953354f0/lavatube-start-noon",
+     "contrast": 1.01,
+     "saturation": 0.3,
+     "ceiling": [
+      0.0,
+      0.0
+     ]
+    }
+   ]
+  }
+ }
+}

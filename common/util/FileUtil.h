@@ -46,6 +46,8 @@ std::optional<std::string> try_get_project_path_from_path(const std::string& pat
 bool setup_project_path(std::optional<fs::path> project_path_override, bool skip_logs = false);
 void override_user_config_dir(fs::path user_config_dir_override,
                               bool use_overridden_config_dir_for_saves);
+/// The --config-path folder, empty when none was given.
+fs::path get_user_config_dir_override();
 std::string get_file_path(const std::vector<std::string>& path);
 void write_binary_file(const std::string& name, const void* data, size_t size);
 void write_binary_file(const fs::path& name, const void* data, size_t size);

@@ -1,0 +1,78 @@
+# Ice with depth: class `ice` gets a glossy fresnel coat over a darker, bluer inner layer
+# (the texture sampled again below the surface along the refracted view ray, tinted by its own
+# colour over the path length), a sharp sun lobe, and the sun through thin ice (faces turned
+# from the sun, edges seen toward it). Param 40 (`pc-set-pbr-param 40 n`, millionths) is the
+# strength; 0 = off, where `ice` rows shade as stone.
+# Arms per shot: C original game (no forms), A today (play look, ice off), B1 (strength 1),
+# B2 (strength 2.5). Each arm's forms are ONE after-load string, play look first.
+# Material table: the live table (B1 was chosen; the 17 ice rows are
+# applied live, so no SANDOVER_MATERIALS). A at param 40 = 0 shades the ice rows as stone.
+# (17 rows to `ice`: snow-ice x2, snow-ice-trans-01, snow-icewall*, snow-fringe-01,
+# icecube-ice-01/-corner/-nails; list in candidates/ice-corrections.csv). PBR maps unchanged.
+# snow-crystals stays `special`: it is a light source and must keep its glow.
+# Cameras ($SANDOVER_DATA):
+# - ice-lake-noon: NEW position (no captured frame shows the frozen lake; the nearest, rounds/
+#   emissive-lights/world-002/candidates/A/snow-entity-snow-bumper-71.png, is at night and
+#   shows snow, not the lake). 7 m above the lake by the fort, looking across it toward the
+#   fort wall; offline render of this camera attached to the PR round notes (lake sunlit at 12 h).
+# - ice-crystal-crate: crystals-011/B/snow-crystal-crate.png, camera unchanged
+#   (ice walls and the ice crystal, Jak beside it; the cave is in shade at 12 h).
+# - ice-lake-sun-front: NEW position, same lake, east end, looking toward the 7.5 h sun
+#   (19 degrees up, just above the frame top): sun lobe on the lake and backlit edges.
+# - icecube-spikes: the ice-cube enemy (entity ice-cube-11, path point 0 on the frozen lake by the
+#   fort) close up with its spikes out. Camera derived from ice-depth-003/
+#   ice-lake-noon-B1.png (same heading, moved to 5 m from the enemy, 2.6 m up; offline render
+#   candidates/ice-shots/offline-icecube-spikes.png). A stage hook (in every arm, vanilla
+#   included) places the enemy there facing the camera, forces its become-mean state (spikes
+#   extend) while the other actors stay held, re-holds it when the spikes are out, prints
+#   RIG:ICE-CUBE posed, and clears itself.
+# - snow-control-0004: snow-glints-003/A/snow-0004-glints.png (from
+#   runs/20260928-0934-play/0004): snow, rock and wood only; B must equal A.
+set: ice-depth
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+shots:
+  # throwaway: the first play-look shot after a cold boot fails on the rig; keep this first
+  - {name: warmup-play-look, continue: snow-fort, hour: 12, jak: hide, settle_frames: 30, resolution: [640, 360], msaa: 1,
+     goals_after_load: ["(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update)"]}
+  - {name: ice-lake-noon-vanilla, continue: snow-fort, hour: 12, jak: hide, settle_frames: 300, camera: {pos: [3092480.0, 929792.0, -13312000.0], rot: [-0.871576, 0.0, -0.490261, 0.031979, 0.99787, -0.056852, 0.489217, -0.065229, -0.869719]}}
+  - {name: ice-crystal-crate-vanilla, continue: snow-by-ice-lake, hour: 12, actors: freeze, settle_frames: 300, jak_pos: [3307596.2, 1030909.6, -14203750.7], camera: {pos: [3325070.75, 1044071.0, -14184732.0], rot: [-0.7518, 0.0, 0.6594, -0.2449, 0.9285, -0.2792, -0.6122, -0.3714, -0.698]}}
+  - {name: ice-lake-sun-front-vanilla, continue: snow-fort, hour: 7.5, jak: hide, settle_frames: 300, camera: {pos: [4210688.0, 933888.0, -13414400.0], rot: [0.982548, 0.0, 0.186008, -0.025892, 0.990265, 0.136768, -0.184197, -0.139198, 0.972983]}}
+  - {name: snow-control-0004-vanilla, continue: snow-start, hour: 14.542, settle_frames: 300, jak_pos: [4107151.75, 1026399.625, -13540062.0], camera: {pos: [4148876.0, 1044947.1875, -13537616.0], rot: [0.014056, -0.0000003, 0.999901, -0.141349, 0.989958, 0.001987, -0.98986, -0.141363, 0.013915]}}
+  - {name: ice-lake-noon-A, continue: snow-fort, hour: 12, jak: hide, settle_frames: 300, camera: {pos: [3092480.0, 929792.0, -13312000.0], rot: [-0.871576, 0.0, -0.490261, 0.031979, 0.99787, -0.056852, 0.489217, -0.065229, -0.869719]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 0)']}
+  - {name: ice-crystal-crate-A, continue: snow-by-ice-lake, hour: 12, actors: freeze, settle_frames: 300, jak_pos: [3307596.2, 1030909.6, -14203750.7], camera: {pos: [3325070.75, 1044071.0, -14184732.0], rot: [-0.7518, 0.0, 0.6594, -0.2449, 0.9285, -0.2792, -0.6122, -0.3714, -0.698]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 0)']}
+  - {name: ice-lake-sun-front-A, continue: snow-fort, hour: 7.5, jak: hide, settle_frames: 300, camera: {pos: [4210688.0, 933888.0, -13414400.0], rot: [0.982548, 0.0, 0.186008, -0.025892, 0.990265, 0.136768, -0.184197, -0.139198, 0.972983]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 0)']}
+  - {name: snow-control-0004-A, continue: snow-start, hour: 14.542, settle_frames: 300, jak_pos: [4107151.75, 1026399.625, -13540062.0], camera: {pos: [4148876.0, 1044947.1875, -13537616.0], rot: [0.014056, -0.0000003, 0.999901, -0.141349, 0.989958, 0.001987, -0.98986, -0.141363, 0.013915]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 0)']}
+  - {name: ice-lake-noon-B1, continue: snow-fort, hour: 12, jak: hide, settle_frames: 300, camera: {pos: [3092480.0, 929792.0, -13312000.0], rot: [-0.871576, 0.0, -0.490261, 0.031979, 0.99787, -0.056852, 0.489217, -0.065229, -0.869719]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 1000000)']}
+  - {name: ice-crystal-crate-B1, continue: snow-by-ice-lake, hour: 12, actors: freeze, settle_frames: 300, jak_pos: [3307596.2, 1030909.6, -14203750.7], camera: {pos: [3325070.75, 1044071.0, -14184732.0], rot: [-0.7518, 0.0, 0.6594, -0.2449, 0.9285, -0.2792, -0.6122, -0.3714, -0.698]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 1000000)']}
+  - {name: ice-lake-sun-front-B1, continue: snow-fort, hour: 7.5, jak: hide, settle_frames: 300, camera: {pos: [4210688.0, 933888.0, -13414400.0], rot: [0.982548, 0.0, 0.186008, -0.025892, 0.990265, 0.136768, -0.184197, -0.139198, 0.972983]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 1000000)']}
+  - {name: snow-control-0004-B1, continue: snow-start, hour: 14.542, settle_frames: 300, jak_pos: [4107151.75, 1026399.625, -13540062.0], camera: {pos: [4148876.0, 1044947.1875, -13537616.0], rot: [0.014056, -0.0000003, 0.999901, -0.141349, 0.989958, 0.001987, -0.98986, -0.141363, 0.013915]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 1000000)']}
+  - {name: ice-lake-noon-B2, continue: snow-fort, hour: 12, jak: hide, settle_frames: 300, camera: {pos: [3092480.0, 929792.0, -13312000.0], rot: [-0.871576, 0.0, -0.490261, 0.031979, 0.99787, -0.056852, 0.489217, -0.065229, -0.869719]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 2500000)']}
+  - {name: ice-crystal-crate-B2, continue: snow-by-ice-lake, hour: 12, actors: freeze, settle_frames: 300, jak_pos: [3307596.2, 1030909.6, -14203750.7], camera: {pos: [3325070.75, 1044071.0, -14184732.0], rot: [-0.7518, 0.0, 0.6594, -0.2449, 0.9285, -0.2792, -0.6122, -0.3714, -0.698]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 2500000)']}
+  - {name: ice-lake-sun-front-B2, continue: snow-fort, hour: 7.5, jak: hide, settle_frames: 300, camera: {pos: [4210688.0, 933888.0, -13414400.0], rot: [0.982548, 0.0, 0.186008, -0.025892, 0.990265, 0.136768, -0.184197, -0.139198, 0.972983]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 2500000)']}
+  - {name: snow-control-0004-B2, continue: snow-start, hour: 14.542, settle_frames: 300, jak_pos: [4107151.75, 1026399.625, -13540062.0], camera: {pos: [4148876.0, 1044947.1875, -13537616.0], rot: [0.014056, -0.0000003, 0.999901, -0.141349, 0.989958, 0.001987, -0.98986, -0.141363, 0.013915]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 2500000)']}
+  - {name: icecube-spikes-vanilla, continue: snow-fort, hour: 12, jak: hide, actors: freeze, settle_frames: 300, camera: {pos: [3119738.9, 912179.2, -13361356.8], rot: [-0.871736, 0.0, -0.489976, 0.096277, 0.980505, -0.171289, 0.480424, -0.196492, -0.854742]},
+     goals_after_load: ["(set! *rig-stage-hook* (lambda () (set! *rig-stage-hook* (the-as (function none) #f)) (let ((p (the-as process-drawable (process-by-ename \"ice-cube-11\")))) (when p (logclear! (-> p mask) (process-mask enemy actor-pause)) (set-vector! (-> p root trans) (meters 764.1) (meters 220.1) (meters -3266.4) 1.0) (let ((dir (new-stack-vector0))) (set-vector! dir -0.489 0.0 0.870 1.0) (forward-up->quaternion (-> p root quat) dir *up-vector*)) (go-process p ice-cube-become-mean) (let ((n 0)) (while (and (< n 150) (!= (-> p next-state) ice-cube-mean-turn-to-charge)) (+! n 1) (suspend))) (logior! (-> p mask) (process-mask enemy)) (format 0 \"RIG:ICE-CUBE posed~%\"))) (none)))"]}
+  - {name: icecube-spikes-A, continue: snow-fort, hour: 12, jak: hide, actors: freeze, settle_frames: 300, camera: {pos: [3119738.9, 912179.2, -13361356.8], rot: [-0.871736, 0.0, -0.489976, 0.096277, 0.980505, -0.171289, 0.480424, -0.196492, -0.854742]},
+     goals_after_load: ["(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 0) (set! *rig-stage-hook* (lambda () (set! *rig-stage-hook* (the-as (function none) #f)) (let ((p (the-as process-drawable (process-by-ename \"ice-cube-11\")))) (when p (logclear! (-> p mask) (process-mask enemy actor-pause)) (set-vector! (-> p root trans) (meters 764.1) (meters 220.1) (meters -3266.4) 1.0) (let ((dir (new-stack-vector0))) (set-vector! dir -0.489 0.0 0.870 1.0) (forward-up->quaternion (-> p root quat) dir *up-vector*)) (go-process p ice-cube-become-mean) (let ((n 0)) (while (and (< n 150) (!= (-> p next-state) ice-cube-mean-turn-to-charge)) (+! n 1) (suspend))) (logior! (-> p mask) (process-mask enemy)) (format 0 \"RIG:ICE-CUBE posed~%\"))) (none)))"]}
+  - {name: icecube-spikes-B1, continue: snow-fort, hour: 12, jak: hide, actors: freeze, settle_frames: 300, camera: {pos: [3119738.9, 912179.2, -13361356.8], rot: [-0.871736, 0.0, -0.489976, 0.096277, 0.980505, -0.171289, 0.480424, -0.196492, -0.854742]},
+     goals_after_load: ["(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 1000000) (set! *rig-stage-hook* (lambda () (set! *rig-stage-hook* (the-as (function none) #f)) (let ((p (the-as process-drawable (process-by-ename \"ice-cube-11\")))) (when p (logclear! (-> p mask) (process-mask enemy actor-pause)) (set-vector! (-> p root trans) (meters 764.1) (meters 220.1) (meters -3266.4) 1.0) (let ((dir (new-stack-vector0))) (set-vector! dir -0.489 0.0 0.870 1.0) (forward-up->quaternion (-> p root quat) dir *up-vector*)) (go-process p ice-cube-become-mean) (let ((n 0)) (while (and (< n 150) (!= (-> p next-state) ice-cube-mean-turn-to-charge)) (+! n 1) (suspend))) (logior! (-> p mask) (process-mask enemy)) (format 0 \"RIG:ICE-CUBE posed~%\"))) (none)))"]}
+  - {name: icecube-spikes-B2, continue: snow-fort, hour: 12, jak: hide, actors: freeze, settle_frames: 300, camera: {pos: [3119738.9, 912179.2, -13361356.8], rot: [-0.871736, 0.0, -0.489976, 0.096277, 0.980505, -0.171289, 0.480424, -0.196492, -0.854742]},
+     goals_after_load: ["(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-pbr-param 40 2500000) (set! *rig-stage-hook* (lambda () (set! *rig-stage-hook* (the-as (function none) #f)) (let ((p (the-as process-drawable (process-by-ename \"ice-cube-11\")))) (when p (logclear! (-> p mask) (process-mask enemy actor-pause)) (set-vector! (-> p root trans) (meters 764.1) (meters 220.1) (meters -3266.4) 1.0) (let ((dir (new-stack-vector0))) (set-vector! dir -0.489 0.0 0.870 1.0) (forward-up->quaternion (-> p root quat) dir *up-vector*)) (go-process p ice-cube-become-mean) (let ((n 0)) (while (and (< n 150) (!= (-> p next-state) ice-cube-mean-turn-to-charge)) (+! n 1) (suspend))) (logior! (-> p mask) (process-mask enemy)) (format 0 \"RIG:ICE-CUBE posed~%\"))) (none)))"]}

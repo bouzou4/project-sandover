@@ -1,0 +1,77 @@
+# Vista / neighbour-fidelity fog. Source of truth for rig runs:
+# `sandover-capture run ... --preset vista=<name>` sends the forms from `sandover-preset apply`.
+#
+# fog_start_m     unified fog: distance before any fog, metres
+# fog_density     unified fog: optical depth per km at sea level
+# fog_height_m    unified fog: scale height of the density falloff, metres (0: none)
+# haze_density    haze in neighbour mode: optical depth per km past haze_start_m (0 or absent: off)
+# haze_start_m    haze: distance before any haze, metres (about the viewer level's edge)
+# haze_max        haze: 0-1 cap on the haze amount
+# haze_tint       [r, g, b] multipliers on the viewer's fog colour giving the haze colour
+# standin_levels  true: load and draw the levels the viewer's stand-ins depict (vista option 12;
+#                 village2 and rolling from village1) instead of the stand-ins
+# [presets.<name>.neighbour_fog.<level>]   override for one neighbour level (vista draws only)
+#   density_scale multiplies fog_density
+#   tint          [r, g, b] multipliers on the viewer's fog colour (0-1.99)
+#   max_fog       0-1 cap on the fog amount (omit: the viewer level's own cap)
+#   haze_scale    multiplies haze_density
+# caption         one line for the compare view: what visibly differs, never parameters
+
+[meta]
+schema = 1
+phase = "vista"
+
+# Viewer levels that may load and draw neighbours (the neighbour-load policy); from
+# any other level neighbour mode draws nothing beyond vanilla. The viewer is the level the player
+# is in (level-get-target-inside). Mirrored by kOutdoor in Neighbours.cpp (a test checks).
+# A hand list, not derived from the stand-ins: ogre (medres-snow) and finalboss (16 lores/medres
+# pieces) carry stand-ins but their neighbours intrude, while beach, rolling and snow carry none
+# because vanilla draws their neighbour for real. kb/howto/vista.md "Indoor levels".
+[outdoor]
+levels = ["training", "village1", "beach", "jungle", "misty", "firecanyon", "village2", "rolling",
+          "swamp", "village3", "snow"]
+
+# Neighbours kept out of another level's play space: `level` is not drawn while the camera is
+# inside `inside`'s geometry box (metres; kb/facts/vista.md detail box). Firecanyon's walls stand
+# on beach's cliff top, 5-40 m from Jak at the flut flut egg ledge, and vanilla never displays the
+# two together. Keyed on the camera, not the viewer level: in play the viewer there was village1.
+# Mirrored by kKeepOut in Neighbours.cpp (a test checks). kb/howto/vista.md "Neighbours kept out".
+[[keep_out]]
+level = "firecanyon"
+inside = "beach"
+box_min = [-514.73, -19.71, -606.67]
+box_max = [-12.86, 152.13, -86.02]
+
+[presets.haze]
+caption = "Real neighbours in a light haze; misty island and geyser rock darker and obscured, with their silhouettes kept"
+fog_start_m = 150
+fog_density = 0.15
+fog_height_m = 800
+# Density: midpoint between the first fit (0.6) and the vanilla stand-ins' far-band luminance at
+# hut-roof dusk; kb/findings/2026-09-25-black-cliff-haze-midpoint.md.
+haze_density = 0.85
+haze_start_m = 200
+haze_tint = [1.1, 1.12, 1.0]
+haze_max = 0.7
+standin_levels = true
+
+# Misty: obscured at noon (island contrast below its stand-in's), spires kept by the height
+# falloff at dusk. Rolling: the real Precursor Basin fogged to its vanilla stand-in's
+# near-silhouette at hut-roof dusk, rock village (village2) to its stand-in. kb/findings/2026-09-25-black-cliff-haze-midpoint.md.
+[presets.haze.neighbour_fog.misty]
+density_scale = 16.0
+tint = [0.95, 0.93, 0.88]
+haze_scale = 0.0
+
+[presets.haze.neighbour_fog.rolling]
+density_scale = 10.0
+tint = [0.83, 0.82, 0.94]
+
+[presets.haze.neighbour_fog.village2]
+density_scale = 16.0
+tint = [0.79, 0.79, 1.01]
+
+[presets.haze.neighbour_fog.training]
+density_scale = 7.0
+tint = [0.92, 0.9, 0.88]
+haze_scale = 0.0

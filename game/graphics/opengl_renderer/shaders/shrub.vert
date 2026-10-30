@@ -1,4 +1,6 @@
 #version 410 core
+SSAO_NORMAL_VERT
+INSPECT_VERT
 
 layout (location = 0) in vec3 position_in;
 layout (location = 1) in vec3 tex_coord_in;
@@ -15,11 +17,26 @@ uniform vec4 cam_trans;
 uniform mat4 pc_camera;
 uniform sampler1D tex_T10; // note, sampled in the vertex shader on purpose.
 
+PBR_BG_VERT
+
 out vec4 fragment_color;
 out vec3 tex_coord;
 out float fogginess;
 
+// actor shadows: receiver position and sun share (global estimate without sidecar data)
+uniform float shadow_share_global;
+WORLD_SHADOW_VERT
+out vec3 shadow_pos;
+out float shadow_share;
+out float shadow_receive;  // 1 - emissive: lit surfaces never get an actor shadow
+
+ATMO_UNIFORMS_VERT
+out float fog_tw;  // share of the fog layer that takes the neighbour tint
+
+ATMO_FOG_VERT
+ATMO_COMBINE_VERT
 void main() {
+  insp_vid = uint(gl_VertexID);
   // old system:
   // - load vf12
   // - itof0 vf12
@@ -43,10 +60,20 @@ void main() {
 
   // do fog!
   fogginess = 255 - clamp(-transformed.w + hvdf_offset.w, fog_min, fog_max);
+  haze_f = 0.;
+  fog_tw = 1.;
+  if (atmo.x > 0.) {
+    vec3 d = (position_in - cam_trans.xyz) * (1. / 4096.);
+    float af = atmo_fog(length(d), 0.5 * (position_in.y + cam_trans.y) * (1. / 4096.));
+    haze_f = haze.z * (1. - exp(-haze.x * max(length(d) - haze.y, 0.)));
+    fogginess = atmo.x > 1.5 ? atmo_combine(fogginess, af, haze_f, fog_tw) : af;
+  }
 
   // scissoring area adjust
   transformed.y *= SCISSOR_ADJUST * HEIGHT_SCALE;
   gl_Position = transformed;
+  ssao_cpos = gl_Position.xyw;
+  ssao_vnrm = vec4(0.0);
 
   // time of day lookup
   // start with the vertex color (only rgb, VIF filled in the 255.)
@@ -59,7 +86,16 @@ void main() {
   if (decal == 1) {
     fragment_color.xyz = vec3(1.0, 1.0, 1.0);
   }
+  pbr_cau = decal == 1 ? vec3(0.0) : 4.0 * rgba_base * pbr_caustic_env(time_of_day_index);
 
   tex_coord = tex_coord_in;
   tex_coord.xy /= 4096;
+  shadow_pos = position_in;
+  // the palette part of the colour (the base colour scales it like a texture)
+  vec3 tod2 = tod_color.rgb * 2.0;
+  shadow_share = (ws_on & 1) != 0 ? ws_share_est(tod2, ws_glow_share(time_of_day_index, tod2))
+                                 : shadow_share_global;
+  shadow_share1 = shadow_share;
+  shadow_receive = 1.0;
+  pbr_vertex(position_in, cam_trans.xyz, uvec4(0u));
 }

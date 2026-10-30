@@ -1,11 +1,81 @@
 //--------------------------MIPS2C---------------------
 
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
+
+#include "game/graphics/gfx.h"
 #include "game/kernel/jak1/kscheme.h"
 #include "game/mips2c/mips2c_private.h"
 using namespace jak1;
 namespace Mips2C::jak1 {
 
 ExecutionContext sky_regs_vfs;
+
+namespace {
+u16 oct_unorm(float v) {
+  return (u16)std::clamp(std::lround((v * 0.5f + 0.5f) * 65535.f), 0L, 65535L);
+}
+
+/*!
+ * XR: the sky polygon in the scratch buffer at t4 (t0 vertices) goes out unclipped. Each vertex
+ * carries its homogeneous GS position u = (x / 256, y / 256, w): direction octahedral in x and y,
+ * log2 |u| in z bits 9-22 and F (22 bits, 2^-15 octave steps), the GS depth in z bits 0-8 and
+ * z bit 23 as the marker (DirectRenderer decodes it). st is not divided by the vertex depth.
+ */
+void draw_sky_polygon_directions(ExecutionContext* c) {
+  u8* mem = g_ee_main_mem;
+  const u32 buf = c->gprs[a1].du32[0];
+  u32 out;
+  memcpy(&out, mem + buf + 4, 4);
+  const u32 src = c->gprs[t4].du32[0];
+  const int n = (int)c->gprs[t0].du32[0];
+  const auto& vf13 = c->vfs[13];
+  const auto& vf23 = c->vfs[23];
+  const auto& vf24 = c->vfs[24];
+  const auto& vf26 = c->vfs[26];
+  memcpy(mem + out, &c->vfs[27], 16);
+  memcpy(mem + out, &n, 4);
+  out += 16;
+  const u32 zdepth = std::min((u32)std::max(0.f, vf23.f[0]), 511u);
+  for (int i = 0; i < n; i++) {
+    float p[4], st[4], col[4];
+    memcpy(p, mem + src + 48 * i, 16);
+    memcpy(st, mem + src + 48 * i + 16, 16);
+    memcpy(col, mem + src + 48 * i + 32, 16);
+    float u[3] = {p[0] * vf26.f[0] / 256.f, p[1] * vf26.f[1] / 256.f, p[3]};
+    const float len = std::sqrt(u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
+    const u32 code = (u32)std::clamp(
+        std::lround(((len > 0.f ? std::log2(len) : -64.f) + 64.f) * 32768.f), 0L, 4194303L);
+    const float l1 = std::abs(u[0]) + std::abs(u[1]) + std::abs(u[2]);
+    for (auto& x : u) {
+      x /= l1 > 0.f ? l1 : 1.f;
+    }
+    if (u[2] < 0.f) {
+      const float ox = (1.f - std::abs(u[1])) * (u[0] >= 0.f ? 1.f : -1.f);
+      const float oy = (1.f - std::abs(u[0])) * (u[1] >= 0.f ? 1.f : -1.f);
+      u[0] = ox;
+      u[1] = oy;
+    }
+    float sto[4];
+    for (int k = 0; k < 4; k++) {
+      sto[k] = st[k] + vf24.f[k];
+    }
+    s32 rgba[4];
+    for (int k = 0; k < 4; k++) {
+      rgba[k] = (s32)col[k];
+    }
+    const u32 zfield = 0x800000u | ((code >> 8) << 9) | zdepth;
+    const s32 xyzf[4] = {(s32)oct_unorm(u[0]), (s32)oct_unorm(u[1]), (s32)(zfield << 4),
+                         (s32)((code & 0xffu) << 4)};
+    memcpy(mem + out, sto, 16);
+    memcpy(mem + out + 16, rgba, 16);
+    memcpy(mem + out + 32, xyzf, 16);
+    out += 48;
+  }
+  memcpy(mem + buf + 4, &out, 4);
+}
+}  // namespace
 
 }  // namespace Mips2C::jak1
 
@@ -751,6 +821,15 @@ u64 execute(void* ctxt) {
   c->daddiu(sp, sp, -8);                            // daddiu sp, sp, -8
   // nop                                            // sll r0, r0, 0
   c->sd(ra, 0, sp);                                 // sd ra, 0(sp)
+  // SANDOVER_XR_SKY_CLIPPED: the old clipped GS polygons in XR too (A/B of the sky band)
+  static const bool xr_clipped = std::getenv("SANDOVER_XR_SKY_CLIPPED") != nullptr;
+  if (Gfx::g_global_settings.xr_enable && !xr_clipped) {
+    draw_sky_polygon_directions(c);
+    c->ld(ra, 0, sp);
+    c->daddiu(v0, s7, 8);
+    c->daddiu(sp, sp, 8);
+    goto end_of_function;
+  }
   c->load_symbol(t9, cache.clip_polygon_against_positive_hyperplane);// lw t9, clip-polygon-against-positive-hyperplane(s7)
   c->mov64(a2, t4);                                 // or a2, t4, r0
   c->mov64(a3, t5);                                 // or a3, t5, r0

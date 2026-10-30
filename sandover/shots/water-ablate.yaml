@@ -1,0 +1,41 @@
+# Reproducible ablation for (the mid ocean envmap holes), step 1: the beach snapshot
+# camera once per shading variant, 3 frames each. Run with --preset water=bold; every shot
+# sets view, ripple, hex and fresnel itself, because forms persist from shot to shot.
+set: water-ablate
+defaults:
+  resolution: [3840, 2054]
+  msaa: 4
+  settle_frames: 120
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - {name: beach-base, continue: beach-start, hour: 7.772, jak_pos: [-580650.812, 8700.754, -298296.312],
+     camera: {pos: [-542860.062, 27657.885, -277138.25], rot: [-0.487705, 2e-06, 0.873008, -0.116803, 0.991009, -0.065254, -0.865159, -0.133794, -0.48332]},
+     pan: {frames: 3},
+     goals_after_load: ["(pc-set-water 6 0)", "(pc-set-water 1 300000)", "(pc-set-water 54 1000000)", "(pc-set-water 4 400000)"]}
+  - {name: beach-normal-view, continue: beach-start, hour: 7.772, jak_pos: [-580650.812, 8700.754, -298296.312],
+     camera: {pos: [-542860.062, 27657.885, -277138.25], rot: [-0.487705, 2e-06, 0.873008, -0.116803, 0.991009, -0.065254, -0.865159, -0.133794, -0.48332]},
+     pan: {frames: 3},
+     goals_after_load: ["(pc-set-water 6 1000000)", "(pc-set-water 1 300000)", "(pc-set-water 54 1000000)", "(pc-set-water 4 400000)"]}
+  - {name: beach-fresnel-view, continue: beach-start, hour: 7.772, jak_pos: [-580650.812, 8700.754, -298296.312],
+     camera: {pos: [-542860.062, 27657.885, -277138.25], rot: [-0.487705, 2e-06, 0.873008, -0.116803, 0.991009, -0.065254, -0.865159, -0.133794, -0.48332]},
+     pan: {frames: 3},
+     goals_after_load: ["(pc-set-water 6 3000000)", "(pc-set-water 1 300000)", "(pc-set-water 54 1000000)", "(pc-set-water 4 400000)"]}
+  - {name: beach-glint-view, continue: beach-start, hour: 7.772, jak_pos: [-580650.812, 8700.754, -298296.312],
+     camera: {pos: [-542860.062, 27657.885, -277138.25], rot: [-0.487705, 2e-06, 0.873008, -0.116803, 0.991009, -0.065254, -0.865159, -0.133794, -0.48332]},
+     pan: {frames: 3},
+     goals_after_load: ["(pc-set-water 6 2000000)", "(pc-set-water 1 300000)", "(pc-set-water 54 1000000)", "(pc-set-water 4 400000)"]}
+  - {name: beach-ripple-off, continue: beach-start, hour: 7.772, jak_pos: [-580650.812, 8700.754, -298296.312],
+     camera: {pos: [-542860.062, 27657.885, -277138.25], rot: [-0.487705, 2e-06, 0.873008, -0.116803, 0.991009, -0.065254, -0.865159, -0.133794, -0.48332]},
+     pan: {frames: 3},
+     goals_after_load: ["(pc-set-water 6 0)", "(pc-set-water 1 0)", "(pc-set-water 54 1000000)", "(pc-set-water 4 400000)"]}
+  - {name: beach-hex-off, continue: beach-start, hour: 7.772, jak_pos: [-580650.812, 8700.754, -298296.312],
+     camera: {pos: [-542860.062, 27657.885, -277138.25], rot: [-0.487705, 2e-06, 0.873008, -0.116803, 0.991009, -0.065254, -0.865159, -0.133794, -0.48332]},
+     pan: {frames: 3},
+     goals_after_load: ["(pc-set-water 6 0)", "(pc-set-water 1 300000)", "(pc-set-water 54 0)", "(pc-set-water 4 400000)"]}
+  - {name: beach-fresnel-off, continue: beach-start, hour: 7.772, jak_pos: [-580650.812, 8700.754, -298296.312],
+     camera: {pos: [-542860.062, 27657.885, -277138.25], rot: [-0.487705, 2e-06, 0.873008, -0.116803, 0.991009, -0.065254, -0.865159, -0.133794, -0.48332]},
+     pan: {frames: 3},
+     goals_after_load: ["(pc-set-water 6 0)", "(pc-set-water 1 300000)", "(pc-set-water 54 1000000)", "(pc-set-water 4 0)"]}

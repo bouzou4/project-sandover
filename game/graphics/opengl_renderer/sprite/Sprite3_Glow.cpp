@@ -187,6 +187,17 @@ void Sprite3::glow_dma_and_draw(DmaFollower& dma,
   }
   SpriteGlowConsts consts;
   memcpy(&consts, maybe_consts_setup.data, sizeof(SpriteGlowConsts));
+  // camera-space eye offset (stereo), before the separate perspective step
+  consts.camera[3].x() -= render_state->stereo_eye_x;
+  if (render_state->eye.active) {
+    eye_world_to_camera(consts.camera, render_state->eye);
+    for (auto& row : consts.perspective) {
+      row.x() *= render_state->eye.fov_x;
+      row.y() *= render_state->eye.fov_y;
+    }
+    consts.basis_x.x() *= render_state->eye.fov_x;
+    consts.basis_y.y() *= render_state->eye.fov_y;
+  }
 
   auto templ_1 = dma.read_and_advance();
   ASSERT(templ_1.size_bytes == 16 * 0x54);

@@ -822,6 +822,24 @@ std::string ObjectFileDB::process_tpages(TextureDB& tex_db,
     file_util::write_text_file(tex_dump_out, tex_dump);
   }
 
+  if (cfg.write_texture_levels) {
+    // "<tpage>/<name>" -> levels using it, from TextureDB::texture_ids_per_level.
+    file_util::create_dir_if_needed(dump_out);
+    std::unordered_map<u32, std::vector<std::string>> levels_by_combo_id;
+    for (auto& [level_name, combo_ids] : tex_db.texture_ids_per_level) {
+      for (auto combo_id : combo_ids) {
+        levels_by_combo_id[combo_id].push_back(level_name);
+      }
+    }
+    nlohmann::json levels_json = nlohmann::json::object();
+    for (auto& [combo_id, tex] : tex_db.textures) {
+      auto& levels = levels_by_combo_id[combo_id];
+      std::sort(levels.begin(), levels.end());
+      levels_json[fmt::format("{}/{}", tex_db.tpage_names[tex.page], tex.name)] = levels;
+    }
+    file_util::write_text_file(dump_out / "texture-levels.json", levels_json.dump(-1));
+  }
+
   return result;
 }
 

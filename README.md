@@ -1,219 +1,239 @@
-<p align="center">
-  <img width="500" height="100%" src="./docs/img/logo-text-colored-new.png">
-</p>
+# Sandover
 
-<p align="center">
-  <a href="https://opengoal.dev/docs/intro" rel="nofollow"><img src="https://img.shields.io/badge/Documentation-Here-informational" alt="Documentation Badge" style="max-width:100%;"></a>
-  <a title="Crowdin" target="_blank" href="https://crowdin.com/project/opengoal"><img src="https://badges.crowdin.net/opengoal/localized.svg"></a>
-  <a target="_blank" rel="noopener noreferrer" href="https://github.com/open-goal/jak-project/actions/workflows/build-matrix.yaml"><img src="https://github.com/open-goal/jak-project/actions/workflows/build-matrix.yaml/badge.svg" alt="Linux and Windows Build" style="max-width:100%;"></a>
-  <a href="https://www.codacy.com/gh/open-goal/jak-project/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=open-goal/jak-project&amp;utm_campaign=Badge_Grade" rel="nofollow"><img src="https://app.codacy.com/project/badge/Grade/29316d04a1644aa390c33be07289f3f5" alt="Codacy Badge" style="max-width:100%;"></a>
-  <a href="https://discord.gg/VZbXMHXzWv"><img src="https://img.shields.io/discord/756287461377703987" alt="Discord"></a>
-</p>
+Project Sandover is built on OpenGOAL; the upstream project's README is kept as
+[README.opengoal.md](README.opengoal.md).
 
-## Please read first <!-- omit from toc -->
+A lighting and materials remaster of *Jak and Daxter: The Precursor Legacy*, built on
+[OpenGOAL](https://github.com/open-goal/jak-project). Sandover keeps the game, its levels and its
+art direction, and changes how the world is lit and shaded:
 
-> [!IMPORTANT]
-> Our repositories on GitHub are for development of the project and tracking active issues. Most of the information you will find here pertains to setting up the project for development purposes and is not relevant to the end-user.
+- shadows from the sun, the moon and local lights (lamps, crystals, eco) on actors and the world
+- ground-truth ambient occlusion (GTAO), and light cast by glowing surfaces: eco, lava, lamps,
+  crystals (the red crystals of the Mountain Pass and the blue wall crystals of the Spider Cave light their surroundings)
+- PBR materials (normal and roughness per texture), fur, ice, metals that take the level's light
+- reworked water: clear inland water, wet shorelines with foam, sun glint shadowed by the world
+- neighbouring levels drawn for real in the distance, with fog at least as dense as the original
+- a sun, moon and stars in the style of *Jak 3*
+- HDR10 or scRGB output with an in-game calibration page
+- temporal antialiasing (the default) and render scale with AMD FidelityFX FSR 3.1, FSR 4 (on
+  supported AMD cards) or NVIDIA DLSS
+- VR through OpenXR on SteamVR (tested on a PSVR2), with the upscaler run per eye and the menus
+  and HUD on a flat panel in front of you
+- surround and spatial audio: 5.1, 7.1, headphones, and Dolby Atmos, Windows Sonic or DTS:X
+  through Windows Spatial Sound, with a speaker test
 
-For a setup guide on how to install and play the game there is the following video that you can check out: https://youtu.be/K84UUMnkJc4
+**Status: public beta, 0.9.0.** A partial playthrough found no crashes or
+progression blockers; see [Known issues](#known-issues).
 
-For questions or additional information pertaining to the project, we have a Discord for discussion here: https://discord.gg/VZbXMHXzWv
+## Screenshots
 
-Additionally, you can find further documentation and answers to **frequently asked questions** on the project's main website: https://opengoal.dev
-
-> [!WARNING]
-> **Do not use this decompilation project without the use of your own legally purchased copy of the game.** OpenGOAL does not include any assets from the original games, so you must provide your own legitimately obtained PS2 copy of the game. OpenGOAL supports every retail PAL, NTSC, and NTSC-J build, including Greatest Hits copies. Please note that does NOT include any of the later releases (PS3/PS4/PS5).
-
-- [Project Description](#project-description)
-  - [Current Status](#current-status)
-  - [Methodology](#methodology)
-- [Setting up a Development Environment](#setting-up-a-development-environment)
-  - [OS Setup](#os-setup)
-  - [Editor Setup](#editor-setup)
-  - [Building and Running the Game](#building-and-running-the-game)
-    - [Extract Assets](#extract-assets)
-    - [Build the Game (Running the Compiler)](#build-the-game-running-the-compiler)
-    - [Run the Game](#run-the-game)
-      - [Connecting the REPL to the Game](#connecting-the-repl-to-the-game)
-      - [Running the Game Without Auto-Booting](#running-the-game-without-auto-booting)
-- [Technical Project Overview](#technical-project-overview)
-
-## Project Description
-
-The project's goal is to port the original trilogy (Jak 1 -> Jak 3) to PC. Over 98% of the games were written in GOAL, a custom LISP language developed by Naughty Dog. Our strategy is:
-- decompile the original game code into human-readable GOAL code
-- develop our own compiler for GOAL and recompile the game code for x86-64
-- create a tool to extract game assets into formats that can be easily viewed or modified
-- create tools to repack game assets into a format that our port uses.
-
-Our objectives are:
-- make the port a "native application" on x86-64, with high performance. It shouldn't be emulated, interpreted, or transpiled.
-- Our GOAL compiler's performance should be around the same as unoptimized C.
-- try to match things from the original game and development as possible. For example, the original GOAL compiler supported live modification of code while the game is running, so we do the same, even though it's not required for just porting the game.
-- support modifications. It should be possible to make edits to the code without everything else breaking.
-
-At the moment we support **x86_64** on Windows, Linux and macOS (via Rosetta translation).  There are no plans to ever make a mobile release.
-
-### Current Status
-
-- Jak 1 has been considered in a polished, complete state for years at this point.
-- Jak 2 is considered in beta due to a few issues we are aware of that need fixing, however to the casual user, the game is essentially complete.
-- Jak 3 has a good amount of work left to do.
-
-![](./docs/img/promosmall1.png)
-![](./docs/img/promosmall2.png)
-
-YouTube playlist showcasing some of the early progress for Jak 1:
-https://www.youtube.com/playlist?list=PLWx9T30aAT50cLnCTY1SAbt2TtWQzKfXX
-
-### Methodology
-
-To assist with decompiling, we've built a decompiler that can process GOAL code and unpack game assets. We manually specify function types and locations where we believe the original code had type casts (or where they feel appropriate) until the decompilation succeeds, then we clean up the output of the decompiled code by adding comments and adjusting formatting, then save it in `goal_src/`.
-
-Our decompiler is designed specifically for processing the output of the original GOAL compiler. As a result, when given correct casts, it often produces code that can be directly fed into a compiler and works perfectly. This is continually tested as part of our unit tests.
-
-## Setting up a Development Environment
-
-The remainder of this README is aimed at people interested in building the project from source, typically with the intention of contributing as a developer.
-
-If this does not sound like you and you just want to play the game, refer to the above section [Quick Start](#quick-start)
-
-### OS Setup
-
-- [Windows](/docs/setup/system/windows.md)
-- [Linux](/docs/setup/system/linux.md)
-- [MacOS](/docs/setup/system/macos.md)
-- [Docker](/docs/setup/system/docker.md)
-
-### Editor Setup
-
-You can of course use whatever editor you want, but here is some documentation that should help you get started on some of the editor's we have used and have written about:
-
-- [Visual Studio (Windows)](/docs/setup/dev/vs.md)
-- [Visual Studio Code](/docs/setup/dev/vscode.md)
-- [Zed](/docs/setup/dev/zed.md)
-
-### Building and Running the Game
-
-Getting a running game involves 4 main steps:
-
-1. Build C++ tools (follow Getting Started steps above for your platform)
-2. Extract assets from the game
-3. Build the game
-4. Run the game
-
-#### Extract Assets
-
-First, we have to setup our environment so we know which game and version we are operating with. For the black label version of Jak 1 we would run the following:
-
-```sh
-task set-game-jak1
-task set-decomp-ntscv1 # or for example for PAL, `task set-decomp-pal`
-```
-
-> Run `task --list` to see the other available options
-
-Next, ensure you extract your ISO file contents into the relevant `iso_data/<game-name>` folder.  In the case of Jak 1 this is `iso_data/jak1`.
-
-Once this is done, open a terminal in the `jak-project` folder and run the following:
-
-```sh
-task extract
-```
-
-#### Build the Game (Running the Compiler)
-
-The next step is to build the game itself.  To do so, in the same terminal run the following:
-
-```sh
-task repl
-```
-
-You will be greeted with a prompt like so:
-
-```sh
- _____             _____ _____ _____ __
-|     |___ ___ ___|   __|     |  _  |  |
-|  |  | . | -_|   |  |  |  |  |     |  |__
-|_____|  _|___|_|_|_____|_____|__|__|_____|
-      |_|
-Welcome to OpenGOAL 0.8!
-Run (repl-help) for help with common commands and REPL usage.
-Run (lt) to connect to the local target.
-
-g >
-```
-
-Run the following to build the game:
-
-```sh
-g > (mi)
-```
-
-> IMPORTANT NOTE! If you're not using the non-default version of the game, you may hit issues trying to run `(mi)` in this step. An example error might include something like:
->
-> `Input file iso_data/jak1/MUS/TWEAKVAL.MUS does not exist.`
->
-> This is because the decompiler inputs/outputs using the `gameName` JSON field in the decompiler config. For example if you are using Jak 1 PAL, it will assume `iso_data/jak1_pal` and `decompiler_out/jak1_pal`.  Therefore, you can inform the REPL/compiler of this via the `gameVersionFolder` config field described [here](./goal_src/user/README.md)
-
-#### Run the Game
-
-Finally the game can be launched.  Open a second terminal from the `jak-project` directory and run the following:
-
-```sh
-task boot-game
-```
-
-The game should boot automatically if everything was done correctly.
-
-##### Connecting the REPL to the Game
-
-Connecting the REPL to the game allows you to inspect and modify code or data while the game is running.
-
-To do so, in the REPL after a successful `(mi)`, run the following:
-
-```sh
-g > (lt)
-```
-
-If successful, your prompt should change to:
-
-```sh
-gc>
-```
-
-For example, running the following will print out some basic information about Jak:
-
-```sh
-gc> *target*
-```
-
-##### Running the Game Without Auto-Booting
-
-You can also start up the game without booting.  To do so run the following in one terminal
-
-```sh
-task run-game
-```
-
-And then in your REPL run the following (after a successful `(mi)`):
-
-```sh
-g > (lt)
-[Listener] Socket connected established! (took 0 tries). Waiting for version...
-Got version 0.8 OK!
-[Debugger] Context: valid = true, s7 = 0x147d24, base = 0x2123000000, tid = 2438049
-
-gc> (lg)
-10836466        #xa559f2              0.0000        ("game" "kernel")
-
-gc> (test-play)
-(play :use-vis #t :init-game #f) has been called!
-0        #x0              0.0000        0
-
-gc>
-```
-
-## Technical Project Overview
-
-Some more detail about the various components of the project can be found [here](/docs/project-overview.md)
+Sentinel Beach from above Sandover Village at sunset: the low sun lays a bright path across the
+water, and the palms and cliffs catch it on their edges.
+
+| Stock OpenGOAL | Sandover |
+|---|---|
+| ![Sentinel Beach from above Sandover Village at sunset, stock OpenGOAL](sandover/docs/showcase/01-beach-from-village-sunset-before.jpg) | ![Sentinel Beach from above Sandover Village at sunset, Sandover](sandover/docs/showcase/01-beach-from-village-sunset-after.jpg) |
+
+Forbidden Jungle coast at dawn: the sun rises over the open sea and a path of sunlight runs
+across the waves.
+
+| Stock OpenGOAL | Sandover |
+|---|---|
+| ![Forbidden Jungle coast at dawn, stock OpenGOAL](sandover/docs/showcase/02-jungle-dawn-sea-before.jpg) | ![Forbidden Jungle coast at dawn, Sandover](sandover/docs/showcase/02-jungle-dawn-sea-after.jpg) |
+
+Snowy Mountain at sunrise: low, grazing light across the snow, with glints sparkling on the
+drift in front.
+
+| Stock OpenGOAL | Sandover |
+|---|---|
+| ![Snowy Mountain at sunrise, stock OpenGOAL](sandover/docs/showcase/03-snowy-mountain-sunrise-before.jpg) | ![Snowy Mountain at sunrise, Sandover](sandover/docs/showcase/03-snowy-mountain-sunrise-after.jpg) |
+
+Lava Tube: the lava field lights the rock around it in orange.
+
+| Stock OpenGOAL | Sandover |
+|---|---|
+| ![Lava Tube, stock OpenGOAL](sandover/docs/showcase/04-lava-tube-before.jpg) | ![Lava Tube, Sandover](sandover/docs/showcase/04-lava-tube-after.jpg) |
+
+Spider Cave: the blue and green crystals light the cave wall and floor around them.
+
+| Stock OpenGOAL | Sandover |
+|---|---|
+| ![Spider Cave, stock OpenGOAL](sandover/docs/showcase/05-spider-cave-crystals-before.jpg) | ![Spider Cave, Sandover](sandover/docs/showcase/05-spider-cave-crystals-after.jpg) |
+
+Sentinel Beach at dawn: low morning sun lights the cliffs and the waterfall in the cove.
+
+| Stock OpenGOAL | Sandover |
+|---|---|
+| ![Sentinel Beach at dawn, stock OpenGOAL](sandover/docs/showcase/06-beach-cove-dawn-before.jpg) | ![Sentinel Beach at dawn, Sandover](sandover/docs/showcase/06-beach-cove-dawn-after.jpg) |
+
+## Requirements
+
+- **Windows** 11, 64-bit, with a current graphics driver. Development and testing used AMD
+  Radeon and NVIDIA GPUs on Windows 11. Nothing is vendor-only: any GPU with OpenGL 4.3 and a CPU
+  with AVX runs every effect and FSR 3.1. Windows 10 should work but is untested.
+- **Optional, per feature:** DLSS needs an NVIDIA RTX card and `nvngx_dlss.dll` (not included, see
+  [Settings](#settings)); FSR 4 needs a card and driver that support it (Radeon RX 9000 series,
+  or RX 7000 with a recent driver) and DirectX 12; HDR needs an HDR display with Windows HDR on
+  and a driver with OpenGL-Direct3D interop (`WGL_NV_DX_interop2`); VR needs an OpenXR runtime (SteamVR) and a headset.
+- **The [OpenGOAL launcher](https://opengoal.dev)**, a recent version with mod support.
+- **Your own copy of the game** as a disc image (`.iso`) made from your own disc. Nothing from
+  the game is in this repository; what the download holds is listed under [Install](#install).
+  If you already play Jak 1 in the launcher, the mod reuses the disc data you gave it.
+
+### Disc version
+
+Sandover's lighting data is built for the **original North American release (NTSC-U 1.0)**.
+
+- NTSC-U 1.0: everything works as intended.
+- Other releases (PAL, NTSC-J, later NTSC-U printings) should work, untested; only NTSC-U 1.0
+  was tested. Where a level's geometry differs from NTSC-U 1.0, the differing parts keep the
+  original lighting, and the game log names the level (`unbake: <level> ...`).
+
+## Install
+
+The OpenGOAL launcher is the only supported way to install Sandover.
+
+1. In the launcher, open **Settings > Mods**, paste this into **Mod Source URL** and press **Add**:
+
+   ```
+   https://raw.githubusercontent.com/bouzou4/project-sandover/master/sandover/release/mod-source.json
+   ```
+
+2. Open **Jak and Daxter**, then **Features > Mods**. Pick **Sandover (beta)** under
+   **Available Mods** and install it. The launcher downloads the release, builds the game from
+   your disc data (a few minutes) and gives the mod its own **Play** button.
+3. Optional, for VR: see [VR](#vr). The launcher's **Play** button starts the flat-screen game.
+4. Optional, for HDR: turn on **Use HDR** for your display in Windows Settings > System > Display
+   before starting the game, then set peak brightness, paper white and black level on
+   **Options > Sandover > HDR CALIBRATION**.
+
+Updates arrive through the same mod source. Sandover keeps its own settings and saves, separate
+from the stock game in the launcher.
+
+The download (about 400 MB) holds the engine, the game's source code, and data Sandover derived
+offline from the game's files: per-texture PBR maps, canopy maps and per-level lighting sidecars
+for NTSC-U 1.0. Your own Jak 1 disc image is still required.
+
+## Settings
+
+Everything but contact shadows is on by default. **Pause > Options > Sandover** has:
+
+- **VANILLA RENDERING**, off by default: the stock OpenGOAL renderer (MSAA at the stock setting,
+  no Sandover effects). Every other row greys out while it is on.
+- an **on/off row for each enhancement**: AMBIENT OCCLUSION, EMISSIVE LIGHT, BLOOM,
+  ACTOR SHADOWS, MATERIALS, FUR, WATER, SUN GLINT ON WATER, NEIGHBOUR LEVELS, SUN,
+  FP16 COLOR, and CONTACT SHADOWS (off by default)
+- **LOW / MEDIUM / HIGH** only for the two heavy ones: SHADOW QUALITY (HIGH by default) and
+  AMBIENT OCCLUSION QUALITY, which adds ULTRA (MEDIUM by default)
+- **MOTION BLUR** (OFF, WEAK, MEDIUM, STRONG; MEDIUM by default) blurs moving actors only, and
+  **CAMERA MOTION BLUR** (OFF, VEHICLES, ALWAYS; VEHICLES by default) adds the camera's own motion
+- **HDR OUTPUT**: PQ (HDR10, the default), SCRGB, or off, and the **HDR CALIBRATION** page. The
+  game presents HDR only while Windows HDR is on for its display; otherwise it runs in SDR.
+- **UPSCALER**: TEMPORAL AA (FSR 3.1), the antialiasing of every Sandover frame (AMD FidelityFX
+  FSR 3.1, vendor-neutral, any GPU with OpenGL 4.3). **FSR 4** is offered where the card and
+  driver support it; AMD's runtime for it ships with the mod. On NVIDIA graphics cards **DLSS**
+  is offered as well. It needs `nvngx_dlss.dll`,
+  which is not included: a copy placed in the mod folder next to `gk.exe` is used first (it is
+  usually taken from the [DLSS SDK](https://github.com/NVIDIA/DLSS) or from an installed game that
+  uses DLSS); otherwise a copy the NVIDIA App has stored on the system is used when there is one.
+  Without either the DLSS entry is not offered.
+- **RENDER SCALE** (100%, 77%, 67%, 59%, 50%, 33%), each with the resolution it renders at and the
+  quality name (NATIVE, or DLAA with DLSS, QUALITY, BALANCED, PERFORMANCE, ULTRA PERFORMANCE); 100%
+  by default
+- **AUDIO** page: OUTPUT (AUTO, STEREO, 5.1, 7.1, HEADPHONES, SPATIAL), DEVICE, and a SPEAKER
+  TEST that plays a burst on each channel in turn (see [Audio](#audio))
+
+Some rows depend on others: EMISSIVE LIGHT needs AMBIENT OCCLUSION on, CONTACT SHADOWS need
+ACTOR SHADOWS on and temporal AA, CAMERA MOTION BLUR needs MOTION BLUR on, and HDR OUTPUT
+and HDR CALIBRATION need FP16 COLOR on. A greyed-out row is waiting for the row it depends on.
+
+On a weaker GPU, render resolution is the safe lever: the game's art was made for PS2
+resolution, so rendering below your display's resolution costs far less than it would in a
+modern game. Turn individual enhancements off after that.
+
+If exclusive fullscreen looks washed out in HDR, close overlays such as the NVIDIA app overlay
+and try again.
+
+## VR
+
+Sandover plays in a headset through OpenXR; it was developed on a PSVR2 with SteamVR. Start
+SteamVR, then start `gk.exe` in the mod folder with `--xr` plus the launcher's boot arguments;
+the launcher's **Play** button starts the flat-screen game. Press **F6** while sitting the way you will play to
+recentre.
+
+- While a headset session runs the options page edits a separate VR profile (VR SETTINGS), saved
+  apart from the flat-screen settings. Render scale defaults to 67% of each eye's frame.
+- The upscaler runs per eye (FSR 3.1 or FSR 4; DLSS, contact shadows, HDR output and motion blur
+  are not available in VR).
+- Menus, HUD, text and subtitles are on a flat panel 2 m in front of you. The blackout and
+  letterbox cover that panel, not the whole view.
+- Head motion is smooth at the headset's rate; the game's own animation runs at 60 Hz.
+
+## Audio
+
+**Pause > Options > Sandover > AUDIO** sets the output: AUTO follows the speaker layout Windows
+reports for the device, and STEREO, 5.1, 7.1 and HEADPHONES (binaural) force one. SPATIAL uses
+Windows Spatial Sound (Dolby Atmos, Windows Sonic or DTS:X, whichever Windows has enabled for the
+device) and applies at the next game start. In surround, dialogue goes to the centre, music and
+ambience are spread to the sides and rear, and positional effects are placed around you. The
+SPEAKER TEST helps check the wiring; the page names the device, the output in use and any
+mismatch with the Windows speaker setup.
+
+## Known issues
+
+- **Effects take a long time to appear the first time they are used.** The graphics driver
+  builds each effect's pipelines on its first draw and a level's material maps upload when it
+  first comes into view, so the first seconds after boot, after a load, and after turning an
+  effect on can stall, or show black in VR. The game is not held back while this happens.
+- **Distant geometry of a neighbouring level overlaps the real level geometry** in some far
+  views, seen in the precursor basin and in a lava area. Visual only.
+- **Input can stop responding after changing a graphics setting in an in-game menu** while the
+  game keeps running. It recovers after a wait.
+- **VR:** actors can be missing at the far edge of the view when the head is turned quickly;
+  heat haze does not follow the head; the blackout and letterbox cover only the menu panel.
+  Only the PSVR2 through SteamVR has been tested.
+- **Audio:** surround routing is proven by measurement, not yet by listening on a receiver, and
+  Dolby Atmos and DTS:X on a receiver are untested. Cutscene dialogue routing is unverified.
+- **Jak can render as a white silhouette** during the zoomer overheat death with HDR on.
+- **A thin lit sliver** shows along one contact crease in the jungle (shadow bias).
+
+## Roadmap to 1.0
+
+- Gate the game on a ready state: hold the loading screen until every enabled effect is built,
+  instead of stalling in play
+- VR: pass a full smoke test on real headsets
+- Performance-tiered settings for lower-end GPUs
+- Further optimization
+- Linux and Steam Deck
+
+## Reporting bugs
+
+Use the in-game bug report, so the problem can be reproduced:
+
+1. Where you see the problem, press **F7** (or **Options > Sandover > SAVE BUG REPORT (F7)**).
+   "BUG REPORT SAVED" shows at the top left.
+2. The report goes to the `bug-reports` folder in the mod's settings folder, inside the
+   launcher's install folder: `features/jak1/mods/Sandover/_settings/sandover/bug-reports`. Each
+   report is a PNG of the frame, a JSON sidecar (level, camera, time of day, your Sandover
+   settings, display and HDR state, build, Windows version, GPU and driver, the end of the game
+   log) and a zip of both. File paths and your user name are removed before it is written.
+3. Open an issue with the **Sandover bug report** form, say what you saw and what you expected,
+   and attach the zip.
+
+## Building from source
+
+Sandover is a fork of OpenGOAL's [jak-project](https://github.com/open-goal/jak-project), and
+the upstream build instructions apply. Sandover's own notes are in `sandover/kb/` (start with
+`sandover/kb/howto/build-and-extract.md`); release packaging is described in
+`sandover/kb/findings/2026-10-08-packaging.md`.
+
+## License and credits
+
+- Built on [OpenGOAL](https://opengoal.dev) by the OpenGOAL team, whose decompilation, compiler
+  and PC port make this possible. Sandover is not affiliated with or supported by the OpenGOAL
+  team; report Sandover problems here, not to them.
+- *Jak and Daxter* is a Naughty Dog game published by Sony Interactive Entertainment. Sandover is
+  an unofficial fan project; you need your own copy of the game.
+- Source code: ISC License, as upstream (`LICENSE`). Third-party libraries keep their own
+  licenses under `third-party/`; OpenAL Soft (LGPL) ships as a separate DLL with its notices,
+  and its source is in `third-party/openal-soft` at the release tag.

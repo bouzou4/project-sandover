@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sandover-bug-report/1",
+  "title": "Sandover bug report sidecar (report.json)",
+  "description": "Written by gk (game/graphics/bug_report.cpp) next to screenshot.png. A superset of the snapshot-run sidecar (kb/howto/snapshot-run.md): sandover-bug import copies it to <run>/NNNN.json.",
+  "type": "object",
+  "required": ["schema", "schema_version", "id", "source", "time_utc", "level", "continue", "jak_pos",
+               "cam_pos", "cam_rows", "fov", "hour", "mood_weights", "build", "system", "display",
+               "settings", "files", "log_tail"],
+  "properties": {
+    "schema": {"const": "sandover-bug-report"},
+    "schema_version": {"type": "integer", "minimum": 1},
+    "id": {"type": "string", "description": "local time YYYYMMDD-HHMMSS, -N on a clash; also the folder and zip name"},
+    "source": {"enum": ["key", "menu", "repl"]},
+    "index": {"type": "integer"},
+    "time_utc": {"type": "string", "description": "ISO 8601, UTC, Z suffix"},
+    "level": {"type": ["string", "null"]},
+    "continue": {"type": ["string", "null"]},
+    "jak_pos": {"$ref": "#/$defs/vec3", "description": "game units, 4096 per metre"},
+    "jak_quat": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+    "cam_pos": {"$ref": "#/$defs/vec3"},
+    "cam_rows": {"type": "array", "items": {"$ref": "#/$defs/vec3"}, "minItems": 3, "maxItems": 3,
+                 "description": "*math-camera* inv-camera-rot rows, as in the shot manifests' camera.rot"},
+    "fov": {"type": "number", "description": "degrees"},
+    "hour": {"type": "number", "minimum": 0, "maximum": 24},
+    "mood_weights": {"type": "array", "items": {"type": "number"}, "minItems": 8, "maxItems": 8},
+    "toggles": {"type": "array", "items": {"type": "string"}},
+    "build_sha": {"type": ["string", "null"]},
+    "hdr": {"type": "boolean"},
+    "status": {"type": "string"},
+    "note": {"type": ["string", "null"]},
+    "tags": {"type": "array"},
+    "annotations": {"type": "array"},
+    "build": {
+      "type": "object",
+      "required": ["id", "commit"],
+      "properties": {
+        "id": {"type": "string", "description": "the staged or packaged build's name (build.json bin), else dev-<revision>"},
+        "commit": {"type": ["string", "null"]},
+        "branch": {"type": ["string", "null"]},
+        "built": {"type": ["string", "null"]},
+        "compiled_revision": {"type": "string"}
+      }
+    },
+    "system": {
+      "type": "object",
+      "required": ["os", "gpu"],
+      "properties": {
+        "os": {"type": "string"},
+        "cpu_threads": {"type": "integer"},
+        "gpu": {
+          "type": "object",
+          "required": ["vendor", "renderer", "driver"],
+          "properties": {
+            "vendor": {"type": "string"},
+            "renderer": {"type": "string"},
+            "driver": {"type": "string", "description": "GL_VERSION, which carries the driver version"}
+          }
+        }
+      }
+    },
+    "display": {
+      "type": "object",
+      "required": ["game_resolution", "screenshot", "render_scale", "hdr"],
+      "properties": {
+        "mode": {"enum": ["windowed", "fullscreen", "borderless", "unknown"]},
+        "window": {"$ref": "#/$defs/size"},
+        "refresh_hz": {"type": "integer"},
+        "game_resolution": {"$ref": "#/$defs/size"},
+        "screenshot": {"$ref": "#/$defs/size"},
+        "render_scale": {"type": "number"},
+        "upscaler": {"enum": ["bilinear", "fsr1", "fsr3", "none"]},
+        "msaa": {"type": "integer"},
+        "aa_mode": {"type": "integer"},
+        "vsync": {"type": "boolean"},
+        "hdr": {
+          "type": "object",
+          "required": ["fp16_target", "output_requested", "presenting"],
+          "properties": {
+            "fp16_target": {"type": "boolean"},
+            "output_requested": {"type": "boolean"},
+            "format": {"enum": ["pq", "scrgb"]},
+            "presenting": {"type": "boolean"},
+            "peak_nits": {"type": "number"},
+            "paper_white_nits": {"type": "number"},
+            "black_nits": {"type": "number"},
+            "display_peak_nits": {"type": "number"},
+            "display_black_nits": {"type": "number"},
+            "desktop_white_nits": {"type": "number"}
+          }
+        }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "required": ["sandover"],
+      "properties": {
+        "sandover": {"$ref": "#/$defs/settings_file"},
+        "pc": {"$ref": "#/$defs/settings_file"}
+      }
+    },
+    "files": {
+      "type": "object",
+      "required": ["screenshot"],
+      "properties": {
+        "screenshot": {"type": "string"},
+        "preview": {"type": "string"}
+      }
+    },
+    "log_tail": {"type": "array", "items": {"type": "string"}, "maxItems": 200}
+  },
+  "$defs": {
+    "vec3": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+    "size": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+    "settings_file": {
+      "type": ["object", "null"],
+      "description": "a settings file read by gk: version, values (key: value) and, for sandover.gc, the file text",
+      "properties": {
+        "version": {"type": ["integer", "string"]},
+        "values": {"type": "object"},
+        "text": {"type": "string"}
+      }
+    }
+  }
+}

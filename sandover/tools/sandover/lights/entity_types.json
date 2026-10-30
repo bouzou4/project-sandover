@@ -1,0 +1,5413 @@
+{
+ "pickup_types": {
+  "0": "none",
+  "1": "eco-yellow",
+  "2": "eco-red",
+  "3": "eco-blue",
+  "4": "eco-green",
+  "5": "money",
+  "6": "fuel-cell",
+  "7": "eco-pill",
+  "8": "buzzer",
+  "9": "eco-pill-random"
+ },
+ "pickup_types_source": "goal_src/jak1/engine/game/fact-h.gc:48",
+ "pickup_colours": {
+  "1": {
+   "colour": [
+    1.0,
+    0.84,
+    0.0
+   ],
+   "radius_hint_m": 3.0,
+   "group": "goal_src/jak1/engine/common-obs/collectables-part.gc:1045 group-eco-yellow"
+  },
+  "2": {
+   "colour": [
+    1.0,
+    0.4,
+    0.0
+   ],
+   "radius_hint_m": 3.0,
+   "group": "goal_src/jak1/engine/common-obs/collectables-part.gc:515 group-eco-red"
+  },
+  "3": {
+   "colour": [
+    0.42,
+    0.47,
+    1.0
+   ],
+   "radius_hint_m": 3.0,
+   "group": "goal_src/jak1/engine/common-obs/collectables-part.gc:61 group-eco-blue"
+  },
+  "4": {
+   "colour": [
+    0.7,
+    1.0,
+    0.05
+   ],
+   "radius_hint_m": 3.0,
+   "group": "goal_src/jak1/engine/common-obs/collectables-part.gc:1249 group-eco-green (as 'health' type)"
+  },
+  "5": {
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "radius_hint_m": 1.5,
+   "note": "precursor orb model, color-emissive 0.2 (goal_src/jak1/engine/common-obs/collectables.gc:756); hue is the texture, not in code; emits no light (design decision 2026-09-26)"
+  },
+  "6": {
+   "colour": [
+    1.0,
+    1.0,
+    0.6
+   ],
+   "radius_hint_m": 4.0,
+   "group": "goal_src/jak1/engine/common-obs/collectables-part.gc:1751 group-fuel-cell-starburst"
+  },
+  "7": {
+   "colour": [
+    0.5,
+    1.0,
+    0.1
+   ],
+   "radius_hint_m": 1.0,
+   "group": "goal_src/jak1/engine/common-obs/collectables-part.gc:1359 group-eco-green-pill"
+  },
+  "8": {
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "radius_hint_m": 1.0,
+   "emits": "maybe",
+   "group": "goal_src/jak1/engine/common-obs/collectables-part.gc:1944 group-buzzer-effect (additive white wing sprites, a=32)"
+  },
+  "9": {
+   "colour": [
+    0.5,
+    1.0,
+    0.1
+   ],
+   "radius_hint_m": 1.0,
+   "note": "drops green eco-pill(s)"
+  }
+ },
+ "fact_options_bits": {
+  "vent-blocked": 1,
+  "has-power-cell": 2,
+  "vent-valve": 4,
+  "large": 1024,
+  "powerup": 4096,
+  "touch": 8192,
+  "eco-blocked": 262144,
+  "respawn": 524288,
+  "source": "goal_src/jak1/engine/game/fact-h.gc:63"
+ },
+ "colour_convention": "0..1, normalized so the max component = 1; taken from additive (flags bit3) particle :r :g :b (128 = 1.0) weighted by :a. 'assumed' in a note means the code gives no colour.",
+ "state_kinds": {
+  "always": "no gate",
+  "entity-flag": "entity perm status (dead/complete), own or alt-actor's",
+  "task": "game-task status",
+  "player": "depends on player state (blue eco powerup, distance)",
+  "transient": "short event-driven flash"
+ },
+ "types": {
+  "accordian": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/jungle-obs.gc:351",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "allpontoons": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/village2-obs.gc:377",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "assistant": {
+   "emits": "maybe",
+   "colour": [
+    1.0,
+    0.88,
+    0.7
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 1.5,
+   "state": {
+    "kind": "always",
+    "var": "intermittent: welding-torch sparks during the welding idle anim (assistant.gc:150-165)"
+   },
+   "moves": "small",
+   "note": "group-assistant-torch additive at the torchTIP joint",
+   "source": "goal_src/jak1/levels/village1/assistant.gc:158",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "assistant-bluehut": {
+   "emits": "maybe",
+   "colour": [
+    1.0,
+    0.88,
+    0.7
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 1.5,
+   "state": {
+    "kind": "always",
+    "var": "intermittent welding torch (assistant-village2.gc:396-406)"
+   },
+   "moves": "small",
+   "note": "group-assistant-bluehut-torch",
+   "source": "goal_src/jak1/levels/village2/assistant-village2.gc:396",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "assistant-firecanyon": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/firecanyon/assistant-firecanyon.gc:8",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "assistant-lavatube-end": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/assistant-citadel.gc:8",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "assistant-lavatube-start": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/lavatube/assistant-lavatube.gc:8",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "assistant-levitator": {
+   "emits": "maybe",
+   "colour": [
+    0.25,
+    0.25,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 6.0,
+   "state": {
+    "kind": "task",
+    "var": "blue levitator beam during/after the village2-levitator sequence (assistant-village2.gc:948-991)"
+   },
+   "moves": false,
+   "note": "group-levitator-blue-beam additive",
+   "source": "goal_src/jak1/levels/village2/assistant-village2.gc:990",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "assistant-villagec": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village3/assistant-village3.gc:8",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "babak": {
+   "emits": false,
+   "source": "goal_src/jak1/engine/common-obs/babak.gc:8",
+   "lump_keys_present": [
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "idle-distance",
+    "name",
+    "nav-mesh-actor",
+    "nav-mesh-sphere",
+    "next-actor",
+    "notice-top",
+    "options",
+    "path",
+    "prev-actor",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "babak-with-cannon": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/babak-with-cannon.gc:10",
+   "lump_keys_present": [
+    "alt-actor",
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "distance",
+    "idle-distance",
+    "movie-pos",
+    "name",
+    "options",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "baby-spider": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/maincave/baby-spider.gc:27",
+   "lump_keys_present": [
+    "crystal-light",
+    "name",
+    "nav-mesh-actor",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "balance-plat": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/swamp/swamp-obs.gc:312",
+   "lump_keys_present": [
+    "distance",
+    "name",
+    "next-actor",
+    "prev-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "balloon": {
+   "emits": false,
+   "note": "cooling balloon; additive group only on pop",
+   "source": "goal_src/jak1/levels/firecanyon/firecanyon-obs.gc:8",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "balloonlurker": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/balloonlurker.gc:256",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "next-actor",
+    "options",
+    "path",
+    "path-actor",
+    "prev-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "barrel": {
+   "emits": false,
+   "note": "crate subclass (look 'barrel); contents as crate, default eco-pill-random",
+   "source": "goal_src/jak1/engine/common-obs/crates.gc:871",
+   "lump_fields": [
+    "eco-info"
+   ],
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "beachcam": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/beach-obs.gc:1101",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "billy": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/swamp/billy.gc:9",
+   "lump_keys_present": [
+    "alt-actor",
+    "eco-info",
+    "movie-pos",
+    "name",
+    "nav-mesh-sphere",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "bird-lady": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/bird-lady.gc:8",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "bird-lady-beach": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/bird-lady-beach.gc:8",
+   "lump_keys_present": [
+    "movie-pos",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "bladeassm": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/beach-obs.gc:675",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "blue-eco-charger": {
+   "emits": true,
+   "colour": [
+    0.42,
+    0.47,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 3.0,
+   "state": {
+    "kind": "task",
+    "var": "orb glows (eco-blue-glow) while the charger is open; open when task sunken-room reminder is nonzero (sun-exit-chamber.gc:365-372)"
+   },
+   "moves": false,
+   "note": "blue-eco-charger-orb child, eco-blue-glow sparks (sun-exit-chamber.gc:222-228)",
+   "source": "goal_src/jak1/levels/sunken/sun-exit-chamber.gc:171",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "nav-mesh-actor",
+    "next-actor",
+    "prev-actor",
+    "rotoffset",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "blue-sagecage": {
+   "emits": true,
+   "colour": [
+    0.21,
+    0.2,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 5.0,
+   "state": {
+    "kind": "task",
+    "var": "beam-on when the sage's task status is invalid, i.e. rescued (citadel-sages.gc:268-269); drawn in idle post (citadel-sages.gc:327)"
+   },
+   "moves": false,
+   "note": "Beam from a sage joint to the target, plus impact; additive.",
+   "source": "goal_src/jak1/levels/citadel/citadel-sages.gc:434",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "boat-fuelcell": {
+   "emits": false,
+   "note": "spawns a fuel-cell (see fuel-cell) on the 'task-complete event",
+   "source": "goal_src/jak1/levels/misty/misty-obs.gc:1530",
+   "lump_keys_present": [
+    "movie-pos",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "boatpaddle": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/misty-obs.gc:957",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "bone-platform": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/misty-obs.gc:1346",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol",
+    "water-actor"
+   ]
+  },
+  "bonelurker": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/bonelurker.gc:9",
+   "lump_keys_present": [
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "idle-distance",
+    "name",
+    "nav-mesh-actor",
+    "nearest-y-threshold",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "breakaway-left": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/misty-obs.gc:1277",
+   "lump_keys_present": [
+    "name",
+    "prev-actor",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "breakaway-mid": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/misty-obs.gc:1274",
+   "lump_keys_present": [
+    "name",
+    "next-actor",
+    "prev-actor",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "breakaway-right": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/misty-obs.gc:1271",
+   "lump_keys_present": [
+    "name",
+    "next-actor",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "bucket": {
+   "emits": false,
+   "note": "crate subclass; default contents none (crates.gc:831)",
+   "source": "goal_src/jak1/engine/common-obs/crates.gc:879",
+   "lump_fields": [
+    "eco-info"
+   ],
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "bully": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/bully.gc:17",
+   "lump_keys_present": [
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "name",
+    "nav-mesh-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "camera-start": {
+   "emits": false,
+   "source": "goal_src/jak1/engine/common-obs/generic-obs.gc:131",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "cave-trap": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/robocave/cave-trap.gc:9",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "nav-max-users",
+    "nav-mesh-sphere",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "cave-water": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/maincave/maincave-obs.gc:49",
+   "lump_keys_present": [
+    "look",
+    "mode",
+    "name",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "cavecrusher": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/maincave/maincave-obs.gc:80",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "cavecrystal": {
+   "emits": true,
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 70.0,
+   "state": {
+    "kind": "transient",
+    "var": "lit when attacked; stays lit for 'timeout' lump seconds (default 8) with flicker, then fades; drives *cavecrystal-light-control*, which lights nearby actors (fade 5 m to 70 m, cavecrystal-light.gc:69-70)"
+   },
+   "moves": false,
+   "note": "The game's own point light for darkcave. color-mult lerps from 0 to 1 (off black, on white); emissive stays 0 (darkcave-obs.gc:139-145). Hue comes from the texture.",
+   "source": "goal_src/jak1/levels/darkcave/darkcave-obs.gc:103",
+   "lump_fields": [
+    "timeout",
+    "extra-id"
+   ],
+   "lump_keys_present": [
+    "name",
+    "nav-mesh-actor",
+    "next-actor",
+    "prev-actor",
+    "scale",
+    "timeout",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "caveelevator": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/maincave/maincave-obs.gc:599",
+   "lump_keys_present": [
+    "crystal-light",
+    "mode",
+    "name",
+    "path",
+    "rotoffset",
+    "sync",
+    "trans-offset",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "caveflamepots": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.7,
+    0.1
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 4.0,
+   "state": {
+    "kind": "always",
+    "var": "periodic: flames while (time + cycle-offset) mod cycle-speed < cycle-speed - cycle-pause (maincave-obs.gc:339-350)"
+   },
+   "moves": false,
+   "note": "Additive bigpuff parts 704/705, r128 g128 b0 with g fading: yellow to orange/red flame (maincave-obs.gc:275).",
+   "source": "goal_src/jak1/levels/maincave/maincave-obs.gc:349",
+   "lump_fields": [
+    "cycle-speed",
+    "shove",
+    "rotoffset"
+   ],
+   "lump_keys_present": [
+    "cycle-speed",
+    "name",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "cavegem": {
+   "emits": "maybe",
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 9.0,
+   "state": {
+    "kind": "always",
+    "var": "always"
+   },
+   "moves": false,
+   "note": "Plain animated mesh (bounds 9 m); any glow is texture only.",
+   "source": "goal_src/jak1/levels/village3/miners.gc:383",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "light-index",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "cavespatula": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/maincave/maincave-obs.gc:455",
+   "lump_keys_present": [
+    "crystal-light",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "cavespatulatwo": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/maincave/maincave-obs.gc:537",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "cavetrapdoor": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/maincave/maincave-obs.gc:140",
+   "lump_keys_present": [
+    "crystal-light",
+    "delay",
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "ceilingflag": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/village2-obs.gc:626",
+   "lump_keys_present": [
+    "light-index",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "chainmine": {
+   "emits": false,
+   "note": "explosion only",
+   "source": "goal_src/jak1/levels/lavatube/lavatube-obs.gc:658",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citadelcam": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:1009",
+   "lump_keys_present": [
+    "name",
+    "trigger-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-arm-a": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:175",
+   "lump_keys_present": [
+    "name",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-arm-b": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:178",
+   "lump_keys_present": [
+    "name",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-arm-c": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:181",
+   "lump_keys_present": [
+    "name",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-arm-d": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:184",
+   "lump_keys_present": [
+    "name",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-arm-shoulder-a": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:187",
+   "lump_keys_present": [
+    "name",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-arm-shoulder-b": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:190",
+   "lump_keys_present": [
+    "name",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-battlecontroller": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:1059",
+   "lump_keys_present": [
+    "alt-actor",
+    "delay",
+    "eco-info",
+    "final-pickup",
+    "idle-distance",
+    "kill-actor",
+    "lurker-type",
+    "max-pickup-count",
+    "mode",
+    "name",
+    "num-lurkers",
+    "path",
+    "patha",
+    "pathb",
+    "pathc",
+    "pathspawn",
+    "percent",
+    "pickup-percent",
+    "pickup-type",
+    "spawner-blocker-actor",
+    "spawner-trigger-actor",
+    "trigger-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-button": {
+   "emits": false,
+   "note": "button",
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:409",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-chain-plat": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citb-plat.gc:307",
+   "lump_keys_present": [
+    "height-info",
+    "name",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-chains": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:788",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-coil": {
+   "emits": true,
+   "colour": [
+    0.4,
+    0.5,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 4.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "group-citb-coil-glow while idle; broken (non-additive) once entity perm complete (citadel-obs.gc:692,721)"
+   },
+   "moves": false,
+   "note": "additive blue",
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:686",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-disc-a": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:334",
+   "lump_keys_present": [
+    "name",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-disc-b": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:337",
+   "lump_keys_present": [
+    "name",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-disc-c": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:340",
+   "lump_keys_present": [
+    "name",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-disc-d": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:343",
+   "lump_keys_present": [
+    "name",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-donut": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citb-plat.gc:512",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-drop-plat": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citb-drop-plat.gc:235",
+   "lump_keys_present": [
+    "count",
+    "name",
+    "plat-type",
+    "rotoffset",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-exit-plat": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citb-plat.gc:736",
+   "lump_keys_present": [
+    "bidirectional",
+    "camera-name",
+    "continue-name",
+    "name",
+    "path",
+    "scale",
+    "state-actor",
+    "trigger-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-firehose": {
+   "emits": false,
+   "note": "red additive blast only while firing (citb-plat.gc:654)",
+   "source": "goal_src/jak1/levels/citadel/citb-plat.gc:601",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-generator": {
+   "emits": true,
+   "colour": [
+    0.37,
+    0.49,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 5.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "group-citb-generator-on (+ mushroom) until broken, then perm complete (citadel-obs.gc:914,999)"
+   },
+   "moves": false,
+   "note": "additive blue",
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:887",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "movie-pos",
+    "name",
+    "scale",
+    "state-actor",
+    "trigger-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-hose": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:731",
+   "lump_keys_present": [
+    "name",
+    "state-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-iris-door": {
+   "emits": false,
+   "note": "eco-door",
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:366",
+   "lump_keys_present": [
+    "flags",
+    "name",
+    "scale",
+    "state-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-launcher": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.17,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "always",
+    "var": "always while alive"
+   },
+   "moves": true,
+   "note": "Precursor platform under-glow: goal_src/jak1/engine/common-obs/plat.gc:10 group-standard-plat (part 364 additive hotdot, g 0-64, b 128-256), spawned every frame via baseplat-method-20 (baseplat.gc:108). Also owns a launcher (cyan, gated on blue eco).",
+   "source": "goal_src/jak1/engine/common-obs/plat.gc:120",
+   "lump_fields": [
+    "path",
+    "sync"
+   ],
+   "lump_keys_present": [
+    "mode",
+    "name",
+    "options",
+    "path",
+    "path-actor",
+    "spring-height",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-plat": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.17,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "always",
+    "var": "always while alive"
+   },
+   "moves": true,
+   "note": "Precursor platform under-glow: goal_src/jak1/engine/common-obs/plat.gc:10 group-standard-plat (part 364 additive hotdot, g 0-64, b 128-256), spawned every frame via baseplat-method-20 (baseplat.gc:108).",
+   "source": "goal_src/jak1/engine/common-obs/plat.gc:120",
+   "lump_fields": [
+    "path",
+    "sync"
+   ],
+   "lump_keys_present": [
+    "name",
+    "path",
+    "scale",
+    "sync",
+    "trans-offset",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-plat-eco": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.17,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "entity-flag",
+    "var": "as plat-eco"
+   },
+   "moves": true,
+   "note": "plat-eco subclass",
+   "source": "goal_src/jak1/levels/citadel/citb-plat.gc:111",
+   "lump_fields": [
+    "path",
+    "sync"
+   ],
+   "lump_keys_present": [
+    "name",
+    "path",
+    "path-k",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-robotboss": {
+   "emits": true,
+   "colour": [
+    0.25,
+    0.0,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 20.0,
+   "state": {
+    "kind": "task",
+    "var": "shield group spawned while shield-on; the process dies when its entity task status is invalid (citadel-obs.gc:611-614,643)"
+   },
+   "moves": false,
+   "note": "additive purple-blue shield (0.31,0,1.25 of 128), also drives a palette fade",
+   "source": "goal_src/jak1/levels/citadel/citadel-obs.gc:613",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-rotatebox": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citb-plat.gc:463",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-stair-plat": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/citadel/citb-plat.gc:206",
+   "lump_keys_present": [
+    "delay",
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "citb-stopbox": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.17,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "always",
+    "var": "always while alive"
+   },
+   "moves": true,
+   "note": "Precursor platform under-glow: goal_src/jak1/engine/common-obs/plat.gc:10 group-standard-plat (part 364 additive hotdot, g 0-64, b 128-256), spawned every frame via baseplat-method-20 (baseplat.gc:108).",
+   "source": "goal_src/jak1/engine/common-obs/plat.gc:120",
+   "lump_fields": [
+    "path",
+    "sync"
+   ],
+   "lump_keys_present": [
+    "name",
+    "path",
+    "path-actor",
+    "path-k",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "crate": {
+   "emits": false,
+   "note": "Crate body does not glow (except crate-type 'darkeco: color-emissive 0.2, crates.gc:828). Contents exist only after the crate breaks: money/buzzer/eco-blue/yellow/red/fuel-cell go through special-contents-die (crates.gc:696-709), others through drop-pickup. eco-info [5,N] = N orbs. No eco-info -> eco-pill-random, amount *FACT-bank* default-pill-inc (crates.gc:786); looks 'darkeco and 'bucket default to none (crates.gc:823,831). Buzzer contents force look iron (crates.gc:805-810); the buzzer crate spawns an occasional non-additive puff. Broken state persists in entity perm user-int8 (crates.gc:857).",
+   "source": "goal_src/jak1/engine/common-obs/crates.gc:767",
+   "lump_fields": [
+    "eco-info",
+    "crate-type",
+    "options"
+   ],
+   "state": {
+    "kind": "entity-flag",
+    "var": "contents spawn when the crate breaks (perm user-int8[0] >= 1 -> starts dead); spawned orbs are entity-perm tracked like money"
+   },
+   "moves": false,
+   "contents_emit": {
+    "1": {
+     "name": "eco-yellow",
+     "bake": {
+      "class": "weak",
+      "gate": "crate",
+      "gain": 40.0,
+      "radius_m": 5.0,
+      "offset_m": [
+       0.0,
+       0.8,
+       0.0
+      ]
+     },
+     "colour": [
+      1.0,
+      0.84,
+      0.0
+     ],
+     "radius_hint_m": 3.0,
+     "emits": true
+    },
+    "2": {
+     "name": "eco-red",
+     "bake": {
+      "class": "weak",
+      "gate": "crate",
+      "gain": 40.0,
+      "radius_m": 5.0,
+      "offset_m": [
+       0.0,
+       0.8,
+       0.0
+      ]
+     },
+     "colour": [
+      1.0,
+      0.4,
+      0.0
+     ],
+     "radius_hint_m": 3.0,
+     "emits": true
+    },
+    "3": {
+     "name": "eco-blue",
+     "bake": {
+      "class": "weak",
+      "gate": "crate",
+      "gain": 40.0,
+      "radius_m": 5.0,
+      "offset_m": [
+       0.0,
+       0.8,
+       0.0
+      ]
+     },
+     "colour": [
+      0.42,
+      0.47,
+      1.0
+     ],
+     "radius_hint_m": 3.0,
+     "emits": true
+    },
+    "4": {
+     "name": "eco-green",
+     "colour": [
+      0.7,
+      1.0,
+      0.05
+     ],
+     "radius_hint_m": 3.0,
+     "emits": true
+    },
+    "5": {
+     "name": "money",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "radius_hint_m": 1.5,
+     "emits": false
+    },
+    "6": {
+     "name": "fuel-cell",
+     "colour": [
+      1.0,
+      1.0,
+      0.6
+     ],
+     "radius_hint_m": 4.0,
+     "emits": true
+    },
+    "7": {
+     "name": "eco-pill",
+     "colour": [
+      0.5,
+      1.0,
+      0.1
+     ],
+     "radius_hint_m": 1.0,
+     "emits": true
+    },
+    "8": {
+     "name": "buzzer",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "radius_hint_m": 1.0,
+     "emits": "maybe"
+    },
+    "9": {
+     "name": "eco-pill-random",
+     "colour": [
+      0.5,
+      1.0,
+      0.1
+     ],
+     "radius_hint_m": 1.0,
+     "emits": true
+    }
+   },
+   "darkeco_look": {
+    "emits": "maybe",
+    "colour": [
+     0.31,
+     0.09,
+     1.0
+    ],
+    "radius_hint_m": 1.5,
+    "note": "crate-type 'darkeco: color-emissive 0.2 (crates.gc:828); 219 instances"
+   },
+   "lump_keys_present": [
+    "crate-type",
+    "eco-info",
+    "light-index",
+    "movie-mask",
+    "movie-pos",
+    "name",
+    "nav-mesh-actor",
+    "options",
+    "pickup-radius",
+    "scale",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "crate-darkeco-cluster": {
+   "emits": false,
+   "colour": [
+    0.31,
+    0.09,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "until destroyed (perm dead)"
+   },
+   "moves": false,
+   "note": "No emissive in code; the dark eco texture is drawn lit like the crate, and no vanilla frame measures it as glowing: no light. Explosion additive purple.",
+   "source": "goal_src/jak1/levels/firecanyon/firecanyon-obs.gc:488",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "dark-crystal": {
+   "emits": true,
+   "bake": {
+    "class": "glow",
+    "gate": "dark-crystal",
+    "param": 1,
+    "gain": 6.0,
+    "colour": [
+     0.42,
+     0.08,
+     1.0
+    ],
+    "radius_m": 8.0,
+    "offset_m": [
+     0.0,
+     2.4,
+     0.0
+    ]
+   },
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 4.0,
+   "state": {
+    "kind": "transient",
+    "var": "flashes lit (emissive 1,1,1) only during its activate countdown before exploding; task cave-dark-crystals"
+   },
+   "moves": false,
+   "note": "Idle is unlit (emissive 0). The flash adds 1 to the model's ambient light (drawable.gc: ambient + color-emissive, times the texture), so it shows its own texture, brighter: linear 0.42, 0.08, 1 (cave-darkcrystal texture 0.41, 0.09, 1; vanilla frames 0.42-0.43, 0.05-0.09, 1). Light: none while idle or between flashes, full on each flash, the explosion's 0.18 s starflash.",
+   "source": "goal_src/jak1/levels/maincave/dark-crystal.gc:419",
+   "lump_fields": [
+    "mode",
+    "extra-radius",
+    "extra-id"
+   ],
+   "lump_keys_present": [
+    "extra-id",
+    "mode",
+    "movie-pos",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "dark-eco-pool": {
+   "emits": true,
+   "colour": [
+    0.31,
+    0.09,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 6.0,
+   "state": {
+    "kind": "always",
+    "var": "always (water-anim idle)"
+   },
+   "moves": false,
+   "note": "Dark eco surface; additive purple group-dark-eco-pool-nasty at random ripple vertices (avg 0.36,0.10,1.16 of 128). Area source: use mesh extents.",
+   "source": "goal_src/jak1/engine/common-obs/dark-eco-pool.gc:310",
+   "lump_fields": [
+    "look"
+   ],
+   "lump_keys_present": [
+    "look",
+    "name",
+    "rotoffset",
+    "scale",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "dark-plant": {
+   "emits": false,
+   "note": "group-dark-plant only in the death state (rolling-obs.gc:223)",
+   "source": "goal_src/jak1/levels/rolling/rolling-obs.gc:137",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "darkecobarrel": {
+   "emits": "maybe",
+   "colour": [
+    0.31,
+    0.09,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.0,
+   "state": {
+    "kind": "always",
+    "var": "spawner emits darkecobarrel-mover processes on a delay/sync schedule"
+   },
+   "moves": true,
+   "note": "Rolling dark eco barrels following a path; only hit/explode particles are additive; body glow is texture only.",
+   "source": "goal_src/jak1/levels/lavatube/lavatube-obs.gc:540",
+   "lump_fields": [
+    "speed",
+    "delay",
+    "sync"
+   ],
+   "lump_keys_present": [
+    "delay",
+    "name",
+    "path",
+    "speed",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "darkvine": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/darkvine.gc:13",
+   "lump_keys_present": [
+    "light-index",
+    "name",
+    "nav-mesh-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "double-lurker": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/double-lurker.gc:17",
+   "lump_keys_present": [
+    "name",
+    "nav-mesh-actor",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "driller-lurker": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/maincave/driller-lurker.gc:9",
+   "lump_keys_present": [
+    "driller-lurker",
+    "name",
+    "options",
+    "path",
+    "path-k",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "eco": {
+   "emits": true,
+   "bake": {
+    "class": "weak",
+    "gate": "alive",
+    "gain": 40.0,
+    "radius_m": 5.0,
+    "offset_m": [
+     0.0,
+     0.8,
+     0.0
+    ]
+   },
+   "colour": [
+    0.42,
+    0.47,
+    1.0
+   ],
+   "colour_from": "eco-info",
+   "radius_hint_m": 3.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "eco-info[0] picks the concrete type (1 yellow, 2 red, 3 blue, 4 green->health, 5 money, 6 fuel-cell, 8 buzzer, else eco-pill). Yellow/red/blue: after pickup sits in 'die' until the player's eco of that colour runs out, then respawns at base (not perm-dead). Green/pill: entity perm dead on pickup. options bit18 eco-blocked -> 'blocked' state until entity task complete. options respawn(bit19): respawn after 'timeout'."
+   },
+   "moves": false,
+   "note": "Static at entity trans (no bob in eco wait code). Particles: eco-effect launch group spawned every frame in wait.",
+   "source": "goal_src/jak1/engine/common-obs/collectables.gc:1363",
+   "lump_fields": [
+    "eco-info",
+    "options",
+    "timeout"
+   ],
+   "colour_by_eco_info": {
+    "1": [
+     1.0,
+     0.84,
+     0.0
+    ],
+    "2": [
+     1.0,
+     0.4,
+     0.0
+    ],
+    "3": [
+     0.42,
+     0.47,
+     1.0
+    ],
+    "4": [
+     0.7,
+     1.0,
+     0.05
+    ],
+    "5": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "6": [
+     1.0,
+     1.0,
+     0.6
+    ],
+    "7": [
+     0.5,
+     1.0,
+     0.1
+    ],
+    "8": [
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "default_no_eco_info": "eco-pill, green (goal_src/jak1/engine/common-obs/collectables.gc:1373)",
+   "refs": [
+    "goal_src/jak1/engine/common-obs/collectables.gc:125 initialize-effect",
+    "goal_src/jak1/engine/common-obs/collectables.gc:546 die/respawn",
+    "goal_src/jak1/engine/common-obs/collectables.gc:263 blocked",
+    "goal_src/jak1/engine/common-obs/collectables.gc:375 wait spawn"
+   ],
+   "lump_keys_present": [
+    "eco-info",
+    "name",
+    "options",
+    "scale",
+    "timeout",
+    "vis-dist",
+    "visvol"
+   ],
+   "launch": {
+    "groups": [
+     "group-eco-yellow",
+     "group-eco-red",
+     "group-eco-blue",
+     "group-eco-green",
+     "group-eco-yellow-collect",
+     "group-eco-red-collect",
+     "group-eco-blue-collect",
+     "group-eco-green-collect"
+    ],
+    "offset_m": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "note": "idle glow spawned at the collision sphere centre (the bake's 0.8 m is already in the origin); the -collect groups are the pickup stream's tracker, spawned :to the eco, so the light follows it to Jak"
+   }
+  },
+  "ecoclaw": {
+   "emits": "maybe",
+   "colour": [
+    0.42,
+    0.47,
+    1.0
+   ],
+   "colour_from": "eco-info",
+   "radius_hint_m": 6.0,
+   "state": {
+    "kind": "task",
+    "var": "finalboss only: beams set by 'open / 'beam-on events from robotboss (robotboss-misc.gc:118-135)"
+   },
+   "moves": false,
+   "note": "eco-info 1..4 on the four claws probably selects the colour, but ecoclaw code does not read it; the colour comes from the event's group.",
+   "source": "goal_src/jak1/levels/finalboss/robotboss-misc.gc:118",
+   "lump_fields": [
+    "eco-info"
+   ],
+   "colour_by_eco_info": {
+    "1": [
+     1.0,
+     0.84,
+     0.0
+    ],
+    "2": [
+     1.0,
+     0.4,
+     0.0
+    ],
+    "3": [
+     0.42,
+     0.47,
+     1.0
+    ],
+    "4": [
+     0.7,
+     1.0,
+     0.05
+    ]
+   },
+   "lump_keys_present": [
+    "eco-info",
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "ecovent": {
+   "emits": true,
+   "colour": [
+    0.42,
+    0.47,
+    1.0
+   ],
+   "colour_from": "eco-info",
+   "radius_hint_m": 6.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "Default blue (goal_src/jak1/engine/common-obs/collectables.gc:1784); eco-info[0] overrides colour. Particles only in vent-wait-for-touch; vent-blocked state spawns nothing. Blocked if: (a) alt-actor set -> until the alt-actor entity perm 'complete' (goal_src/jak1/engine/common-obs/collectables.gc:1661-1666); (b) options = vent-blocked|vent-valve (5) -> until task complete: blue=jungle-eggtop, red=red-eggtop, yellow=snow-eggtop, with an ecovalve cap (goal_src/jak1/engine/common-obs/collectables.gc:1668-1681); (c) options = 1 and no alt-actor -> blocked until a 'show event (finalboss). A 'hide event blocks."
+   },
+   "moves": false,
+   "note": "Infinite source, never consumed. Fixed position.",
+   "source": "goal_src/jak1/engine/common-obs/collectables.gc:1623",
+   "lump_fields": [
+    "eco-info",
+    "alt-actor",
+    "options"
+   ],
+   "colour_by_eco_info": {
+    "1": [
+     1.0,
+     0.84,
+     0.0
+    ],
+    "2": [
+     1.0,
+     0.4,
+     0.0
+    ],
+    "3": [
+     0.42,
+     0.47,
+     1.0
+    ],
+    "4": [
+     0.7,
+     1.0,
+     0.05
+    ]
+   },
+   "vent_groups": {
+    "3": "goal_src/jak1/engine/common-obs/collectables-part.gc:335",
+    "2": "goal_src/jak1/engine/common-obs/collectables-part.gc:722",
+    "1": "goal_src/jak1/engine/common-obs/collectables-part.gc:883",
+    "4": "goal_src/jak1/engine/common-obs/collectables-part.gc:1612"
+   },
+   "lump_keys_present": [
+    "alt-actor",
+    "eco-info",
+    "light-index",
+    "name",
+    "options",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ],
+   "launch": {
+    "groups": [
+     "group-part-vent-blue-active",
+     "group-part-vent-red-active",
+     "group-part-vent-green-active",
+     "group-part-vent-yellow-active"
+    ],
+    "offset_m": [
+     0.0,
+     1.0,
+     0.0
+    ],
+    "note": "spawned at the root (vent-wait-for-touch); light 1 m up the eco column"
+   }
+  },
+  "ecoventrock": {
+   "emits": false,
+   "note": "beach rock blocking a green ecovent (the vent's alt-actor); breaking it sets entity perm complete, which unblocks the vent",
+   "source": "goal_src/jak1/levels/beach/beach-obs.gc:319",
+   "lump_keys_present": [
+    "alt-actor",
+    "movie-pos",
+    "name",
+    "nav-mesh-actor",
+    "next-actor",
+    "prev-actor",
+    "scale",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "eggtop": {
+   "emits": true,
+   "colour": [
+    0.42,
+    0.47,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 5.0,
+   "state": {
+    "kind": "task",
+    "var": "group-jungle-blue-eco-room-open while task jungle-eggtop is not complete; closes after (jungleb-obs.gc:171,262)"
+   },
+   "moves": false,
+   "note": "Blue eco room cap, additive blue (0.56,0.56,1.25 of 128). A fuel-cell child sits inside.",
+   "source": "goal_src/jak1/levels/jungleb/jungleb-obs.gc:172",
+   "lump_fields": [
+    "options"
+   ],
+   "lump_keys_present": [
+    "light-index",
+    "movie-pos",
+    "name",
+    "options",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "energybase": {
+   "emits": false,
+   "note": "mesh only",
+   "source": "goal_src/jak1/levels/lavatube/lavatube-energy.gc:488",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "energydoor": {
+   "emits": false,
+   "note": "mesh only (task-gated door)",
+   "source": "goal_src/jak1/levels/lavatube/lavatube-energy.gc:336",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "energyhub": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.78,
+    0.6
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 8.0,
+   "state": {
+    "kind": "task",
+    "var": "5 energyarms each carry an energyball until task lavatube-balls is closed need-resolution (lavatube-energy.gc:1021-1025, 852)"
+   },
+   "moves": true,
+   "note": "energyball group-energyball-always additive (255,196,196/64) plus zap sparks at arm joints; balls orbit the hub (~6 m radius).",
+   "source": "goal_src/jak1/levels/lavatube/lavatube-energy.gc:999",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "cycle-speed",
+    "effect-name",
+    "effect-param",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "evilbro": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/intro/evilbro.gc:8",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "evilplant": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village1/village-obs.gc:431",
+   "lump_keys_present": [
+    "light-index",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "evilsis": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/intro/evilbro.gc:73",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "exit-chamber": {
+   "emits": false,
+   "note": "sunken exit chamber; the glowing part is its blue-eco-charger entity",
+   "source": "goal_src/jak1/levels/sunken/sun-exit-chamber.gc:64",
+   "lump_keys_present": [
+    "light-index",
+    "movie-mask",
+    "movie-pos",
+    "name",
+    "options",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "exit-chamber-dummy": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/village2-obs.gc:655",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "explorer": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village1/explorer.gc:8",
+   "lump_keys_present": [
+    "movie-pos",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "farmer": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village1/farmer.gc:8",
+   "lump_keys_present": [
+    "alt-actor",
+    "movie-pos",
+    "name",
+    "nav-mesh-actor",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "fireboulder": {
+   "emits": "maybe",
+   "colour": [
+    0.02,
+    0.34,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 4.0,
+   "state": {
+    "kind": "task",
+    "var": "hovers with additive blue group-village2-fireboulder-hover when its task status is invalid (closed) (village2-obs.gc:622); otherwise idle"
+   },
+   "moves": "small",
+   "note": "color-emissive 0.125,0.0625,0 (warm self-illumination, village2-obs.gc:618).",
+   "source": "goal_src/jak1/levels/village2/village2-obs.gc:489",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "fisher": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/fisher.gc:673",
+   "lump_keys_present": [
+    "movie-mask",
+    "movie-pos",
+    "name",
+    "path",
+    "path-k",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "fishermans-boat": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village1/fishermans-boat.gc:353",
+   "lump_keys_present": [
+    "continue-name",
+    "name",
+    "nav-mesh-actor",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "floating-launcher": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.84,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 4.0,
+   "state": {
+    "kind": "player",
+    "var": "spawns a launcher (active-distance 20 m) once raised; that launcher glows only with blue eco"
+   },
+   "moves": true,
+   "source": "goal_src/jak1/levels/sunken/floating-launcher.gc:91",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "alt-vector",
+    "mode",
+    "name",
+    "path",
+    "spring-height",
+    "trigger-height",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "flutflut": {
+   "emits": "maybe",
+   "colour": [
+    0.22,
+    0.61,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "task",
+    "var": "trans-pad glow while the flutflut is available (task beach-flutflut + condition) and waiting (flutflut.gc:60,84-94)"
+   },
+   "moves": false,
+   "note": "group-flut-trans-pad additive blue",
+   "source": "goal_src/jak1/levels/flut_common/flutflut.gc:60",
+   "lump_fields": [
+    "path"
+   ],
+   "lump_keys_present": [
+    "index",
+    "name",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "flutflut-bluehut": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/flutflut-bluehut.gc:8",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "flutflut-plat-large": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.17,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "entity-flag",
+    "var": "hidden until alt-actor snow-button reports pressed / plat task complete (snow-flutflut-obs.gc:393-425)"
+   },
+   "moves": true,
+   "note": "Precursor platform under-glow: goal_src/jak1/engine/common-obs/plat.gc:10 group-standard-plat (part 364 additive hotdot, g 0-64, b 128-256), spawned every frame via baseplat-method-20 (baseplat.gc:108). Own group (snow-flutflut-obs.gc:715).",
+   "source": "goal_src/jak1/engine/common-obs/plat.gc:120",
+   "lump_fields": [
+    "path",
+    "sync",
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "extra-id",
+    "mode",
+    "name",
+    "next-actor",
+    "path",
+    "prev-actor",
+    "scale",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "flutflut-plat-med": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.17,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "entity-flag",
+    "var": "hidden until alt-actor snow-button reports pressed / plat task complete (snow-flutflut-obs.gc:393-425)"
+   },
+   "moves": true,
+   "note": "Precursor platform under-glow: goal_src/jak1/engine/common-obs/plat.gc:10 group-standard-plat (part 364 additive hotdot, g 0-64, b 128-256), spawned every frame via baseplat-method-20 (baseplat.gc:108). Own group (snow-flutflut-obs.gc:687).",
+   "source": "goal_src/jak1/engine/common-obs/plat.gc:120",
+   "lump_fields": [
+    "path",
+    "sync",
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "extra-id",
+    "mode",
+    "name",
+    "next-actor",
+    "path",
+    "path-k",
+    "prev-actor",
+    "scale",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "flutflut-plat-small": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.17,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "entity-flag",
+    "var": "hidden until alt-actor snow-button reports pressed / plat task complete (snow-flutflut-obs.gc:393-425)"
+   },
+   "moves": true,
+   "note": "Precursor platform under-glow: goal_src/jak1/engine/common-obs/plat.gc:10 group-standard-plat (part 364 additive hotdot, g 0-64, b 128-256), spawned every frame via baseplat-method-20 (baseplat.gc:108). Own group (snow-flutflut-obs.gc:647).",
+   "source": "goal_src/jak1/engine/common-obs/plat.gc:120",
+   "lump_fields": [
+    "path",
+    "sync",
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "extra-id",
+    "mode",
+    "name",
+    "next-actor",
+    "path",
+    "path-k",
+    "prev-actor",
+    "rotoffset",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "flutflutegg": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/beach-obs.gc:727",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "flying-lurker": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/ogre/flying-lurker.gc:210",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "next-actor",
+    "path",
+    "path-k",
+    "prev-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "fuel-cell": {
+   "emits": true,
+   "colour": [
+    1.0,
+    1.0,
+    0.6
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 4.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "collected -> entity perm dead / task complete"
+   },
+   "moves": "small",
+   "note": "Rises up to 2867.2 units (0.7 m) above base when the player is within suck-suck-dist, settles otherwise (goal_src/jak1/engine/common-obs/collectables.gc:908-912). color-emissive 0.5 (goal_src/jak1/engine/common-obs/collectables.gc:864) + group-fuel-cell-starburst (additive white/yellow starflash 192,192,64, goal_src/jak1/engine/common-obs/collectables-part.gc:1751).",
+   "source": "goal_src/jak1/engine/common-obs/collectables.gc:1120",
+   "lump_fields": [
+    "options"
+   ],
+   "lump_keys_present": [
+    "eco-info",
+    "movie-mask",
+    "movie-pos",
+    "name",
+    "options",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "gambler": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/gambler.gc:8",
+   "lump_keys_present": [
+    "movie-pos",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "geologist": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/geologist.gc:8",
+   "lump_keys_present": [
+    "movie-pos",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "gnawer": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/maincave/gnawer.gc:47",
+   "lump_keys_present": [
+    "extra-count",
+    "gnawer",
+    "movie-pos",
+    "name",
+    "next-actor",
+    "path",
+    "prev-actor",
+    "rotoffset",
+    "scale",
+    "trans-offset",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "gondola": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village3/village3-obs.gc:74",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "gondolacables": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village3/village3-obs.gc:354",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "gorge-pusher": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/rolling/rolling-obs.gc:37",
+   "lump_keys_present": [
+    "light-index",
+    "max-frame",
+    "min-frame",
+    "name",
+    "scale",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "gorge-start": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/rolling/rolling-obs.gc:607",
+   "lump_keys_present": [
+    "light-index",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "green-sagecage": {
+   "emits": true,
+   "colour": [
+    0.1,
+    1.0,
+    0.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 5.0,
+   "state": {
+    "kind": "task",
+    "var": "beam-on when the sage's task status is invalid, i.e. rescued (citadel-sages.gc:268-269); drawn in idle post (citadel-sages.gc:327)"
+   },
+   "moves": false,
+   "note": "Beam from a sage joint to the target, plus impact; additive.",
+   "source": "goal_src/jak1/levels/citadel/citadel-sages.gc:564",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "grottopole": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/beach-obs.gc:159",
+   "lump_keys_present": [
+    "distance",
+    "name",
+    "num-positions",
+    "scale",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "happy-plant": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/rolling/rolling-obs.gc:342",
+   "lump_keys_present": [
+    "alt-actor",
+    "movie-pos",
+    "name",
+    "options",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "harvester": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/beach-obs.gc:995",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "helix-button": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/helix-water.gc:37",
+   "lump_keys_present": [
+    "alt-actor",
+    "movie-pos",
+    "name",
+    "options",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "helix-slide-door": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/helix-water.gc:22",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "helix-water": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/helix-water.gc:62",
+   "lump_keys_present": [
+    "alt-actor",
+    "look",
+    "name",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "hopper": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/hopper.gc:8",
+   "lump_keys_present": [
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "name",
+    "notice-top",
+    "path",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "hutlamp": {
+   "emits": true,
+   "bake": {
+    "class": "lamp",
+    "gate": "slot",
+    "param": 5
+   },
+   "colour": [
+    1.0,
+    0.8,
+    0.5
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 3.0,
+   "state": {
+    "kind": "always",
+    "var": "always"
+   },
+   "moves": "small",
+   "note": "Swinging lamp mesh (+-10 deg pivot, village-obs.gc:752); no particles/emissive in code; colour assumed. Lit while village1 palette slot 5 (flames, update-mood-flames) has weight, the rule the actor shadow lamps used.",
+   "source": "goal_src/jak1/levels/village1/village-obs.gc:732",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "ice-cube": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/snow/ice-cube.gc:16",
+   "lump_keys_present": [
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "name",
+    "nav-mesh-actor",
+    "options",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "jng-iris-door": {
+   "emits": false,
+   "note": "eco-door",
+   "source": "goal_src/jak1/levels/jungleb/jungleb-obs.gc:273",
+   "lump_keys_present": [
+    "light-index",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "jungle-elevator": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/jungle-elevator.gc:8",
+   "lump_keys_present": [
+    "bidirectional",
+    "continue-name",
+    "name",
+    "path",
+    "path-k",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "jungle-water": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/jungle-obs.gc:889",
+   "lump_keys_present": [
+    "look",
+    "name",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "junglecam": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/jungle-obs.gc:400",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "junglefish": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/junglefish.gc:9",
+   "lump_keys_present": [
+    "name",
+    "nav-mesh-actor",
+    "path",
+    "scale",
+    "vis-dist",
+    "visvol",
+    "water-height"
+   ]
+  },
+  "junglesnake": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/junglesnake.gc:57",
+   "lump_keys_present": [
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "keg-conveyor": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/misty-conveyor.gc:53",
+   "lump_keys_present": [
+    "name",
+    "path",
+    "path-k",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "kermit": {
+   "emits": false,
+   "note": "blue pulse only when attacking",
+   "source": "goal_src/jak1/levels/swamp/kermit.gc:526",
+   "lump_keys_present": [
+    "name",
+    "nav-mesh-actor",
+    "nav-mesh-sphere",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "launcher": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.84,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 4.0,
+   "state": {
+    "kind": "player",
+    "var": "particles only in launcher-active: player within active-distance (100 m) and holding blue eco (generic-obs.gc:1190-1231)"
+   },
+   "moves": false,
+   "note": "No mesh (pad is background geometry). Level picks group: beach / swamp / else jungle (generic-obs.gc:1257-1263); cyan additive hotdot 0.5,162,192.",
+   "source": "goal_src/jak1/engine/common-obs/generic-obs.gc:1203",
+   "lump_fields": [
+    "spring-height",
+    "mode",
+    "alt-vector"
+   ],
+   "lump_keys_present": [
+    "alt-vector",
+    "mode",
+    "name",
+    "nav-mesh-actor",
+    "scale",
+    "spring-height",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "launcherdoor": {
+   "emits": false,
+   "note": "door",
+   "source": "goal_src/jak1/levels/common/launcherdoor.gc:8",
+   "lump_keys_present": [
+    "alt-actor",
+    "continue-name",
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lavaballoon": {
+   "emits": false,
+   "note": "additive group only on pop",
+   "source": "goal_src/jak1/levels/lavatube/lavatube-obs.gc:852",
+   "lump_keys_present": [
+    "name",
+    "path",
+    "scale",
+    "speed",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lavabase": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.45,
+    0.1
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 22.0,
+   "state": {
+    "kind": "always",
+    "var": "always"
+   },
+   "moves": false,
+   "note": "Animated lava mesh (bounds 22 m); no particles/emissive in code, glow is the lava texture; colour assumed.",
+   "source": "goal_src/jak1/levels/lavatube/lavatube-obs.gc:11",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lavafall": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.45,
+    0.1
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 13.0,
+   "state": {
+    "kind": "always",
+    "var": "always"
+   },
+   "moves": false,
+   "note": "Animated lava mesh (bounds 13 m); no particles/emissive in code, glow is the lava texture; colour assumed.",
+   "source": "goal_src/jak1/levels/lavatube/lavatube-obs.gc:41",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lavafallsewera": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.45,
+    0.1
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 30.0,
+   "state": {
+    "kind": "always",
+    "var": "always"
+   },
+   "moves": false,
+   "note": "Animated lava mesh (bounds 185 m); no particles/emissive in code, glow is the lava texture; colour assumed.",
+   "source": "goal_src/jak1/levels/lavatube/lavatube-obs.gc:600",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lavafallsewerb": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.45,
+    0.1
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 30.0,
+   "state": {
+    "kind": "always",
+    "var": "always"
+   },
+   "moves": false,
+   "note": "Animated lava mesh (bounds 120 m); no particles/emissive in code, glow is the lava texture; colour assumed.",
+   "source": "goal_src/jak1/levels/lavatube/lavatube-obs.gc:629",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lavashortcut": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.45,
+    0.1
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 30.0,
+   "state": {
+    "kind": "always",
+    "var": "always"
+   },
+   "moves": false,
+   "note": "Animated lava mesh (bounds 105 m); no particles/emissive in code, glow is the lava texture; colour assumed.",
+   "source": "goal_src/jak1/levels/lavatube/lavatube-obs.gc:71",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lavaspoutdrip": {
+   "emits": "maybe",
+   "colour": [
+    1.0,
+    0.45,
+    0.1
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 3.0,
+   "state": {
+    "kind": "always",
+    "var": "always"
+   },
+   "moves": false,
+   "note": "No deftype: birth! falls back to the viewer process, which draws the lavaspoutdrip art group (entity.gc:829-833, viewer.gc:150). Lava drip anim; glow is texture only.",
+   "source": "goal_src/jak1/engine/debug/viewer.gc:150",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lavatube-lava": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.45,
+    0.1
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 20.0,
+   "state": {
+    "kind": "always",
+    "var": "always"
+   },
+   "moves": false,
+   "note": "water-anim with water-flag lava; area source (use mesh extents). Colour assumed from the lava texture.",
+   "source": "goal_src/jak1/levels/lavatube/lavatube-obs.gc:1022",
+   "lump_fields": [
+    "look"
+   ],
+   "lump_keys_present": [
+    "look",
+    "name",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "lavayellowtarp": {
+   "emits": false,
+   "note": "tarp mesh, no light code",
+   "source": "goal_src/jak1/levels/lavatube/lavatube-obs.gc:1026",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lightning-mole": {
+   "emits": false,
+   "note": "name only; no light code",
+   "source": "goal_src/jak1/levels/rolling/rolling-lightning-mole.gc:348",
+   "lump_keys_present": [
+    "alt-actor",
+    "idle-distance",
+    "name",
+    "nav-mesh-actor",
+    "next-actor",
+    "path",
+    "prev-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "logo": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/title/title-obs.gc:10",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "logtrap": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/jungle-obs.gc:28",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lrocklrg": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/beach-rocks.gc:373",
+   "lump_keys_present": [
+    "movie-mask",
+    "movie-pos",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lurkercrab": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/lurkercrab.gc:54",
+   "lump_keys_present": [
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "idle-distance",
+    "name",
+    "nav-mesh-actor",
+    "nav-mesh-sphere",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lurkerm-piston": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/jungle-obs.gc:270",
+   "lump_keys_present": [
+    "alt-actor",
+    "height-info",
+    "name",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lurkerm-tall-sail": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/jungle-obs.gc:118",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lurkerpuppy": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/lurkerpuppy.gc:8",
+   "lump_keys_present": [
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "name",
+    "nav-mesh-actor",
+    "nav-mesh-sphere",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "lurkerworm": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/lurkerworm.gc:9",
+   "lump_keys_present": [
+    "name",
+    "nav-mesh-actor",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "maindoor": {
+   "emits": false,
+   "note": "door",
+   "source": "goal_src/jak1/levels/jungle/jungle-obs.gc:700",
+   "lump_keys_present": [
+    "name",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "mayor": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/mayor.gc:8",
+   "lump_keys_present": [
+    "alt-actor",
+    "movie-mask",
+    "movie-pos",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "mayorgears": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village1/village-obs.gc:400",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "med-res-level": {
+   "emits": false,
+   "note": "distant low-res level mesh; art-name lump may name a part group (village1: group-village1-misty-fog, group-village1-training-spouts), fog/spouts, not light",
+   "source": "goal_src/jak1/engine/common-obs/generic-obs.gc:680",
+   "lump_keys_present": [
+    "art-name",
+    "index",
+    "level",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "minecartsteel": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village3/minecart.gc:16",
+   "lump_keys_present": [
+    "index",
+    "name",
+    "path",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "minershort": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.6,
+    0.1
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.0,
+   "state": {
+    "kind": "always",
+    "var": "always (trans-hook every frame)"
+   },
+   "moves": "small",
+   "note": "helmet candle: group-minershort-candle additive (1.25,0.75,0.12 of 128)",
+   "source": "goal_src/jak1/levels/village3/miners.gc:191",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "movie-pos",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "minertall": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village3/miners.gc:20",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "mis-bone-bridge": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/misty-obs.gc:1035",
+   "lump_keys_present": [
+    "animation-select",
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "misty-battlecontroller": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/misty-obs.gc:1477",
+   "lump_keys_present": [
+    "alt-actor",
+    "delay",
+    "eco-info",
+    "final-pickup",
+    "kill-actor",
+    "lurker-type",
+    "max-pickup-count",
+    "mode",
+    "name",
+    "num-lurkers",
+    "options",
+    "path",
+    "patha",
+    "pathb",
+    "pathc",
+    "pathd",
+    "pathe",
+    "pathf",
+    "pathg",
+    "pathh",
+    "percent",
+    "pickup-percent",
+    "pickup-type",
+    "play-mode",
+    "sound-name",
+    "text-id",
+    "trigger-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "mistycam": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/misty-obs.gc:1445",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "mistycannon": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/mistycannon.gc:800",
+   "lump_keys_present": [
+    "alt-actor",
+    "center-point",
+    "center-radius",
+    "idle-distance",
+    "name",
+    "rotmax",
+    "rotmin",
+    "scale",
+    "tiltmax",
+    "tiltmin",
+    "vis-dist",
+    "visvol",
+    "water-height"
+   ]
+  },
+  "money": {
+   "emits": false,
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 1.5,
+   "state": {
+    "kind": "entity-flag",
+    "var": "collected -> entity perm dead (goal_src/jak1/engine/common-obs/collectables.gc:727)"
+   },
+   "moves": "small",
+   "note": "Bobs 1024 units (0.25 m) sine around base y and spins (goal_src/jak1/engine/common-obs/collectables.gc:687-692); no bob when spawned with velocity. color-emissive 0.2 (goal_src/jak1/engine/common-obs/collectables.gc:756). Colour is the orb texture (not in code). group-money-starburst is a PC-port addition behind *pc-settings* money-starburst?. Not a light (design decision 2026-09-26): orbs are collectible icons, not lamps, and already glow in vanilla; the glow and bloom stay (emissive table), no world light.",
+   "source": "goal_src/jak1/engine/common-obs/collectables.gc:731",
+   "lump_fields": [
+    "options"
+   ],
+   "lump_keys_present": [
+    "name",
+    "options",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "mother-spider": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/maincave/mother-spider-h.gc:36",
+   "lump_keys_present": [
+    "crystal-light",
+    "mother-spider",
+    "name",
+    "nav-mesh-actor",
+    "nav-mesh-sphere",
+    "options",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "mud": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/mud.gc:8",
+   "lump_keys_present": [
+    "look",
+    "name",
+    "rotoffset",
+    "scale",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "muse": {
+   "emits": "maybe",
+   "colour": [
+    1.0,
+    0.84,
+    0.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 1.5,
+   "state": {
+    "kind": "entity-flag",
+    "var": "until caught"
+   },
+   "moves": true,
+   "note": "part 271 additive yellow hotdot sparkles on random joints each frame (muse.gc:104)",
+   "source": "goal_src/jak1/levels/misty/muse.gc:104",
+   "lump_fields": [
+    "options",
+    "path"
+   ],
+   "lump_keys_present": [
+    "cmds",
+    "movie-pos",
+    "name",
+    "options",
+    "path",
+    "play-mode",
+    "sound-name",
+    "text-id",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "ogre-bridge": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/ogre/ogre-obs.gc:660",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "ogre-bridgeend": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/ogre/ogre-obs.gc:930",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "ogre-isle-b": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/ogre/ogre-obs.gc:618",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol",
+    "water-actor"
+   ]
+  },
+  "ogre-isle-c": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/ogre/ogre-obs.gc:621",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol",
+    "water-actor"
+   ]
+  },
+  "ogre-isle-d": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/ogre/ogre-obs.gc:624",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol",
+    "water-actor"
+   ]
+  },
+  "ogre-lava": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.45,
+    0.1
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 20.0,
+   "state": {
+    "kind": "always",
+    "var": "always"
+   },
+   "moves": false,
+   "note": "water-anim with water-flag lava; area source (use mesh extents). Colour assumed from the lava texture. Animates submerge/emerge on events.",
+   "source": "goal_src/jak1/levels/ogre/ogre-obs.gc:1022",
+   "lump_fields": [
+    "look"
+   ],
+   "lump_keys_present": [
+    "look",
+    "name",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "ogre-step-a": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/ogre/ogre-obs.gc:539",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol",
+    "water-actor"
+   ]
+  },
+  "ogre-step-b": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/ogre/ogre-obs.gc:542",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol",
+    "water-actor"
+   ]
+  },
+  "ogre-step-c": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/ogre/ogre-obs.gc:545",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol",
+    "water-actor"
+   ]
+  },
+  "ogre-step-d": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/ogre/ogre-obs.gc:548",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol",
+    "water-actor"
+   ]
+  },
+  "ogreboss": {
+   "emits": "maybe",
+   "colour": [
+    1.0,
+    0.5,
+    0.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 15.0,
+   "state": {
+    "kind": "task",
+    "var": "alive until the ogre-boss task closes"
+   },
+   "moves": true,
+   "note": "color-emissive 0.125,0.0625,0 (ogreboss.gc:683); lava missiles and boulders additive orange",
+   "source": "goal_src/jak1/levels/ogre/ogreboss.gc:683",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "movie-mask",
+    "movie-pos",
+    "name",
+    "target-actor",
+    "trigger-actor",
+    "vis-dist",
+    "visvol",
+    "water-actor"
+   ]
+  },
+  "oracle": {
+   "emits": true,
+   "colour": [
+    1.0,
+    1.0,
+    0.6
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.0,
+   "state": {
+    "kind": "task",
+    "var": "each eye is a fuel-cell model + group-fuel-cell-starburst while first-task / alt-task is not closed need-resolution (oracle.gc:189-210)"
+   },
+   "moves": false,
+   "note": "two eyes; an eye goes out when its cell is bought",
+   "source": "goal_src/jak1/levels/village_common/oracle.gc:189",
+   "lump_fields": [
+    "alt-task"
+   ],
+   "lump_keys_present": [
+    "alt-task",
+    "movie-pos",
+    "name",
+    "options",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "orb-cache-top": {
+   "emits": "maybe",
+   "colour": [
+    0.42,
+    0.47,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "idle until opened with blue eco; then releases orb-cache-count (default 20) money that rise; entity perm complete afterwards"
+   },
+   "moves": "small",
+   "note": "Lid has no emissive/particles in code; the released orbs glow like money.",
+   "source": "goal_src/jak1/engine/common-obs/orb-cache.gc:138",
+   "lump_fields": [
+    "orb-cache-count"
+   ],
+   "lump_keys_present": [
+    "name",
+    "orb-cache-count",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "orbit-plat": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.17,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "always",
+    "var": "always"
+   },
+   "moves": true,
+   "note": "group-standard-plat + non-additive jet (orbit-plat.gc:196-197)",
+   "source": "goal_src/jak1/levels/sunken/orbit-plat.gc:196",
+   "lump_fields": [
+    "alt-actor",
+    "timeout"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "nav-mesh-actor",
+    "scale",
+    "timeout",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "peeper": {
+   "emits": false,
+   "note": "no light",
+   "source": "goal_src/jak1/levels/rolling/rolling-lightning-mole.gc:871",
+   "lump_keys_present": [
+    "cycle-speed",
+    "effect-name",
+    "effect-param",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "pelican": {
+   "emits": "maybe",
+   "colour": [
+    1.0,
+    1.0,
+    0.6
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 4.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "carries/drops a fuel cell with starburst until its task is complete"
+   },
+   "moves": true,
+   "note": "pelican.gc:160,599",
+   "source": "goal_src/jak1/levels/beach/pelican.gc:599",
+   "lump_fields": [
+    "options",
+    "path"
+   ],
+   "lump_keys_present": [
+    "cmds",
+    "movie-pos",
+    "name",
+    "options",
+    "path",
+    "path-k",
+    "play-mode",
+    "sound-name",
+    "text-id",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "periscope": {
+   "emits": "maybe",
+   "colour": [
+    0.25,
+    0.38,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 3.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "binocular aligned glow when aligned/powered (entity perm complete)"
+   },
+   "moves": false,
+   "note": "group-jungle-binoculars-aligned additive blue (jungle-mirrors.gc:1318)",
+   "source": "goal_src/jak1/levels/jungle/jungle-mirrors.gc:738",
+   "lump_fields": [
+    "alt-actor",
+    "alt-vector",
+    "rotoffset"
+   ],
+   "lump_keys_present": [
+    "alt-vector",
+    "cmds",
+    "height-info",
+    "name",
+    "nav-mesh-actor",
+    "next-actor",
+    "play-mode",
+    "prev-actor",
+    "rotoffset",
+    "sound-name",
+    "text-id",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "pickup-spawner": {
+   "emits": "maybe",
+   "colour": [
+    0.42,
+    0.47,
+    1.0
+   ],
+   "colour_from": "eco-info",
+   "radius_hint_m": 3.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "invisible crate (look 'none); with options vent-blocked waits until alt-actor entity perm complete, then drops its eco-info pickup (swamp instance: eco-blue)"
+   },
+   "moves": false,
+   "note": "the dropped eco behaves like a spawned eco collectable",
+   "source": "goal_src/jak1/engine/common-obs/crates.gc:974",
+   "lump_fields": [
+    "eco-info",
+    "options",
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "eco-info",
+    "name",
+    "options",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "pistons": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village3/village3-obs.gc:302",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "plant-boss": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungleb/plant-boss.gc:9",
+   "lump_keys_present": [
+    "extra-count",
+    "light-index",
+    "movie-pos",
+    "name",
+    "path",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "plat": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.17,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "always",
+    "var": "always while alive"
+   },
+   "moves": true,
+   "note": "Precursor platform under-glow: goal_src/jak1/engine/common-obs/plat.gc:10 group-standard-plat (part 364 additive hotdot, g 0-64, b 128-256), spawned every frame via baseplat-method-20 (baseplat.gc:108). Not in maincave (plat.gc:122).",
+   "source": "goal_src/jak1/engine/common-obs/plat.gc:120",
+   "lump_fields": [
+    "path",
+    "sync"
+   ],
+   "lump_keys_present": [
+    "light-index",
+    "name",
+    "options",
+    "path",
+    "path-actor",
+    "path-k",
+    "path1",
+    "path1-k",
+    "scale",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "plat-eco": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.17,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "entity-flag",
+    "var": "unlit mesh until woken with blue eco; lit mesh (plat-eco-lit) once entity perm complete or notice-dist < 0 (plat-eco.gc:224-227)"
+   },
+   "moves": true,
+   "note": "Always spawns group-standard-plat (plat-eco.gc:193); eco-blue-glow sparks while the player is near with blue eco. Lit mesh colour is texture.",
+   "source": "goal_src/jak1/engine/common-obs/plat-eco.gc:186",
+   "lump_fields": [
+    "notice-dist",
+    "path",
+    "sync"
+   ],
+   "lump_keys_present": [
+    "name",
+    "nav-mesh-actor",
+    "next-actor",
+    "notice-dist",
+    "path",
+    "path-k",
+    "prev-actor",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "plat-eco-finalboss": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.17,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "entity-flag",
+    "var": "as plat-eco"
+   },
+   "moves": true,
+   "note": "plat-eco subclass",
+   "source": "goal_src/jak1/levels/finalboss/sage-finalboss.gc:43",
+   "lump_fields": [
+    "path",
+    "sync"
+   ],
+   "lump_keys_present": [
+    "name",
+    "notice-dist",
+    "path",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "plat-flip": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungleb/plat-flip.gc:9",
+   "lump_keys_present": [
+    "light-index",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "plunger-lurker": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/ogre/flying-lurker.gc:18",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "pontoonfive": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/village2-obs.gc:196",
+   "lump_keys_present": [
+    "alt-task",
+    "name",
+    "nav-mesh-actor",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "pontoonten": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/village2-obs.gc:199",
+   "lump_keys_present": [
+    "alt-task",
+    "name",
+    "nav-mesh-actor",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "power-left": {
+   "emits": false,
+   "note": "finale door; emissive only via 'brightness event in the ending",
+   "source": "goal_src/jak1/levels/finalboss/final-door.gc:113",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "power-right": {
+   "emits": false,
+   "note": "finale door; emissive only via 'brightness event in the ending",
+   "source": "goal_src/jak1/levels/finalboss/final-door.gc:116",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "precurbridge": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/jungle-obs.gc:426",
+   "lump_keys_present": [
+    "cycle-speed",
+    "effect-name",
+    "effect-param",
+    "name",
+    "scale",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "precursor-arm": {
+   "emits": false,
+   "note": "mesh",
+   "source": "goal_src/jak1/levels/village2/swamp-blimp.gc:401",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "puffer": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/puffer.gc:12",
+   "lump_keys_present": [
+    "alt-actor",
+    "distance",
+    "name",
+    "options",
+    "path",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "pusher": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/rolling/rolling-obs.gc:30",
+   "lump_keys_present": [
+    "light-index",
+    "name",
+    "scale",
+    "shadow-mask",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "qbert-plat": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 3.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "qbert-plat-on child sets color-emissive 0,0,1 when the tile is lit by the puzzle (qbert-plat.gc:94)"
+   },
+   "moves": false,
+   "note": "sunken puzzle tiles",
+   "source": "goal_src/jak1/levels/sunken/qbert-plat.gc:94",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "next-actor",
+    "prev-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "qbert-plat-master": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/qbert-plat.gc:68",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "next-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "quicksandlurker": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/quicksandlurker.gc:384",
+   "lump_keys_present": [
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "name",
+    "nav-mesh-actor",
+    "path",
+    "vis-dist",
+    "visvol",
+    "water-actor"
+   ]
+  },
+  "race-ring": {
+   "emits": true,
+   "colour": [
+    0.78,
+    0.0,
+    0.78
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 4.0,
+   "state": {
+    "kind": "task",
+    "var": "hidden until the race task is active; spawns part-trackers (magenta group-rolling-ring, blue variant) while the race runs (rolling-race-ring.gc:773-793)"
+   },
+   "moves": false,
+   "note": "additive; blue variant (0,0.78,0.78)",
+   "source": "goal_src/jak1/levels/rolling/rolling-race-ring.gc:503",
+   "lump_fields": [
+    "alt-actor",
+    "alt-task",
+    "timeout",
+    "rotoffset"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "alt-task",
+    "movie-pos",
+    "name",
+    "next-actor",
+    "prev-actor",
+    "rotoffset",
+    "timeout",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "racer": {
+   "emits": "maybe",
+   "colour": [
+    0.22,
+    0.61,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "task",
+    "var": "trans-pad glow while the zoomer is available and waiting (racer.gc:71,98-120)"
+   },
+   "moves": false,
+   "note": "group-racer-trans-pad additive blue",
+   "source": "goal_src/jak1/levels/racer_common/racer.gc:71",
+   "lump_fields": [
+    "options",
+    "path"
+   ],
+   "lump_keys_present": [
+    "index",
+    "movie-mask",
+    "movie-pos",
+    "name",
+    "options",
+    "path",
+    "rotoffset",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "ram": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/snow/snow-ram-h.gc:8",
+   "lump_keys_present": [
+    "alt-actor",
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "extra-id",
+    "mode",
+    "name",
+    "nav-mesh-actor",
+    "next-actor",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "red-sagecage": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.53,
+    0.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 5.0,
+   "state": {
+    "kind": "task",
+    "var": "beam-on when the sage's task status is invalid, i.e. rescued (citadel-sages.gc:268-269); drawn in idle post (citadel-sages.gc:327)"
+   },
+   "moves": false,
+   "note": "Beam from a sage joint to the target, plus impact; additive.",
+   "source": "goal_src/jak1/levels/citadel/citadel-sages.gc:366",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "reflector-end": {
+   "emits": false,
+   "note": "mirror mesh",
+   "source": "goal_src/jak1/levels/village1/village-obs.gc:503",
+   "lump_keys_present": [
+    "name",
+    "prev-actor",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "reflector-middle": {
+   "emits": false,
+   "note": "mirror mesh",
+   "source": "goal_src/jak1/levels/village1/village-obs.gc:464",
+   "lump_keys_present": [
+    "height-info",
+    "name",
+    "next-actor",
+    "prev-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "reflector-mirror": {
+   "emits": "maybe",
+   "colour": [
+    0.12,
+    0.12,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 3.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "beam once the periscope chain is powered (entity perm complete); a mirror can be broken by attack"
+   },
+   "moves": false,
+   "note": "part 825 starflash additive blue at beam hits (jungle-mirrors.gc:833,1406)",
+   "source": "goal_src/jak1/levels/jungle/jungle-mirrors.gc:1406",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "height-info",
+    "name",
+    "prev-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "reflector-origin": {
+   "emits": false,
+   "note": "invisible origin",
+   "source": "goal_src/jak1/levels/jungle/jungle-mirrors.gc:514",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "next-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "revcycle": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village1/village-obs.gc:795",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "revcycleprop": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village1/village-obs.gc:770",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "robber": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/rolling/rolling-robber.gc:60",
+   "lump_keys_present": [
+    "idle-distance",
+    "initial-spline-pos",
+    "name",
+    "next-actor",
+    "options",
+    "path",
+    "path-k",
+    "prev-actor",
+    "timeout",
+    "vis-dist",
+    "visvol",
+    "water-height"
+   ]
+  },
+  "robotboss": {
+   "emits": "maybe",
+   "colour": [
+    0.5,
+    0.8,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 30.0,
+   "state": {
+    "kind": "task",
+    "var": "finalboss fight"
+   },
+   "moves": true,
+   "note": "many additive blue/white eco groups (sage-finalboss.gc:694-702)",
+   "source": "goal_src/jak1/levels/finalboss/robotboss-h.gc:23",
+   "lump_fields": [
+    "alt-actor",
+    "path"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "idle-distance",
+    "name",
+    "path",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "rolling-water": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/rolling/rolling-obs.gc:919",
+   "lump_keys_present": [
+    "look",
+    "name",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "rollingcam": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/rolling/rolling-obs.gc:15",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "ropebridge": {
+   "emits": false,
+   "source": "goal_src/jak1/engine/common-obs/ropebridge.gc:485",
+   "lump_keys_present": [
+    "art-name",
+    "name",
+    "scale",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "rounddoor": {
+   "emits": false,
+   "note": "eco-door",
+   "source": "goal_src/jak1/levels/misty/misty-warehouse.gc:126",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sage": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village1/sage.gc:8",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sage-bluehut": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/sage-bluehut.gc:14",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sage-finalboss": {
+   "emits": "maybe",
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 10.0,
+   "state": {
+    "kind": "task",
+    "var": "ending sequence only (white eco)"
+   },
+   "moves": false,
+   "note": "sage-finalboss.gc:222,694-702",
+   "source": "goal_src/jak1/levels/finalboss/sage-finalboss.gc:222",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sage-villagec": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village3/sage-village3.gc:8",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sagesail": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village1/village-obs.gc:293",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "scarecrow-a": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/training/training-obs.gc:439",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "scarecrow-b": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/training/training-obs.gc:448",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sculptor": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/sculptor.gc:9",
+   "lump_keys_present": [
+    "movie-pos",
+    "name",
+    "options",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "seagullflock": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/seagull.gc:70",
+   "lump_keys_present": [
+    "cmds",
+    "name",
+    "next-actor",
+    "path",
+    "play-mode",
+    "sound-name",
+    "text-id",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "seaweed": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/sunken-obs.gc:232",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sequenceA": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/sidekick-human.gc:10",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sequenceB": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/sidekick-human.gc:1039",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sequenceC": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.0,
+   "state": {
+    "kind": "task",
+    "var": "misty cutscene only (glowing dark-eco can)"
+   },
+   "moves": false,
+   "note": "group-sequenceC-glowing-can (sidekick-human.gc:1444)",
+   "source": "goal_src/jak1/levels/misty/sidekick-human.gc:1444",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sharkey": {
+   "emits": false,
+   "source": "goal_src/jak1/engine/common-obs/sharkey.gc:33",
+   "lump_keys_present": [
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "idle-distance",
+    "name",
+    "path",
+    "vis-dist",
+    "visvol",
+    "water-height"
+   ]
+  },
+  "shortcut-boulder": {
+   "emits": "maybe",
+   "colour": [
+    1.0,
+    0.5,
+    0.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 3.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "until broken"
+   },
+   "moves": false,
+   "note": "color-emissive 0.125,0.0625,0 (ogre-obs.gc:1172), faint lava glow",
+   "source": "goal_src/jak1/levels/ogre/ogre-obs.gc:1172",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "shover": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/shover.gc:12",
+   "lump_keys_present": [
+    "name",
+    "path",
+    "rotoffset",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "side-to-side-plat": {
+   "emits": "maybe",
+   "colour": [
+    0.0,
+    0.17,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 2.5,
+   "state": {
+    "kind": "always",
+    "var": "always while alive"
+   },
+   "moves": true,
+   "note": "Precursor platform under-glow: goal_src/jak1/engine/common-obs/plat.gc:10 group-standard-plat (part 364 additive hotdot, g 0-64, b 128-256), spawned every frame via baseplat-method-20 (baseplat.gc:108). Own group-side-to-side-plat, same layout (sunken-obs.gc:103).",
+   "source": "goal_src/jak1/engine/common-obs/plat.gc:120",
+   "lump_fields": [
+    "path",
+    "sync"
+   ],
+   "lump_keys_present": [
+    "name",
+    "path",
+    "path-k",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sidedoor": {
+   "emits": false,
+   "note": "eco-door",
+   "source": "goal_src/jak1/levels/jungle/jungle-obs.gc:779",
+   "lump_keys_present": [
+    "cmds",
+    "name",
+    "play-mode",
+    "shadow-mask",
+    "sound-name",
+    "text-id",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "silodoor": {
+   "emits": false,
+   "note": "hidden until the finalboss-movies task",
+   "source": "goal_src/jak1/levels/finalboss/robotboss-misc.gc:198",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "silostep": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/misty-warehouse.gc:10",
+   "lump_keys_present": [
+    "distance",
+    "name",
+    "nav-mesh-actor",
+    "next-actor",
+    "prev-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "slide-control": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/target-tube.gc:623",
+   "lump_keys_present": [
+    "name",
+    "path",
+    "path-k",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "snow-ball": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/snow/snow-ball.gc:49",
+   "lump_keys_present": [
+    "name",
+    "path",
+    "path-k",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "snow-bumper": {
+   "emits": true,
+   "bake": {
+    "class": "weak",
+    "gate": "alive",
+    "gain": 40.0,
+    "radius_m": 6.5,
+    "offset_m": [
+     0.0,
+     1.5,
+     0.0
+    ]
+   },
+   "colour": [
+    0.0,
+    0.67,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 5.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "group-snow-bumper-idle while active and the player is within 90 m; inactive once entity perm complete (snow-bumper.gc:289-295)"
+   },
+   "moves": false,
+   "note": "additive cyan (0,64,64-96)",
+   "source": "goal_src/jak1/levels/snow/snow-bumper.gc:155",
+   "lump_fields": [],
+   "lump_keys_present": [
+    "movie-mask",
+    "movie-pos",
+    "name",
+    "nav-mesh-actor",
+    "next-actor",
+    "prev-actor",
+    "rotmin",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ],
+   "launch": {
+    "groups": [
+     "group-snow-bumper-idle"
+    ],
+    "offset_m": "bake",
+    "note": "spawned at the root; the bake's offset_m is the field ring's height"
+   }
+  },
+  "snow-bunny": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/snow/snow-bunny.gc:8",
+   "lump_keys_present": [
+    "mode",
+    "name",
+    "nav-mesh-actor",
+    "nav-mesh-sphere",
+    "options",
+    "path",
+    "prev-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "snow-button": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/snow/snow-flutflut-obs.gc:32",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "next-actor",
+    "shadow-mask",
+    "timeout",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "snow-eggtop": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.84,
+    0.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 5.0,
+   "state": {
+    "kind": "task",
+    "var": "group-snow-yellow-eco-room-open while task snow-eggtop is not complete (snow-obs.gc:237,352)"
+   },
+   "moves": false,
+   "note": "Yellow eco room cap, additive (1.25,1.25,0.56 of 128), pale yellow.",
+   "source": "goal_src/jak1/levels/snow/snow-obs.gc:238",
+   "lump_fields": [
+    "options"
+   ],
+   "lump_keys_present": [
+    "movie-pos",
+    "name",
+    "options",
+    "scale",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "snow-fort-gate": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/snow/snow-obs.gc:520",
+   "lump_keys_present": [
+    "name",
+    "prev-actor",
+    "scale",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "snow-gears": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/snow/snow-obs.gc:815",
+   "lump_keys_present": [
+    "name",
+    "next-actor",
+    "prev-actor",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "snow-log": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/snow/snow-obs.gc:1120",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "nav-mesh-actor",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "snow-log-button": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/snow/snow-obs.gc:1259",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "snow-spatula": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/snow/snow-obs.gc:450",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "snow-switch": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/snow/snow-obs.gc:979",
+   "lump_keys_present": [
+    "movie-pos",
+    "name",
+    "next-actor",
+    "options",
+    "shadow-mask",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "snowpusher": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/snow/snow-obs.gc:366",
+   "lump_keys_present": [
+    "max-frame",
+    "mode",
+    "name",
+    "scale",
+    "shadow-mask",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "spider-egg": {
+   "emits": false,
+   "note": "hatch particles only",
+   "source": "goal_src/jak1/levels/robocave/spider-egg.gc:8",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "nav-mesh-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "spider-vent": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/robocave/cave-trap.gc:23",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "spiderwebs": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/maincave/spiderwebs.gc:37",
+   "lump_keys_present": [
+    "name",
+    "nav-mesh-actor",
+    "scale",
+    "spring-height",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "spike": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/firecanyon/firecanyon-obs.gc:122",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "springbox": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/bouncer.gc:10",
+   "lump_keys_present": [
+    "name",
+    "nav-mesh-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "square-platform": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/square-platform.gc:15",
+   "lump_keys_present": [
+    "alt-actor",
+    "distance",
+    "name",
+    "next-actor",
+    "prev-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "square-platform-button": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/square-platform.gc:42",
+   "lump_keys_present": [
+    "alt-actor",
+    "extra-id",
+    "name",
+    "nav-mesh-actor",
+    "next-actor",
+    "prev-actor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "square-platform-master": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/square-platform.gc:45",
+   "lump_keys_present": [
+    "name",
+    "next-actor",
+    "timeout",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "steam-cap": {
+   "emits": false,
+   "note": "steam (additive white, but steam)",
+   "source": "goal_src/jak1/levels/sunken/steam-cap.gc:14",
+   "lump_keys_present": [
+    "name",
+    "percent",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sun-iris-door": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/sun-iris-door.gc:8",
+   "lump_keys_present": [
+    "name",
+    "proximity",
+    "scale",
+    "scale-factor",
+    "trans-offset",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sunken-elevator": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/sunken-elevator.gc:9",
+   "lump_keys_present": [
+    "bidirectional",
+    "light-index",
+    "name",
+    "path",
+    "path-k",
+    "shadow-mask",
+    "trans-offset",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sunken-pipegame": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/sunken-pipegame.gc:30",
+   "lump_keys_present": [
+    "extra-count",
+    "movie-pos",
+    "name",
+    "options",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "sunken-water": {
+   "emits": "maybe",
+   "colour": [
+    0.55,
+    1.0,
+    0.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 10.0,
+   "state": {
+    "kind": "transient",
+    "var": "emissive lerps to deadly 0.33,0.6,0 when the water turns deadly (sunken-water.gc:94-110,134)"
+   },
+   "moves": false,
+   "note": "area source; safe emissive is 0",
+   "source": "goal_src/jak1/levels/sunken/sunken-water.gc:134",
+   "lump_fields": [
+    "look",
+    "sync"
+   ],
+   "lump_keys_present": [
+    "look",
+    "name",
+    "percent",
+    "rotoffset",
+    "sync",
+    "trans-offset",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "sunkenfisha": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/sunken-fish.gc:9",
+   "lump_keys_present": [
+    "count",
+    "name",
+    "path",
+    "path-actor",
+    "path-k",
+    "path-max-offset",
+    "path-trans-offset",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "swamp-barrel": {
+   "emits": false,
+   "note": "barrel subclass (crate contents)",
+   "source": "goal_src/jak1/levels/swamp/swamp-obs.gc:700",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "swamp-bat": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/swamp/swamp-bat.gc:27",
+   "lump_keys_present": [
+    "eco-info",
+    "name",
+    "num-lurkers",
+    "path",
+    "path-k",
+    "pathb",
+    "pathb-k",
+    "vis-dist",
+    "visvol",
+    "vol"
+   ]
+  },
+  "swamp-battlecontroller": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/swamp/swamp-obs.gc:713",
+   "lump_keys_present": [
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "camera-name",
+    "delay",
+    "eco-info",
+    "fade-actor",
+    "final-pickup",
+    "lurker-type",
+    "max-pickup-count",
+    "mode",
+    "movie-mask",
+    "movie-pos",
+    "name",
+    "nav-mesh-sphere",
+    "num-lurkers",
+    "path",
+    "patha",
+    "pathb",
+    "pathc",
+    "pathd",
+    "percent",
+    "pickup-percent",
+    "pickup-type",
+    "play-mode",
+    "sound-name",
+    "text-id",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "swamp-blimp": {
+   "emits": false,
+   "note": "explosion only",
+   "source": "goal_src/jak1/levels/village2/swamp-blimp.gc:442",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "swamp-rat": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/swamp/swamp-rat.gc:14",
+   "lump_keys_present": [
+    "name",
+    "nav-mesh-actor",
+    "nav-mesh-sphere",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "swamp-rat-nest": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/swamp/swamp-rat-nest.gc:545",
+   "lump_keys_present": [
+    "eco-info",
+    "name",
+    "nav-mesh-actor",
+    "nav-mesh-sphere",
+    "num-lurkers",
+    "path",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "swamp-rock": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/swamp/swamp-obs.gc:412",
+   "lump_keys_present": [
+    "name",
+    "nav-mesh-actor",
+    "scale",
+    "scale-factor",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "swamp-spike": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/swamp/swamp-obs.gc:113",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "swamp-tetherrock": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/swamp-blimp.gc:387",
+   "lump_keys_present": [
+    "alt-actor",
+    "movie-pos",
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "swampcam": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/swamp/swamp-obs.gc:703",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "swampgate": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/swamp/swamp-obs.gc:301",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "swingpole": {
+   "emits": false,
+   "source": "goal_src/jak1/engine/common-obs/generic-obs-h.gc:142",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "tar-plat": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/swamp/swamp-obs.gc:612",
+   "lump_keys_present": [
+    "name",
+    "nav-mesh-actor",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "target-start": {
+   "emits": false,
+   "source": "goal_src/jak1/engine/common-obs/generic-obs.gc:128",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "teetertotter": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/misty-teetertotter.gc:10",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "tntbarrel": {
+   "emits": false,
+   "note": "explosion only",
+   "source": "goal_src/jak1/levels/ogre/ogre-obs.gc:269",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "towertop": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/jungle/jungle-obs.gc:86",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "tra-iris-door": {
+   "emits": false,
+   "note": "eco-door",
+   "source": "goal_src/jak1/levels/training/training-obs.gc:258",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "tra-pontoon": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/training/training-obs.gc:156",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol",
+    "water-actor"
+   ]
+  },
+  "training-cam": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/training/training-obs.gc:50",
+   "lump_keys_present": [
+    "alt-actor",
+    "cam-notice-dist",
+    "index",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "training-water": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/training/training-obs.gc:13",
+   "lump_keys_present": [
+    "look",
+    "name",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "ventblue": {
+   "emits": true,
+   "colour": [
+    0.42,
+    0.47,
+    1.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 6.0,
+   "state": {
+    "kind": "entity-flag",
+    "var": "same vent logic as ecovent; always blue (goal_src/jak1/engine/common-obs/collectables.gc:1776); the single jungle instance has no alt-actor/options -> always on"
+   },
+   "moves": false,
+   "note": "blue vent",
+   "source": "goal_src/jak1/engine/common-obs/collectables.gc:1774",
+   "lump_fields": [
+    "alt-actor",
+    "options"
+   ],
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ],
+   "launch": {
+    "groups": [
+     "group-part-vent-blue-active"
+    ],
+    "offset_m": [
+     0.0,
+     1.0,
+     0.0
+    ],
+    "note": "as ecovent"
+   }
+  },
+  "villa-starfish": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village1/village-obs.gc:517",
+   "lump_keys_present": [
+    "name",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "village-cam": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village_common/villagep-obs.gc:466",
+   "lump_keys_present": [
+    "cam-notice-dist",
+    "index",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "villagea-water": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village1/village-obs.gc:820",
+   "lump_keys_present": [
+    "look",
+    "name",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "villageb-ogreboss": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/village2-obs.gc:1126",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "villageb-water": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/village2-obs.gc:1129",
+   "lump_keys_present": [
+    "light-index",
+    "look",
+    "name",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "villagec-lava": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.45,
+    0.1
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 20.0,
+   "state": {
+    "kind": "always",
+    "var": "always"
+   },
+   "moves": false,
+   "note": "water-anim with water-flag lava; area source (use mesh extents). Colour assumed from the lava texture.",
+   "source": "goal_src/jak1/levels/village3/village3-obs.gc:70",
+   "lump_fields": [
+    "look"
+   ],
+   "lump_keys_present": [
+    "look",
+    "name",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "wall-plat": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/wall-plat.gc:10",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "sync",
+    "tunemeters",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "warp-gate-switch": {
+   "emits": false,
+   "note": "button; when pressed spawns an invisible warp-gate process at notify-actor",
+   "source": "goal_src/jak1/levels/village_common/villagep-obs.gc:254",
+   "lump_keys_present": [
+    "alt-actor",
+    "light-index",
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "warpgate": {
+   "emits": false,
+   "note": "process-hidden; the gate glow is the level *-part spawner (group-*-warpgate), not this entity",
+   "source": "goal_src/jak1/levels/village_common/villagep-obs.gc:12",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "warrior": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village2/warrior.gc:9",
+   "lump_keys_present": [
+    "alt-actor",
+    "movie-pos",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "water-vol": {
+   "emits": false,
+   "source": "goal_src/jak1/engine/common-obs/water-h.gc:148",
+   "lump_keys_present": [
+    "cutoutvol",
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol",
+    "vol",
+    "water-height"
+   ]
+  },
+  "wedge-plat": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/wedge-plats.gc:42",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "path",
+    "path-k",
+    "path1",
+    "path1-k",
+    "path2",
+    "path2-k",
+    "path3",
+    "path3-k",
+    "rotoffset",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "wedge-plat-master": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/wedge-plats.gc:13",
+   "lump_keys_present": [
+    "name",
+    "rotspeed",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "wedge-plat-outer": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/sunken/wedge-plats.gc:150",
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "path4",
+    "path4-k",
+    "path5",
+    "path5-k",
+    "path6",
+    "path6-k",
+    "path7",
+    "path7-k",
+    "path8",
+    "path8-k",
+    "rotoffset",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "wheel": {
+   "emits": false,
+   "note": "No deftype; drawn by the viewer fallback (entity.gc:829)",
+   "source": "goal_src/jak1/engine/debug/viewer.gc:150",
+   "lump_keys_present": [
+    "name",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "whirlpool": {
+   "emits": false,
+   "note": "white water swirl particles, not a light",
+   "source": "goal_src/jak1/levels/sunken/whirlpool.gc:9",
+   "lump_keys_present": [
+    "name",
+    "speed",
+    "sync",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "windmill-one": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/beach/beach-obs.gc:18",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "windmill-sail": {
+   "emits": false,
+   "note": "group-win-wind-mill is wind streaks, not a light",
+   "source": "goal_src/jak1/levels/village1/village-obs.gc:201",
+   "lump_keys_present": [
+    "alt-actor",
+    "cycle-speed",
+    "effect-name",
+    "effect-param",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "windspinner": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village1/village-obs.gc:337",
+   "lump_keys_present": [
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "windturbine": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/misty/misty-obs.gc:997",
+   "lump_keys_present": [
+    "name",
+    "particle-select",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "yakow": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/village1/yakow.gc:86",
+   "lump_keys_present": [
+    "alt-actor",
+    "alt-vector",
+    "name",
+    "nav-mesh-actor",
+    "next-actor",
+    "prev-actor",
+    "scale",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "yellow-sagecage": {
+   "emits": true,
+   "colour": [
+    1.0,
+    0.84,
+    0.0
+   ],
+   "colour_from": "fixed",
+   "radius_hint_m": 5.0,
+   "state": {
+    "kind": "task",
+    "var": "beam-on when the sage's task status is invalid, i.e. rescued (citadel-sages.gc:268-269); drawn in idle post (citadel-sages.gc:327)"
+   },
+   "moves": false,
+   "note": "Beam from a sage joint to the target, plus impact; additive.",
+   "source": "goal_src/jak1/levels/citadel/citadel-sages.gc:511",
+   "lump_fields": [
+    "alt-actor"
+   ],
+   "lump_keys_present": [
+    "alt-actor",
+    "name",
+    "vis-dist",
+    "visvol"
+   ]
+  },
+  "yeti": {
+   "emits": false,
+   "source": "goal_src/jak1/levels/snow/yeti.gc:20",
+   "lump_keys_present": [
+    "cam-horz",
+    "cam-notice-dist",
+    "cam-vert",
+    "name",
+    "nav-mesh-actor",
+    "nav-mesh-sphere",
+    "notice-dist",
+    "notice-top",
+    "num-lurkers",
+    "options",
+    "path",
+    "vis-dist",
+    "visvol"
+   ]
+  }
+ }
+}

@@ -1,4 +1,6 @@
 #version 410 core
+SSAO_NORMAL_VERT
+INSPECT_VERT
 
 layout (location = 0) in vec3 position_in;
 layout (location = 1) in vec3 tex_coord_in;
@@ -11,19 +13,47 @@ uniform float fog_min;
 uniform float fog_max;
 uniform sampler1D tex_T10; // note, sampled in the vertex shader on purpose.
 uniform int decal;
+uniform usamplerBuffer tex_T11;  // .unbake records, see background/Unbake.h
+
+PBR_BG_VERT
 
 out vec4 fragment_color;
 out vec3 tex_coord;
 out float fogginess;
 
+// actor shadows: receiver position, global sun share, emissive gate
+uniform float shadow_share_global;
+WORLD_SHADOW_VERT
+out vec3 shadow_pos;
+out float shadow_share;
+out float shadow_receive;  // 1 - E, as tfrag3
+out float emissive;
+uniform int em_on;
+uniform float em_w[10];
+EM_VALUE_VERT
 // etie stuff
 uniform vec4 persp0;
 uniform vec4 persp1;
 uniform mat4 cam_no_persp;
+uniform vec4 cam_trans;
 
+ATMO_UNIFORMS_VERT
+out float fog_tw;  // share of the fog layer that takes the neighbour tint
+
+ATMO_FOG_VERT
+ATMO_COMBINE_VERT
 void main() {
+  insp_vid = uint(gl_VertexID);
   float fog1 = camera[3].w + camera[0].w * position_in.x + camera[1].w * position_in.y + camera[2].w * position_in.z;
   fogginess = 255 - clamp(fog1 + hvdf_offset.w, fog_min, fog_max);
+  haze_f = 0.;
+  fog_tw = 1.;
+  if (atmo.x > 0.) {
+    vec3 d = (position_in - cam_trans.xyz) * (1. / 4096.);
+    float af = atmo_fog(length(d), 0.5 * (position_in.y + cam_trans.y) * (1. / 4096.));
+    haze_f = haze.z * (1. - exp(-haze.x * max(length(d) - haze.y, 0.)));
+    fogginess = atmo.x > 1.5 ? atmo_combine(fogginess, af, haze_f, fog_tw) : af;
+  }
   vec4 vf17 = cam_no_persp[3];
   vf17 += cam_no_persp[0] * position_in.x;
   vf17 += cam_no_persp[1] * position_in.y;
@@ -48,6 +78,9 @@ void main() {
   // scissoring area adjust
   transformed.y *= SCISSOR_ADJUST * HEIGHT_SCALE;
   gl_Position = transformed;
+  ssao_cpos = gl_Position.xyw;
+  ssao_vnrm = ssao_etie_vnrm(cam_no_persp, persp0, persp1, SCISSOR_ADJUST * HEIGHT_SCALE,
+                             ssao_nrm == 2 ? texelFetch(tex_T11, gl_VertexID) : uvec4(0u));
 
 
 
@@ -60,6 +93,16 @@ void main() {
     fragment_color *= 2;
     fragment_color.a *= 2;
   }
+  pbr_cau = decal == 1 ? vec3(0.0) : 2.0 * pbr_caustic_env(time_of_day_index);
 
   tex_coord = tex_coord_in;
+  pbr_vertex(position_in, cam_trans.xyz,
+             (pbr_on != 0 && pbr_rec != 0) ? texelFetch(tex_T11, gl_VertexID) : uvec4(0u));
+  shadow_pos = position_in;
+  vec3 tod2 = texelFetch(tex_T10, time_of_day_index, 0).rgb * 2.0;
+  shadow_share = (ws_on & 1) != 0 ? ws_share_est(tod2, ws_glow_share(time_of_day_index, tod2))
+                                 : shadow_share_global;
+  shadow_share1 = shadow_share;
+  emissive = em_on == 1 ? em_value(texelFetch(tex_T11, gl_VertexID).w) : 0.0;
+  shadow_receive = 1.0 - emissive;
 }

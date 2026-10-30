@@ -1,0 +1,68 @@
+[project]
+name = "sandover"
+version = "0.1.0"
+description = "Sandover project tooling: texture census, rig, unbake, judge, gallery, metrics."
+requires-python = ">=3.11"
+dependencies = [
+  "fiftyone>=0.24",
+  "numpy>=2.4.6",
+  "pillow>=10.0",
+  "pygltflib>=1.16.5",
+  "scipy>=1.17.1",
+  "filelock>=3.15",
+  "pyyaml>=6.0",
+  "flip-evaluator>=1.6",
+  "jinja2>=3.1",
+  "gradio>=5.0",
+  "scikit-image>=0.24",
+  "zstandard>=0.23",
+]
+
+[project.optional-dependencies]
+unbake = [
+  "scikit-learn>=1.4",
+  "rerun-sdk>=0.18",
+]
+
+[project.scripts]
+sandover-census = "sandover.census:main"
+sandover-pilot = "sandover.pilot:main"
+sandover-unbake = "sandover.unbake.cli:main"
+sandover-capture = "sandover.rig.capture:main"
+sandover-preset = "sandover.presets:main"
+sandover-ssao-cost = "sandover.rig.cost:main"
+sandover-fur-cost = "sandover.rig.fur_cost:main"
+sandover-perf = "sandover.rig.perf:main"
+sandover-grid = "sandover.rig.grid:main"
+sandover-mood-tables = "sandover.mood_tables:main"
+sandover-caustics = "sandover.caustics:main"
+sandover-alpha-normalize = "sandover.assets.alpha:main"
+sandover-sheets = "sandover.sheets:main"
+sandover-report = "sandover.report:main"
+sandover-parity = "sandover.parity.cli:main"
+sandover-viewer = "sandover.viewer.serve:main"
+sandover-materials = "sandover.materials.cli:main"
+sandover-review-materials = "sandover.materials.review:main"
+sandover-triage = "sandover.triage.server:main"
+sandover-lights = "sandover.lights.cli:main"
+sandover-hdr = "sandover.hdr:main"
+sandover-settings = "sandover.settings:main"
+sandover-levelinfo = "sandover.levelinfo:main"
+sandover-pat-census = "sandover.pat_census:main"
+sandover-package = "sandover.package:main"
+sandover-bug = "sandover.bug_report:main"
+sandover-vanilla = "sandover.vanilla:main"
+sandover-vr-synth = "sandover.vr_synth:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["sandover"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

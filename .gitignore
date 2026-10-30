@@ -89,3 +89,11 @@ unifont-15.0.03.ttf
 *.diff
 goalc-report.html
 _new-all-types.gc
+# sandover project data (never commit game data/captures)
+sandover/data/
+# sandover machine-specific facts (hashes, drive letters, disk sizes, usernames)
+sandover/local/
+*.iso
+*.bin
+*.chd
+sandover/**/.rrd

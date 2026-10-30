@@ -4,6 +4,8 @@
 
 #include "common/global_profiler/GlobalProfiler.h"
 
+#include "game/graphics/gfx.h"
+
 constexpr float LOAD_BUDGET = 4.5f;
 
 /*!
@@ -89,6 +91,17 @@ class TfragLoadStage : public LoaderStage {
                        GL_STATIC_DRAW);
         }
       }
+      const auto& gs = Gfx::g_global_settings;
+      if (Gfx::perf_opt(PERF_OPT_WORLD_PREPASS) &&
+          (gs.shadow_world || gs.shadow_world_actors || gs.shadow_world_water)) {
+        for (auto& in_tree : data.lev_data->level->tfrag_trees[0]) {
+          GLuint& buf = data.lev_data->tfrag_index_data.emplace_back();
+          glGenBuffers(1, &buf);
+          glBindBuffer(GL_ARRAY_BUFFER, buf);
+          glBufferData(GL_ARRAY_BUFFER, in_tree.unpacked.indices.size() * sizeof(u32), nullptr,
+                       GL_STATIC_DRAW);
+        }
+      }
       m_opengl_created = true;
       return false;
     }
@@ -133,6 +146,12 @@ class TfragLoadStage : public LoaderStage {
 
       if (complete_tree) {
         unique_buffers++;
+        if (m_next_geo == 0 && m_next_tree < data.lev_data->tfrag_index_data.size()) {
+          const auto& idx = data.lev_data->level->tfrag_trees[0][m_next_tree].unpacked.indices;
+          glBindBuffer(GL_ARRAY_BUFFER, data.lev_data->tfrag_index_data[m_next_tree]);
+          glBufferSubData(GL_ARRAY_BUFFER, 0, idx.size() * sizeof(u32), idx.data());
+          uploaded_bytes += idx.size() * sizeof(u32);
+        }
         // and move on to next tree
         m_next_vert = 0;
         m_next_tree++;

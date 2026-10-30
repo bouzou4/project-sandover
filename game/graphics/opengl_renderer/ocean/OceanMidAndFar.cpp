@@ -1,12 +1,17 @@
 #include "OceanMidAndFar.h"
 
+#include "game/graphics/opengl_renderer/Materials.h"
+#include "game/graphics/opengl_renderer/PerfTimers.h"
+
 #include "third-party/imgui/imgui.h"
 
 OceanMidAndFar::OceanMidAndFar(const std::string& name, int my_id)
     : BucketRenderer(name, my_id),
       m_direct(name, my_id, 4096),
       m_envmap_renderer(name + "-envmap", my_id, 4096),
-      m_texture_renderer(true) {}
+      m_texture_renderer(true) {
+  m_direct.set_stereo_parallax(true);
+}
 
 void OceanMidAndFar::draw_debug_window() {
   if (ImGui::TreeNode("envmap")) {
@@ -63,16 +68,26 @@ void OceanMidAndFar::render_jak1(DmaFollower& dma,
     ASSERT(dma.current_tag_offset() == render_state->next_bucket);
     return;
   }
+  m_drawn_frame = render_state->frame_idx;
   m_direct.reset_state();
 
   {
     auto p = prof.make_scoped_child("texture");
+    perf::Scope ps(perf::Group::OCEAN_TEXTURE);
     m_texture_renderer.handle_ocean_texture_jak1(dma, render_state, p);
   }
 
-  handle_ocean_far(dma, render_state, prof);
-  m_direct.flush_pending(render_state, prof);
+  {
+    perf::Scope ps(perf::Group::OCEAN_FAR);
+    // with the mid ocean deferred (water shading) the far band writes no depth, so the mid tests
+    // against the background only, as vanilla's depth-ALWAYS mid simply overwrote the far band
+    m_direct.set_no_depth_writes(water_active(render_state) && render_state->has_pc_data);
+    handle_ocean_far(dma, render_state, prof);
+    m_direct.flush_pending(render_state, prof);
+    m_direct.set_no_depth_writes(false);
+  }
 
+  perf::Scope mid_scope(perf::Group::OCEAN_MID);
   m_direct.set_mipmap(true);
   handle_ocean_mid(dma, render_state, prof);
 

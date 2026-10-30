@@ -111,7 +111,7 @@ void deci2_runner(SystemThreadInterface& iface) {
   std::function<bool()> shutdown_callback = [&]() { return iface.get_want_exit(); };
 
   // create and register server
-  Deci2Server server(shutdown_callback, DECI2_PORT - 1 + (int)g_game_version);
+  Deci2Server server(shutdown_callback, g_server_port);
   ee::LIBRARY_sceDeci2_register(&server);
 
   // now its ok to continue with initialization
@@ -425,7 +425,8 @@ RuntimeExitStatus exec_runtime(GameLaunchOptions game_options, int argc, const c
 
   bool enable_display = !game_options.disable_display;
   g_game_version = game_options.game_version;
-  g_server_port = game_options.server_port;
+  g_server_port = game_options.server_port >= 0 ? game_options.server_port
+                                                : DECI2_PORT - 1 + (int)g_game_version;
 
   gStartTime = time(nullptr);
   prof().instant_event("ROOT");

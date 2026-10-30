@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snapshot triage</title>
+<link rel="stylesheet" href="/static/triage.css">
+</head>
+<body>
+<header class="top">
+  <div class="title">
+    <h1 id="runName">…</h1>
+    <span class="sub">Snapshot triage</span>
+  </div>
+  <div class="counts" id="counts" aria-label="Snapshot counts"></div>
+  <div class="facetCounts" id="facetCounts" aria-label="Open items by facet"></div>
+  <div class="spacer"></div>
+  <span class="filter" id="filterLabel">Showing: All</span>
+  <label class="jump"><span>Go to #</span><input id="jump" inputmode="numeric" autocomplete="off" size="5" aria-label="Go to snapshot number"></label>
+  <span class="save" id="save" aria-live="polite">Saved</span>
+</header>
+
+<main class="main">
+  <section class="stage" id="stage" aria-label="Snapshot">
+    <div class="layer" id="layer">
+      <img id="img" alt="" draggable="false">
+      <svg id="overlay" class="overlay" aria-hidden="true"></svg>
+    </div>
+    <div class="stageMsg" id="stageMsg" hidden></div>
+    <div class="zoomTag" id="zoomTag">Fit</div>
+    <div class="cropHint" id="cropHint" hidden>Drag over the problem. Esc cancels.</div>
+  </section>
+
+  <aside class="rail" id="rail">
+    <div class="railScroll">
+      <section class="snapHead">
+        <div class="snapTitle"><span id="snapIndex">#—</span> <span id="snapLevel"></span> <span id="snapHour" class="dim"></span></div>
+        <div class="pillRow"><span class="pill" id="pill"></span> <span class="dim small" id="pillHint"></span></div>
+      </section>
+
+      <section>
+        <h2>Facets</h2>
+        <div class="chips" id="chips"></div>
+      </section>
+
+      <section>
+        <h2><label for="note">Note</label></h2>
+        <textarea id="note" rows="3" placeholder="What is wrong here? (N to write, Enter to save)"></textarea>
+      </section>
+
+      <section>
+        <h2>Crops <span class="dim small">C to add</span></h2>
+        <ol class="anns" id="anns"></ol>
+      </section>
+
+      <section>
+        <h2>Snapshot</h2>
+        <dl class="facts" id="facts"></dl>
+      </section>
+    </div>
+
+    <section class="legend" aria-label="Keys">
+      <div class="lg"><kbd>J</kbd><kbd>K</kbd><span>next / previous</span></div>
+      <div class="lg"><kbd>G</kbd><span>go to #</span></div>
+      <div class="lg"><kbd>X</kbd><span>not for review</span></div>
+      <div class="lg"><kbd>D</kbd><span>delete / restore</span></div>
+      <div class="lg"><kbd>U</kbd><span>undo delete</span></div>
+      <div class="lg"><kbd>1</kbd>–<kbd>4</kbd><span>facet</span></div>
+      <div class="lg"><kbd>N</kbd><span>note</span></div>
+      <div class="lg"><kbd>C</kbd><span>new crop</span></div>
+      <div class="lg"><kbd>Z</kbd><span>fit / 1:1, drag pans</span></div>
+      <div class="lg"><kbd>F</kbd><span>filter</span></div>
+      <div class="lg"><kbd>Enter</kbd><span>save text</span></div>
+      <div class="lg"><kbd>Esc</kbd><span>leave / cancel / clear</span></div>
+    </section>
+  </aside>
+</main>
+
+<nav class="strip" id="strip" aria-label="Snapshots in this run"></nav>
+
+<script src="/static/triage.js"></script>
+</body>
+</html>

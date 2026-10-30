@@ -1,0 +1,33 @@
+# Auto shot set v1: parity/golden set, 14 continue points x {dawn, noon, dusk, night}.
+# auto-v0 stays the quick set. Run: sandover-parity check (see kb/howto/parity.md)
+schema: 1
+set: auto-v1
+purpose: [parity, golden]
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 60
+  camera: from_continue
+  effects: off
+  wind: off
+  particles: off
+  jak: show
+generate:
+  from: continue_points
+  continues:
+    - village1-hut      # auto-v0
+    - beach-start       # auto-v0
+    - jungle-start      # auto-v0
+    - sunken-start      # auto-v0; depth-lerped colours, fish
+    - village2-dock
+    - firecanyon-end    # village2 and firecanyon both displayed: two-level mood blend
+    - rolling-start
+    - swamp-start
+    - misty-start
+    - village3-start    # runtime light rewrite
+    - snow-start
+    - darkcave-start    # indoor, fixed slot-0 snapshot; crystal lights
+    - lavatube-start    # fixed-slot quick level
+    - citadel-start     # fixed-slot quick level
+  hours: { dawn: 6, noon: 12, dusk: 18, night: 23 }
+shots: []

@@ -2,6 +2,11 @@
 
 #include "Generic2.h"
 #include "game/graphics/gfx.h"
+#include "game/graphics/opengl_renderer/InlandWater.h"
+#include "game/graphics/opengl_renderer/InspectRenderer.h"
+#include "game/graphics/opengl_renderer/Materials.h"
+#include "game/graphics/opengl_renderer/SsaoRenderer.h"
+#include "game/graphics/opengl_renderer/background/Canopy.h"
 
 void Generic2::opengl_setup(ShaderLibrary& shaders) {
   // create OpenGL objects
@@ -76,6 +81,10 @@ void Generic2::opengl_setup(ShaderLibrary& shaders) {
   m_ogl.warp_sample_mode = glGetUniformLocation(id, "warp_sample_mode");
   m_ogl.use_full_matrix = glGetUniformLocation(id, "use_full_matrix");
   m_ogl.full_matrix = glGetUniformLocation(id, "full_matrix");
+  m_ogl.stereo_eye_x = glGetUniformLocation(id, "stereo_eye_x");
+  m_ogl.eye_on = glGetUniformLocation(id, "eye_on");
+  m_ogl.eye_rot = glGetUniformLocation(id, "eye_rot");
+  m_ogl.eye_t = glGetUniformLocation(id, "eye_t");
 }
 
 void Generic2::opengl_cleanup() {
@@ -89,8 +98,15 @@ void Generic2::opengl_bind_and_setup_proj(SharedRenderState* render_state) {
   glUniform4f(m_ogl.fog_color, render_state->fog_color[0] / 255.f,
               render_state->fog_color[1] / 255.f, render_state->fog_color[2] / 255.f,
               render_state->fog_intensity / 255);
-  glUniform4f(m_ogl.scale, m_drawing_config.proj_scale[0], m_drawing_config.proj_scale[1],
+  const auto& eye = render_state->eye;
+  glUniform4f(m_ogl.scale, m_drawing_config.proj_scale[0] * (eye.active ? eye.fov_x : 1.f),
+              m_drawing_config.proj_scale[1] * (eye.active ? eye.fov_y : 1.f),
               m_drawing_config.proj_scale[2], 0);
+  glUniform1i(m_ogl.eye_on, eye.active ? 1 : 0);
+  if (eye.active) {
+    glUniformMatrix3fv(m_ogl.eye_rot, 1, GL_TRUE, &eye.rot[0][0]);
+    glUniform3f(m_ogl.eye_t, eye.t[0], eye.t[1], eye.t[2]);
+  }
   glUniform1f(m_ogl.mat_23, m_drawing_config.proj_mat_23);
   glUniform1f(m_ogl.mat_32, m_drawing_config.proj_mat_32);
   glUniform1f(m_ogl.mat_33, 0);
@@ -99,6 +115,8 @@ void Generic2::opengl_bind_and_setup_proj(SharedRenderState* render_state) {
   glUniform4f(m_ogl.hvdf_offset, m_drawing_config.hvdf_offset[0], m_drawing_config.hvdf_offset[1],
               m_drawing_config.hvdf_offset[2], m_drawing_config.hvdf_offset[3]);
   glUniform1i(m_ogl.gfx_hack_no_tex, Gfx::g_global_settings.hack_no_tex);
+  glUniform1f(m_ogl.stereo_eye_x, render_state->stereo_eye_x);
+  SsaoRenderer::set_normal_mode(render_state->shaders[ShaderId::GENERIC].id(), 1);
 }
 
 void Generic2::setup_opengl_for_draw_mode(const DrawMode& draw_mode,
@@ -169,6 +187,10 @@ void Generic2::setup_opengl_for_draw_mode(const DrawMode& draw_mode,
       ASSERT(false);
     }
   }
+  SsaoRenderer::set_normal_write(
+      !draw_mode.get_ab_enable() ||
+      draw_mode.get_alpha_blend() == DrawMode::AlphaBlend::SRC_DST_SRC_DST ||
+      draw_mode.get_alpha_blend() == DrawMode::AlphaBlend::SRC_SRC_SRC_SRC);
 
   // setup ztest
   if (draw_mode.get_zt_enable()) {
@@ -266,13 +288,80 @@ void Generic2::do_draws_for_alpha(SharedRenderState* render_state,
                                   ScopedProfilerNode& prof,
                                   DrawMode::AlphaBlend alpha,
                                   bool hud) {
+  int clear_mat = -1;
   for (u32 i = 0; i < m_next_free_bucket; i++) {
     auto& bucket = m_buckets[i];
     auto& first = m_adgifs[bucket.start];
     if (first.mode.get_alpha_blend() == alpha && first.uses_hud == hud) {
       setup_opengl_for_draw_mode(first.mode, first.fix, render_state);
+      if (render_state->light_material) {
+        // depth-writing draws whose blend lands a = 1 clear the material behind them (no
+        // highlight on generic); other modes leave output 2 off (reverse subtract gives a = 0)
+        const auto ab = first.mode.get_alpha_blend();
+        const bool lands_one = ab == DrawMode::AlphaBlend::SRC_SRC_SRC_SRC ||
+                               SsaoRenderer::blend_replaces_alpha(first.mode);
+        const int c = first.mode.get_depth_write_enable() && lands_one ? 1 : 0;
+        if (c != clear_mat) {
+          clear_mat = c;
+          SsaoRenderer::emissive_draw_buffers(c == 1, false, true);
+        }
+      }
       setup_opengl_tex(0, first.tbp, first.mode.get_filt_enable(), first.mode.get_clamp_s_enable(),
                        first.mode.get_clamp_t_enable(), render_state);
+      if (inspect::active()) {
+        inspect::DrawRecord rec;
+        rec.kind = inspect::GENERIC;
+        rec.draw = (int)i;
+        rec.tbp = first.tbp;
+        rec.mode = first.mode;
+        inspect::set(render_state->shaders[ShaderId::GENERIC].id(), inspect::add(std::move(rec)));
+      }
+      if (m_canopy) {
+        auto it = m_canopy_tbp.find(first.tbp);
+        if (it == m_canopy_tbp.end()) {
+          s64 combo = -1;
+          if (!(first.tbp & 0x8000)) {
+            if (auto* gt = render_state->texture_pool->lookup_gpu_texture(first.tbp & 0x7fff)) {
+              combo = ((s64)gt->tex_id.page << 16) | gt->tex_id.tex;
+            }
+          }
+          it = m_canopy_tbp.emplace(first.tbp, combo).first;
+        }
+        canopy_set_emitter(render_state->shaders[ShaderId::GENERIC].id(),
+                           canopy_keeps_light(first.mode, it->second), &m_canopy_emitter);
+      }
+      if (m_pbr) {
+        auto it = m_pbr_tbp.find(first.tbp);
+        if (it == m_pbr_tbp.end()) {
+          std::pair<int, std::pair<GLuint, float>> e = {PBR_SPECIAL, {0, 0.f}};
+          if (!(first.tbp & 0x8000)) {
+            if (auto* gt = render_state->texture_pool->lookup_gpu_texture(first.tbp & 0x7fff)) {
+              const u32 combo = ((u32)gt->tex_id.page << 16) | gt->tex_id.tex;
+              e.first = pbr_mat_for_combo(combo);
+              pbr_maps_for_combo(combo, &e.second.first, &e.second.second);
+            }
+          }
+          it = m_pbr_tbp.emplace(first.tbp, e).first;
+        }
+        m_pbr_draw.set_direct(it->second.first, it->second.second.first, it->second.second.second);
+      }
+      if (m_iw_loc >= 0) {
+        auto it = m_iw_tbp.find(first.tbp);
+        if (it == m_iw_tbp.end()) {
+          int k = inland_water::NONE;
+          if (!(first.tbp & 0x8000)) {
+            if (auto* gt = render_state->texture_pool->lookup_gpu_texture(first.tbp & 0x7fff)) {
+              k = inland_water::kind_for_combo(((u32)gt->tex_id.page << 16) | gt->tex_id.tex);
+              k = Gfx::g_global_settings.inland_water ? (k & inland_water::CLEAR) : 0;
+            }
+          }
+          it = m_iw_tbp.emplace(first.tbp, k).first;
+        }
+        if (it->second != m_iw_kind) {
+          m_iw_kind = it->second;
+          glUniform1i(m_iw_loc, m_iw_kind);
+        }
+      }
       glDrawElements(GL_TRIANGLE_STRIP, bucket.idx_count, GL_UNSIGNED_INT,
                      (void*)(sizeof(u32) * bucket.idx_idx));
       prof.add_draw_call();
@@ -315,6 +404,29 @@ void Generic2::do_draws(SharedRenderState* render_state, ScopedProfilerNode& pro
   } else {
     glUniform1i(m_ogl.use_full_matrix, 0);
   }
+  const GLuint gid = render_state->shaders[ShaderId::GENERIC].id();
+  m_pbr = !m_drawing_config.uses_full_matrix && pbr_active(render_state);
+  pbr_setup_generic(render_state, gid, m_pbr);
+  // the canopy follows the actor shadow prepass: off with shadows, as wind TIE
+  m_canopy = !m_drawing_config.uses_full_matrix && render_state->shadow.active &&
+             render_state->version == GameVersion::Jak1;
+  if (m_canopy) {
+    canopy_set_uniforms(gid, true);
+    m_canopy_emitter = -1;
+    m_canopy_tbp.clear();
+  } else {
+    canopy_disable(gid);
+  }
+  m_iw_loc = -1;
+  if (inland_water::needs_setup(render_state, false)) {
+    m_iw_loc = inland_water::setup(render_state, gid, false);
+    m_iw_kind = 0;
+    m_iw_tbp.clear();
+  }
+  if (m_pbr) {
+    m_pbr_draw.begin(gid, nullptr, nullptr);
+    m_pbr_tbp.clear();
+  }
   constexpr DrawMode::AlphaBlend alpha_order[ALPHA_MODE_COUNT] = {
       DrawMode::AlphaBlend::SRC_0_FIX_DST,    DrawMode::AlphaBlend::SRC_SRC_SRC_SRC,
       DrawMode::AlphaBlend::SRC_DST_SRC_DST,  DrawMode::AlphaBlend::SRC_0_SRC_DST,
@@ -327,6 +439,9 @@ void Generic2::do_draws(SharedRenderState* render_state, ScopedProfilerNode& pro
       do_draws_for_alpha(render_state, prof, alpha_order[i], false);
     }
   }
+  if (render_state->light_material) {
+    SsaoRenderer::emissive_draw_buffers(false);
+  }
 
   if (m_drawing_config.uses_hud) {
     glUniform4f(m_ogl.scale, m_drawing_config.hud_scale[0], m_drawing_config.hud_scale[1],
@@ -335,7 +450,16 @@ void Generic2::do_draws(SharedRenderState* render_state, ScopedProfilerNode& pro
     glUniform1f(m_ogl.mat_32, m_drawing_config.hud_mat_32);
     glUniform1f(m_ogl.mat_33, m_drawing_config.hud_mat_33);
     glUniform1i(m_ogl.gfx_hack_no_tex, false);
+    glUniform1f(m_ogl.stereo_eye_x, 0.f);
+    glUniform1i(m_ogl.eye_on, 0);
+    if (m_pbr) {
+      pbr_setup_generic(render_state, render_state->shaders[ShaderId::GENERIC].id(), false);
+      m_pbr = false;
+    }
+    canopy_disable(render_state->shaders[ShaderId::GENERIC].id());
 
-    do_hud_draws(render_state, prof);
+    if (!ui_canvas_draw(*render_state, [&](int) { do_hud_draws(render_state, prof); })) {
+      do_hud_draws(render_state, prof);
+    }
   }
 }

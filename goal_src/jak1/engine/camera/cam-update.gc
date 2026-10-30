@@ -36,6 +36,45 @@
   (set! (-> arg0 w) 1.0)
   (none))
 
+(defun xr-view-fetch ()
+  "sandover: the XR head view for this frame (pc-get-xr-cull), when the camera is rebuilt from the
+camera system this frame (not the pad-driven external camera, which is moved incrementally)."
+  ;; the look-through count as update-camera leaves it below (it can drop 1 -> 0 this frame)
+  (let* ((other (cond
+                  ((or (= *master-mode* 'pause) (= *master-mode* 'progress) *progress-process*) *camera-look-through-other*)
+                  ((>= *camera-look-through-other* 2) 1)
+                  ((and (= *camera-look-through-other* 1) (!= *master-mode* 'menu)) 0)
+                  (else *camera-look-through-other*)))
+         (rebuilt (and (not *external-cam-mode*) (or (nonzero? other) *camera-combiner*))))
+    ;; a null buffer tells the engine this frame is drawn from the game camera
+    (set! *xr-cull-active*
+          (nonzero? (pc-get-xr-cull (the-as (pointer float) (if rebuilt *xr-cull-data* 0))))))
+  (none))
+
+(defun xr-render-camera-update ()
+  "sandover: in an XR session the render camera is the head's view: the game camera turned and
+moved by the head pose the engine reports. Gameplay keeps the game camera (inv-camera-rot-smooth)."
+  (when *xr-cull-active*
+    (let ((d (the-as (pointer float) *xr-cull-data*))
+          (mc *math-camera*)
+          (h (new 'stack-no-clear 'matrix))
+          (inv (new 'stack-no-clear 'matrix))
+          (off (new 'stack-no-clear 'vector)))
+      ;; head space -> game camera space (row vectors): the rows of the head rotation
+      (matrix-identity! h)
+      (matrix-identity! inv)
+      (dotimes (r 3)
+        (set-vector! (-> h vector r) (-> d (* r 3)) (-> d (+ (* r 3) 1)) (-> d (+ (* r 3) 2)) 0.0)
+        (set! (-> inv vector r quad) (-> mc inv-camera-rot vector r quad))
+        (set! (-> inv vector r w) 0.0))
+      (set-vector! off (-> d 9) (-> d 10) (-> d 11) 0.0)
+      (vector-matrix*! off off inv)
+      (matrix*! (-> mc inv-camera-rot) h inv)
+      (vector+! (-> mc trans) (-> mc trans) off)
+      (set! (-> mc trans w) 1.0)
+      (matrix-transpose! (-> mc camera-rot) (-> mc inv-camera-rot))))
+  (none))
+
 (defun update-view-planes ((arg0 math-camera) (arg1 (inline-array plane)) (arg2 float))
   "Compute the frustum planes from the given camera."
   (when (not *artist-fix-frustum*)
@@ -255,6 +294,7 @@
                   (/ (-> s5-1 info bsphere y) METER_LENGTH)
                   (/ (-> s5-1 info bsphere z) METER_LENGTH)
                   (/ (-> s5-1 info bsphere w) METER_LENGTH))))))
+  (#when PC_PORT (xr-view-fetch))
   (update-math-camera *math-camera* (-> *setting-control* current video-mode) (-> *setting-control* current aspect-ratio))
   (update! *camera-smush-control*)
   (cond
@@ -337,6 +377,7 @@
        (set! (-> v1-124 vector 1 quad) a1-18)
        (set! (-> v1-124 vector 2 quad) a2-14)
        (set! (-> v1-124 vector 3 quad) a3-14))))
+  (#when PC_PORT (xr-render-camera-update))
   (if (and (!= *master-mode* 'menu) *display-camera-info*)
     (format *stdcon* "cam pos ~M ~M ~M~%" (-> *math-camera* trans x) (-> *math-camera* trans y) (-> *math-camera* trans z)))
   (when (zero? (-> *math-camera* reset))

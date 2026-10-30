@@ -1,0 +1,52 @@
+;; Play-session snapshot reporter, sent by the play script over goalc's nREPL after (mi).
+;; gk queues F9/F10/F8 presses (only when SANDOVER_RUN_DIR is set); a process drains them every
+;; frame and prints one line per event to stdout, which the play script turns into sidecars/warps.
+
+(define-extern pc-snap-poll (function int))
+(define-perm *snap-handle* handle (the handle #f))
+
+(defun snap-f32 ((f float))
+  (format 0 " ~X" (the-as uint32 f))
+  (none))
+
+(defun snap-report ((idx int))
+  "SNAP:STATE idx level continue, then raw float bits: jak xyz, camera xyz, camera inv-rot
+rows (row-major 3x3), fov, time of day, the 8 mood slot weights of the level."
+  (let ((lev (if (and *target* (-> *target* current-level))
+                 (-> *target* current-level)
+                 (level-get-target-inside *level*)))
+        (c *math-camera*))
+    (format 0 "SNAP:STATE ~D ~A ~A" idx (if lev (-> lev name) 'none)
+            (if (-> *game-info* current-continue) (-> *game-info* current-continue name) "none"))
+    (let ((p (target-pos 0)))
+      (dotimes (k 3) (snap-f32 (-> p data k))))
+    (dotimes (k 3) (snap-f32 (-> c trans data k)))
+    (dotimes (r 3)
+      (dotimes (k 3) (snap-f32 (-> c inv-camera-rot vector r data k))))
+    (snap-f32 (-> c fov))
+    (snap-f32 (-> *time-of-day-proc* 0 time-of-day))
+    (dotimes (k 8)
+      (snap-f32 (if (and lev (nonzero? (-> lev mood)) (-> lev mood)) (-> lev mood times k w) 0.0))))
+  (format 0 "~%")
+  (none))
+
+(defun snap-install ()
+  "Start the reporter process unless it is already running."
+  (when (not (handle->process *snap-handle*))
+    (set! *snap-handle*
+          (ppointer->handle
+            (process-spawn-function process
+              (lambda :behavior process ()
+                (logclear! (-> self mask) (process-mask pause menu progress))
+                (loop
+                  (let ((ev (pc-snap-poll)))
+                    (while (nonzero? ev)
+                      (case (logand ev 15)
+                        ((1) (snap-report (shr ev 4)))
+                        ((2) (format 0 "SNAP:WARP 1~%"))
+                        ((3) (format 0 "SNAP:WARP -1~%")))
+                      (set! ev (pc-snap-poll))))
+                  (suspend)))
+              :name 'snap))))
+  (format 0 "SNAP:READY~%")
+  (none))

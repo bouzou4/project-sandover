@@ -16,12 +16,17 @@ layout (location = 4) in uint use_uv_in;
 flat out uvec4 tex_info;
 flat out uint use_uv;
 uniform int offscreen_mode;
+uniform vec2 stereo_gs;
+
+XR_GS_VERT
 
 void main() {
   if (offscreen_mode == 1) {
     gl_Position = vec4((position_in.x - 0.453125) * 64., (position_in.y - 0.5 + (2.25 / 64)) * 64, position_in.z * 2 - 1., 1.0);
   }  else {
-    gl_Position = vec4((position_in.x - 0.5) * 16., -(position_in.y - 0.5) * 32 * HEIGHT_SCALE, position_in.z * 2 - 1., 1.0);
+    float x = position_in.x + stereo_gs.x * (position_in.z - stereo_gs.y);
+    vec4 h = xr_gs(vec3(x, position_in.y, position_in.z));
+    gl_Position = vec4((h.x - 0.5 * h.w) * 16., -(h.y - 0.5 * h.w) * 32 * HEIGHT_SCALE, h.z * 2 - h.w, h.w);
     // scissoring area adjust
     gl_Position.y *= SCISSOR_ADJUST;
   }

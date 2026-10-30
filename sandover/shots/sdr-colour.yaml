@@ -1,0 +1,24 @@
+# SDR colour against vanilla (kb/findings/2026-10-22-sdr-colour.md): one frame per level and hour,
+# each matching a vanilla library frame (sandover-vanilla find). Shoot with --play-look; measure with
+# `python -m sandover.sdr_colour` (frames are compared at the library's 2560x1440). 4K: under temporal AA
+# a screenshot at another size than the frame resets the history and misses the background.
+set: sdr-colour
+defaults:
+  resolution: [3840, 2160]
+  msaa: 2
+  settle_frames: 60
+  camera: from_continue
+  effects: off
+  wind: off
+  particles: off
+  jak: show
+  actors: freeze
+shots:
+  - {name: village1-hut-noon, continue: village1-hut, hour: 12}
+  - {name: beach-start-dusk, continue: beach-start, hour: 18}
+  - {name: jungle-start-noon, continue: jungle-start, hour: 12}
+  - {name: sunken-start-night, continue: sunken-start, hour: 23}
+  - {name: misty-start-noon, continue: misty-start, hour: 12, settle_frames: 600, jak: hide}
+  - {name: rolling-start-noon, continue: rolling-start, hour: 12, settle_frames: 600, jak: hide}
+  - {name: blue-vent-noon, continue: jungle-start, hour: 12, settle_frames: 90, effects: on, particles: on, jak: hide, camera: {pos: [1840967.5, 89011.3, -1186295.5], rot: [-0.5, 0.0, -0.866, 0.5609, 0.7619, -0.3239, 0.6598, -0.6477, -0.3809]}}
+  - {name: green-vent-night, continue: rolling-start, hour: 22, settle_frames: 90, effects: on, particles: on, jak: hide, camera: {pos: [-1537773.2, 114617.2, -6664280.6], rot: [-0.9848, 0.0, -0.1736, 0.1155, 0.7465, -0.6553, 0.1296, -0.6654, -0.7352]}}

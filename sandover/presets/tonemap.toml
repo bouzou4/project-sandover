@@ -1,0 +1,70 @@
+# Tonemap of the FP16 main target (Jak 1). Every preset turns the FP16 target on; `off`
+# restores the RGBA8 target (the faithful look). Rig captures apply them with
+# `sandover-capture run ... --preset tonemap=<name>`; `sandover-preset apply tonemap <name>`
+# prints the forms for a play session. Engine side: post_processing.frag, gfx.h TonemapOption.
+# See kb/howto/lighting.md section 6.
+#
+# mode        0 clamp (per channel at 1), 1 filmic (per channel), 2 toon (luminance)
+# exposure    scale before the curve (filmic and toon), 1 = neutral
+# knee        filmic: identity below, exponential shoulder to 1.0 above, per channel
+# toon_knee   toon: luminance identity below
+# toon_range  toon: luminance 1 + toon_range maps to 1.0 (smooth shoulder from the knee);
+#             colour scaled by the tonemapped / original luminance; a channel still above 1
+#             is desaturated toward it (at most 25%), then the hue clip (1 / max channel)
+# white_start toon and the bloom hue clip: max channel (after exposure) where a hot core starts
+#             to blend from the hue-kept colour toward the per-channel clip min(c, 1), the
+#             vanilla result (white for blue eco, yellow for fire); below it nothing changes
+# white_full  max channel where the core is fully the per-channel clip
+# halo_start  toon: max channel where an overbright halo starts toward the per-channel clip, the
+#             vanilla hue of an additive stack (blue eco to cyan, green to lime); sky, snow and
+#             sunlit grass sit under 1.2 and keep the hue-kept roll-off
+# halo_full   max channel where the halo is fully the per-channel clip. With halo_full at 1.8
+#             the white_start/white_full ramp is inert in toon (already the clip past 1.8) and
+#             only drives the bloom hue clip
+# caption     one line for the screening grid: what visibly differs
+
+[meta]
+schema = 1
+phase = "tonemap"
+round = 2
+recommended = "toon"  # the SDR choice; engine defaults for the toon terms match it
+pick_set = "tonemap-hdr"
+
+[presets.clamp]
+label = "Clamp"
+caption = "the RGBA8 look: every channel cut at 1, overbright emissives flatten to white"
+mode = 0
+exposure = 1.0
+knee = 0.8
+toon_knee = 0.95
+toon_range = 1.5
+white_start = 2.0
+white_full = 3.5
+halo_start = 1.2
+halo_full = 1.8
+
+[presets.filmic]
+label = "Filmic 0.8"
+caption = "per-channel shoulder from 0.8: soft highlights, brights lose contrast and saturation"
+mode = 1
+exposure = 1.0
+knee = 0.8
+toon_knee = 0.95
+toon_range = 1.5
+white_start = 2.0
+white_full = 3.5
+halo_start = 1.2
+halo_full = 1.8
+
+[presets.toon]
+label = "Toon"
+caption = "the original colours below white; overbright glows roll off with their hue, hot cores go white as in vanilla"
+mode = 2
+exposure = 1.0
+knee = 0.8
+toon_knee = 0.95
+toon_range = 1.5
+white_start = 2.0
+white_full = 3.5
+halo_start = 1.2
+halo_full = 1.8

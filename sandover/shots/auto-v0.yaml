@@ -1,0 +1,17 @@
+# Auto shot set v0: continue points x {dawn, noon, dusk, night}.
+# Run: sandover-capture run sandover/shots/auto-v0.yaml  (see kb/howto/rig-capture.md)
+set: auto-v0
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 60      # frames between reset and pause; HUD, palette and actors settle
+  camera: from_continue  # or follow, or { pos: [x, y, z], rot: [9 floats] } in game units
+  effects: off           # *time-of-day-effects* (flames, lightning, flicker)
+  wind: off              # foliage wind; the renderer's spring state is reset per shot
+  particles: off         # sprite particles (smoke, vents, sparkles); on is not reproducible
+  jak: show
+generate:
+  from: continue_points
+  continues: [village1-hut, beach-start, jungle-start, sunken-start]
+  hours: { dawn: 6, noon: 12, dusk: 18, night: 23 }
+shots: []

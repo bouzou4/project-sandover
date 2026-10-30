@@ -1,0 +1,75 @@
+# Sunken caustics revision 3. Revision 2 was unusable: shovers and bullies filled both frames and
+# the web moved the caustic-lit floor by 3-15 levels. The look now scales with the caustic light
+# (B1 gathers half of it into the web's lines, B2 all of it). Cameras come from captured frames:
+# - start: sunken-start room, wide (highlights-001/sunken-precursor-pad-A), no enemy
+#   within 45 m; floor and platform caustic-lit (24 % of the frame on the rip)
+# - poolbed: the pool bed under sunken-water seen from the walkway (sunken-caustics-001/
+#   pool-A-f120), no enemy within 45 m; bed 60 % of the frame, the original's strongest caustics
+# - slope: sunkenb floor (sunken-caustics-002/slope-A-f120) turned 45 degrees right and
+#   10 down about the same position, away from the bullies that filled revision 2's frame; floor 88 %
+# Arms: C original game, A today (play look, original loop), B1 web-sharp, B2 web-strong (neither
+# kept as a preset since `web` was picked); one frame each.
+# Stage hook in every arm: every game clock to the next t = 13700 mod 36000 ticks (each synced
+# sunken-water is in its safe phase for 450 ticks), 40 frames for a deadly fade to clear, then the
+# original's caustic counter (state 1 of both sunken moods) and the pattern clock pinned to the same
+# values, so the loop phase and the web match across arms. Actors: the rig's default freeze.
+set: sunken-caustics
+looks:
+  C: &C
+    - '(define-extern pc-set-caustics (function int int none))'
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (the time-frame (+ (* (/ (current-time) 36000) 36000) 36000 13700))) (dotimes (i 40) (suspend)) (set! (-> *sunken-mood* state 1) (the-as uint 116)) (set! (-> *sunkenb-mood* state 1) (the-as uint 116)) (pc-set-caustics 7 1933333) (none)))'
+  A: &A
+    - '(sandover-settings-reset! (-> *pc-settings* sandover))'
+    - '(sandover-settings-reapply)'
+    - '(set! (-> *pc-settings* sandover hdr-output) 2)'
+    - '(define-extern pc-set-caustics (function int int none))'
+    - '(pc-set-caustics 0 0)'
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (the time-frame (+ (* (/ (current-time) 36000) 36000) 36000 13700))) (dotimes (i 40) (suspend)) (set! (-> *sunken-mood* state 1) (the-as uint 116)) (set! (-> *sunkenb-mood* state 1) (the-as uint 116)) (pc-set-caustics 7 1933333) (none)))'
+  B1: &B1
+    - '(sandover-settings-reset! (-> *pc-settings* sandover))'
+    - '(sandover-settings-reapply)'
+    - '(set! (-> *pc-settings* sandover hdr-output) 2)'
+    - '(define-extern pc-set-caustics (function int int none))'
+    - '(pc-set-caustics 1 250000)'
+    - '(pc-set-caustics 2 1875000)'
+    - '(pc-set-caustics 3 250000)'
+    - '(pc-set-caustics 4 2440000)'
+    - '(pc-set-caustics 5 300000)'
+    - '(pc-set-caustics 6 204700)'
+    - '(pc-set-caustics 0 1000000)'
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (the time-frame (+ (* (/ (current-time) 36000) 36000) 36000 13700))) (dotimes (i 40) (suspend)) (set! (-> *sunken-mood* state 1) (the-as uint 116)) (set! (-> *sunkenb-mood* state 1) (the-as uint 116)) (pc-set-caustics 7 1933333) (none)))'
+  B2: &B2
+    - '(sandover-settings-reset! (-> *pc-settings* sandover))'
+    - '(sandover-settings-reapply)'
+    - '(set! (-> *pc-settings* sandover hdr-output) 2)'
+    - '(define-extern pc-set-caustics (function int int none))'
+    - '(pc-set-caustics 1 250000)'
+    - '(pc-set-caustics 2 1875000)'
+    - '(pc-set-caustics 3 250000)'
+    - '(pc-set-caustics 4 4885000)'
+    - '(pc-set-caustics 5 300000)'
+    - '(pc-set-caustics 6 204700)'
+    - '(pc-set-caustics 0 1000000)'
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (the time-frame (+ (* (/ (current-time) 36000) 36000) 36000 13700))) (dotimes (i 40) (suspend)) (set! (-> *sunken-mood* state 1) (the-as uint 116)) (set! (-> *sunkenb-mood* state 1) (the-as uint 116)) (pc-set-caustics 7 1933333) (none)))'
+defaults:
+  resolution: [3840, 2160]
+  msaa: 4
+  hour: 12
+  effects: on
+  particles: on
+  jak: show
+  settle_frames: 120
+  actors: freeze
+shots:
+  - {name: start-C, continue: sunken-start, camera: {pos: [2138871.5, -572296.4, -6751967.5], rot: [0.7575, 0.0, -0.6527, 0.0858, 0.9913, 0.0995, 0.647, -0.1314, 0.7509]}, goals_after_load: *C}  # from highlights-001/sunken-precursor-pad-A.png
+  - {name: poolbed-C, continue: sunken1, camera: {pos: [3473408.0, -559104.0, -6737920.0], rot: [1.0, 0.0, 0.0, 0.0, 0.819152, 0.573576, 0.0, -0.573576, 0.819152]}, goals_after_load: *C}  # from sunken-caustics-001/pool-A-f120.png
+  - {name: slope-C, continue: sunkenb-start, camera: {pos: [2430935.0, -968622.1, -6810460.0], rot: [0.707107, 0.0, -0.707107, 0.353373, 0.866173, 0.353373, 0.612477, -0.499745, 0.612477]}, goals_after_load: *C}  # from sunken-caustics-002/slope-A-f120.png (yaw +45, pitch -10 about the same position)
+  - {name: start-A, continue: sunken-start, camera: {pos: [2138871.5, -572296.4, -6751967.5], rot: [0.7575, 0.0, -0.6527, 0.0858, 0.9913, 0.0995, 0.647, -0.1314, 0.7509]}, goals_after_load: *A}
+  - {name: poolbed-A, continue: sunken1, camera: {pos: [3473408.0, -559104.0, -6737920.0], rot: [1.0, 0.0, 0.0, 0.0, 0.819152, 0.573576, 0.0, -0.573576, 0.819152]}, goals_after_load: *A}
+  - {name: slope-A, continue: sunkenb-start, camera: {pos: [2430935.0, -968622.1, -6810460.0], rot: [0.707107, 0.0, -0.707107, 0.353373, 0.866173, 0.353373, 0.612477, -0.499745, 0.612477]}, goals_after_load: *A}
+  - {name: start-B1, continue: sunken-start, camera: {pos: [2138871.5, -572296.4, -6751967.5], rot: [0.7575, 0.0, -0.6527, 0.0858, 0.9913, 0.0995, 0.647, -0.1314, 0.7509]}, goals_after_load: *B1}
+  - {name: poolbed-B1, continue: sunken1, camera: {pos: [3473408.0, -559104.0, -6737920.0], rot: [1.0, 0.0, 0.0, 0.0, 0.819152, 0.573576, 0.0, -0.573576, 0.819152]}, goals_after_load: *B1}
+  - {name: slope-B1, continue: sunkenb-start, camera: {pos: [2430935.0, -968622.1, -6810460.0], rot: [0.707107, 0.0, -0.707107, 0.353373, 0.866173, 0.353373, 0.612477, -0.499745, 0.612477]}, goals_after_load: *B1}
+  - {name: start-B2, continue: sunken-start, camera: {pos: [2138871.5, -572296.4, -6751967.5], rot: [0.7575, 0.0, -0.6527, 0.0858, 0.9913, 0.0995, 0.647, -0.1314, 0.7509]}, goals_after_load: *B2}
+  - {name: poolbed-B2, continue: sunken1, camera: {pos: [3473408.0, -559104.0, -6737920.0], rot: [1.0, 0.0, 0.0, 0.0, 0.819152, 0.573576, 0.0, -0.573576, 0.819152]}, goals_after_load: *B2}
+  - {name: slope-B2, continue: sunkenb-start, camera: {pos: [2430935.0, -968622.1, -6810460.0], rot: [0.707107, 0.0, -0.707107, 0.353373, 0.866173, 0.353373, 0.612477, -0.499745, 0.612477]}, goals_after_load: *B2}

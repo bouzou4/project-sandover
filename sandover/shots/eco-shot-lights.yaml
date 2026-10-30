@@ -1,0 +1,80 @@
+# Eco shots and blasts light the world around them: every live shot (a process whose type
+# descends from projectile or arcing-shot) and every part-tracker blast whose particle group is in
+# EcoLights.inc throws a point light of the group's own colour. Emissive-lights options 27 (on/off)
+# and 28 (strength: brighter and wider, radius x sqrt); 20-26 are taken by open.
+# Arms, each ONE --goal-after-load string (the settings reapply only marks; the update pushes):
+#   C original: no forms (vanilla)
+#   A today:  "(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-emissive-lights 27 0)"
+#   B1:       "(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-emissive-lights 27 1000000) (pc-set-emissive-lights 28 500000)"
+#   B2:       "(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-emissive-lights 27 1000000) (pc-set-emissive-lights 28 2500000)"
+# Picked: B2 is now the engine default, so --play-look alone shows it.
+# A shot in flight, at the same moment in every arm: each shot defines eco-shot-pause-3, and its
+# stage hook spawns the game's own shot process (same init, same particle group) plus a helper that
+# pauses the game exactly 3 frames later. The rig's own pause (4 frames after the hook, or later if
+# it re-fixes the camera) then finds the game already paused, so the shot, its particles and its
+# light are frozen at spawn + 3 frames whatever the rig does in between; while paused the game sends
+# no eco list and the renderer keeps the last one. actors: live (the rig's freeze holds projectiles).
+# The hook clears itself when it runs, so it never fires in a later shot or manifest, and the helper
+# ends after its 3 frames: nothing of this round outlives its shot (both live in this manifest only).
+# wait_vista: the first shot after an instance boots applies the play look while the rig holds; the
+# rig waits for the vista loads before it releases (arm A's first shot timed out at RIG:RELEASED).
+# Cameras are those of existing frames ($SANDOVER_DATA paths per shot). The finalboss shots use the
+# finalboss-start continue (the start ledge; no intro plays there, final-gate6-ab shows it).
+schema: 1
+set: eco-shot-lights
+variants:
+  A: "(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-emissive-lights 27 0)"
+  B1: "(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-emissive-lights 27 1000000) (pc-set-emissive-lights 28 500000)"
+  B2: "(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-emissive-lights 27 1000000) (pc-set-emissive-lights 28 2500000)"
+defaults:
+  resolution: [3840, 2160]
+  msaa: 4
+  effects: on
+  wind: on
+  particles: on
+  jak: show
+  actors: live
+  settle_frames: 120
+  wait_vista: true
+shots:
+  # shots/final-gate6-ab/A/finalboss: Jak's yellow eco shot, fired from 1 m in front of him along
+  # the camera's heading at the game's 60 m/s (target2.gc), options 128 (narrow aim cone, so it
+  # does not turn onto a crate); frozen about 3-4 m out over the ledge floor
+  - name: finalboss-ledge-yellow-shot
+    continue: finalboss-start
+    hour: 12
+    camera: from_continue
+    goals_after_load:
+      - "(defun eco-shot-pause-3 () (process-spawn-function process (lambda :behavior process () (logclear! (-> self mask) (process-mask pause menu progress)) (dotimes (i 3) (suspend)) (set-master-mode 'pause) (none)) :to *entity-pool*) (none))"
+      - "(set! *rig-stage-hook* (lambda () (set! *rig-stage-hook* #f) (process-spawn projectile-yellow :init projectile-init-by-other (-> *target* entity) (new 'static 'vector :x 11551768.0 :y 2225293.0 :z -19407088.0 :w 1.0) (new 'static 'vector :x 198720.0 :z 144597.0 :w 1.0) 128 #f :to *target*) (eco-shot-pause-3) (none)))"
+  # the same camera: the boss's green shot (robotboss-weapon.gc greenshot) arcing low over the
+  # ledge 8.5 m ahead of Jak, from 1.6 m up toward the floor 13 m ahead over 2 s
+  - name: finalboss-ledge-greenshot
+    continue: finalboss-start
+    hour: 12
+    camera: from_continue
+    goals_after_load:
+      - "(defun eco-shot-pause-3 () (process-spawn-function process (lambda :behavior process () (logclear! (-> self mask) (process-mask pause menu progress)) (dotimes (i 3) (suspend)) (set-master-mode 'pause) (none)) :to *entity-pool*) (none))"
+      - "(set! *rig-stage-hook* (lambda () (set! *rig-stage-hook* #f) (process-spawn greenshot :init greenshot-init-by-other (new 'static 'vector :x 11576608.0 :y 2222426.0 :z -19389013.0 :w 1.0) (new 'static 'vector :x 11591512.0 :y 2215872.0 :z -19378169.0 :w 1.0) 4096.0 (seconds 2) :to *entity-pool*) (eco-shot-pause-3) (none)))"
+  # the same camera (replaces the dark eco bomb blast, whose particles whited out the frame): the
+  # boss's red shot exploding on the floor 9 m ahead of Jak, as it does when it lands or is hit
+  # (robotboss-weapon.gc redshot-explode: an expanding red ring, about 0.75 m when frozen; it only
+  # hurts Jak when the ring reaches him at 9 m)
+  - name: finalboss-ledge-redshot-blast
+    continue: finalboss-start
+    hour: 12
+    camera: from_continue
+    goals_after_load:
+      - "(defun eco-shot-pause-3 () (process-spawn-function process (lambda :behavior process () (logclear! (-> self mask) (process-mask pause menu progress)) (dotimes (i 3) (suspend)) (set-master-mode 'pause) (none)) :to *entity-pool*) (none))"
+      - "(set! *rig-stage-hook* (lambda () (set! *rig-stage-hook* #f) (send-event (ppointer->process (process-spawn redshot :init redshot-init-by-other (new 'static 'vector :x 11578264.0 :y 2215872.0 :z -19387808.0 :w 1.0) (new 'static 'vector :x 11578264.0 :y 2215872.0 :z -19387808.0 :w 1.0) 4096.0 (seconds 1) (seconds 1) 0 :to *entity-pool*)) 'attack) (eco-shot-pause-3) (none)))"
+  # shots/final-gate6-ab/A/darkcave (replaces maincave, already lit there): near pitch-black floor;
+  # Jak's yellow shot at 60 m/s, aimed 17 degrees left of the camera's heading so it passes left of
+  # the unlit grey crystal (a hit would light it); frozen about 3-4 m out over the floor. In the Dark
+  # Cave the eco light reaches half as far (its darkness is kept)
+  - name: darkcave-yellow-shot
+    continue: darkcave-start
+    hour: 12
+    camera: from_continue
+    goals_after_load:
+      - "(defun eco-shot-pause-3 () (process-spawn-function process (lambda :behavior process () (logclear! (-> self mask) (process-mask pause menu progress)) (dotimes (i 3) (suspend)) (set-master-mode 'pause) (none)) :to *entity-pool*) (none))"
+      - "(set! *rig-stage-hook* (lambda () (set! *rig-stage-hook* #f) (process-spawn projectile-yellow :init projectile-init-by-other (-> *target* entity) (new 'static 'vector :x 3814726.0 :y 138908.0 :z -12110485.0 :w 1.0) (new 'static 'vector :x 88766.0 :z 229169.0 :w 1.0) 128 #f :to *target*) (eco-shot-pause-3) (none)))"

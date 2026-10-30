@@ -1,0 +1,80 @@
+# Neighbour fidelity spike: village1-hut and beach-start with every adjacent level resident.
+# hut-roof: 110 m above the village1 hut toward village2, over the beach cliffs (waterfall, windmill).
+# hut: the continue camera. beach-v1: beach shore toward village1. high: the vista facts' 450 m vantage.
+# temple-top: on the forbidden jungle temple top (towertop actor), toward misty island and geyser rock.
+# The mode is set per run with --goal forms; see kb/howto/vista.md.
+schema: 1
+set: neighbours
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 600
+  effects: 'off'
+  wind: 'off'
+  particles: 'off'
+  jak: hide
+shots:
+- name: hut-roof-noon
+  continue: village1-hut
+  hour: 12
+  camera:
+    pos: [-614400.0, 450560.0, 614400.0]
+    rot: [-0.992877, 0.0, -0.119145, 0.001352, 0.999936, -0.011266, 0.119138, -0.011346, -0.992813]
+- name: hut-roof-dusk
+  continue: village1-hut
+  hour: 18
+  camera:
+    pos: [-614400.0, 450560.0, 614400.0]
+    rot: [-0.992877, 0.0, -0.119145, 0.001352, 0.999936, -0.011266, 0.119138, -0.011346, -0.992813]
+- name: hut-roof-night
+  continue: village1-hut
+  hour: 23
+  camera:
+    pos: [-614400.0, 450560.0, 614400.0]
+    rot: [-0.992877, 0.0, -0.119145, 0.001352, 0.999936, -0.011266, 0.119138, -0.011346, -0.992813]
+- {name: hut-noon, continue: village1-hut, hour: 12, camera: from_continue}
+- {name: hut-dusk, continue: village1-hut, hour: 18, camera: from_continue}
+- {name: hut-night, continue: village1-hut, hour: 23, camera: from_continue}
+- name: beach-v1-noon
+  continue: beach-start
+  hour: 12
+  camera:
+    pos: [-450560.0, 163840.0, -245760.0]
+    rot: [0.983229, -0.0, 0.182373, -0.007225, 0.999215, 0.038951, -0.18223, -0.039615, 0.982458]
+- name: beach-v1-dusk
+  continue: beach-start
+  hour: 18
+  camera:
+    pos: [-450560.0, 163840.0, -245760.0]
+    rot: [0.983229, -0.0, 0.182373, -0.007225, 0.999215, 0.038951, -0.18223, -0.039615, 0.982458]
+- name: beach-v1-night
+  continue: beach-start
+  hour: 23
+  camera:
+    pos: [-450560.0, 163840.0, -245760.0]
+    rot: [0.983229, -0.0, 0.182373, -0.007225, 0.999215, 0.038951, -0.18223, -0.039615, 0.982458]
+- {name: beach-noon, continue: beach-start, hour: 12, camera: from_continue}
+- name: high-noon
+  continue: village1-hut
+  hour: 12
+  camera:
+    pos: [-491520.0, 1843200.0, 409600.0]
+    rot: [-0.978371, 0.0, -0.206856, 0.041902, 0.979268, -0.198186, 0.202567, -0.202567, -0.958088]
+- name: high-dusk
+  continue: village1-hut
+  hour: 18
+  camera:
+    pos: [-491520.0, 1843200.0, 409600.0]
+    rot: [-0.978371, 0.0, -0.206856, 0.041902, 0.979268, -0.198186, 0.202567, -0.202567, -0.958088]
+- name: temple-top-noon
+  continue: jungle-start
+  hour: 12
+  camera:
+    pos: [1411072.0, 675840.0, -889241.6]
+    rot: [0.802639, 0.0, 0.596466, -0.052259, 0.996154, 0.070323, -0.594172, -0.087615, 0.799552]
+- name: temple-top-dusk
+  continue: jungle-start
+  hour: 18
+  camera:
+    pos: [1411072.0, 675840.0, -889241.6]
+    rot: [0.802639, 0.0, 0.596466, -0.052259, 0.996154, 0.070323, -0.594172, -0.087615, 0.799552]

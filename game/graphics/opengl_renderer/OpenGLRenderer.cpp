@@ -1,23 +1,45 @@
 #include "OpenGLRenderer.h"
 
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+#include <optional>
+#include <type_traits>
+
 #include "common/goal_constants.h"
 #include "common/log/log.h"
 #include "common/util/FileUtil.h"
+#include "common/util/Timer.h"
+#include "common/util/exr.h"
 
+#include "game/graphics/bug_report.h"
+#include "game/graphics/hdr/HdrPresent.h"
 #include "game/graphics/opengl_renderer/BlitDisplays.h"
 #include "game/graphics/opengl_renderer/DepthCue.h"
 #include "game/graphics/opengl_renderer/DirectRenderer.h"
 #include "game/graphics/opengl_renderer/EyeRenderer.h"
+#include "game/graphics/opengl_renderer/GlQueries.h"
+#include "game/graphics/opengl_renderer/GpuAdapterLog.h"
+#include "game/graphics/opengl_renderer/InlandWater.h"
+#include "game/graphics/opengl_renderer/Materials.h"
+#include "game/graphics/opengl_renderer/OpenGLRendererInternal.h"
+#include "game/graphics/opengl_renderer/PerfTimers.h"
 #include "game/graphics/opengl_renderer/ProgressRenderer.h"
 #include "game/graphics/opengl_renderer/ShadowRenderer.h"
 #include "game/graphics/opengl_renderer/SkyRenderer.h"
+#include "game/graphics/opengl_renderer/StencilMarks.h"
+#include "game/graphics/opengl_renderer/SunDisc.h"
 #include "game/graphics/opengl_renderer/TextureUploadHandler.h"
 #include "game/graphics/opengl_renderer/VisDataHandler.h"
 #include "game/graphics/opengl_renderer/Warp.h"
 #include "game/graphics/opengl_renderer/background/Hfrag.h"
 #include "game/graphics/opengl_renderer/background/Shrub.h"
 #include "game/graphics/opengl_renderer/background/TFragment.h"
+#include "game/graphics/opengl_renderer/LevelHeightfield.h"
+#include "game/graphics/opengl_renderer/background/CanopyVol.h"
 #include "game/graphics/opengl_renderer/background/Tie3.h"
+#include "game/graphics/opengl_renderer/background/background_common.h"
 #include "game/graphics/opengl_renderer/foreground/Generic2.h"
 #include "game/graphics/opengl_renderer/foreground/Generic2BucketRenderer.h"
 #include "game/graphics/opengl_renderer/foreground/Merc2BucketRenderer.h"
@@ -26,6 +48,8 @@
 #include "game/graphics/opengl_renderer/ocean/OceanNear.h"
 #include "game/graphics/opengl_renderer/sprite/Sprite3.h"
 #include "game/graphics/pipelines/opengl.h"
+#include "game/graphics/screenshot.h"
+#include "game/graphics/xr/OpenXr.h"
 
 #include "third-party/imgui/imgui.h"
 #include "third-party/imgui/imgui_stdlib.h"
@@ -38,6 +62,16 @@
 #include <Windows.h>
 #endif
 #include "common/util/string_util.h"
+
+// perf-opt bit 25: GL queries off the per-frame path (GlQueries.h)
+constexpr int kGlq = PERF_OPT_PRESENT2 + 1;
+// pre-roll after a blackout load: black until N frames in a row are under max(floor, scale x
+// the pre-blackout median); at most the wall-time cap after the first black frame
+constexpr double kPrerollMaxMs = 500.0;
+constexpr int kPrerollCalmFrames = 3;
+constexpr double kPrerollCalmFloorMs = 50.0;
+constexpr double kPrerollCalmScale = 1.5;
+constexpr int kPrerollCalmMinSamples = 16;  // fewer lit frames (boot): the floor alone
 
 namespace {
 std::string g_current_renderer;
@@ -53,6 +87,9 @@ void GLAPIENTRY opengl_error_callback(GLenum source,
                                       GLsizei /*length*/,
                                       const GLchar* message,
                                       const void* /*userParam*/) {
+  if (type == GL_DEBUG_TYPE_PERFORMANCE && strstr(message, "recompiled")) {
+    perf::note_recompile();
+  }
   if (severity == GL_DEBUG_SEVERITY_NOTIFICATION) {
     lg::debug("[{}] OpenGL notification 0x{:X} S{:X} T{:X}: {}", g_current_renderer, id, source,
               type, message);
@@ -88,9 +125,11 @@ OpenGLRenderer::OpenGLRenderer(std::shared_ptr<TexturePool> texture_pool,
 
   lg::info("OpenGL context version: {}", (const char*)glGetString(GL_VERSION));
   lg::info("OpenGL context renderer: {}", (const char*)glGetString(GL_RENDERER));
+  log_gpu_adapter();
   lg::info("OpenGL context vendor: {}", (const char*)glGetString(GL_VENDOR));
   lg::info("OpenGL context shading language version: {}",
            (const char*)glGetString(GL_SHADING_LANGUAGE_VERSION));
+  m_upscaler.init(version == GameVersion::Jak1);
 
   // set up screen draw
 
@@ -128,6 +167,10 @@ OpenGLRenderer::OpenGLRenderer(std::shared_ptr<TexturePool> texture_pool,
   {
     auto p = scoped_prof("load-common");
     common_level = &m_render_state.loader->load_common(*m_render_state.texture_pool, "GAME");
+    if (m_version == GameVersion::Jak1) {
+      pbr_load_preset();
+      m_render_state.loader->classify_common();
+    }
   }
 
   // initialize all renderers
@@ -145,6 +188,10 @@ OpenGLRenderer::OpenGLRenderer(std::shared_ptr<TexturePool> texture_pool,
   }
 
   m_merc2 = std::make_shared<Merc2>(m_render_state.shaders, anim_slot_array());
+  if (m_version == GameVersion::Jak1) {
+    m_actor_shadows = std::make_unique<ActorShadows>();
+    m_actor_shadows->prepare_programs();
+  }
   m_generic2 = std::make_shared<Generic2>(m_render_state.shaders);
 
   // initialize all renderers
@@ -650,6 +697,99 @@ void OpenGLRenderer::init_bucket_renderers_jak2() {
 /*!
  * Construct bucket renderers.  We can specify different renderers for different buckets
  */
+namespace {
+/// Profiler group per Jak 1 bucket. TIE and ocean mid/far buckets time their own parts inside.
+// shadow probe 16: fragment shader runs of the background draws, read four frames late
+struct BgFragCount {
+  static constexpr int kRing = 4, kMax = 128;
+  enum Kind : u8 { TFRAG, TIE, SHRUB, VISTA, PRE, KINDS };
+  GLuint q[kRing][kMax] = {};
+  u8 kind[kRing][kMax] = {};
+  int used[kRing] = {};
+  int slot = 0;
+  bool active = false;
+  void frame_begin() {
+    slot = (slot + 1) % kRing;
+    if (used[slot] > 0) {
+      GLint ready = 0;
+      glGetQueryObjectiv(q[slot][used[slot] - 1], GL_QUERY_RESULT_AVAILABLE, &ready);
+      if (ready) {
+        u64 sum[KINDS] = {};
+        for (int i = 0; i < used[slot]; i++) {
+          GLuint64 n = 0;
+          glGetQueryObjectui64v(q[slot][i], GL_QUERY_RESULT, &n);
+          sum[kind[slot][i]] += n;
+        }
+        perf::count(perf::Counter::BG_MFRAGS, (double)(sum[TFRAG] + sum[TIE] + sum[SHRUB] + sum[VISTA]) / 1e6);
+        for (int k = 0; k < KINDS; k++) {
+          perf::count((perf::Counter)((int)perf::Counter::BG_TFRAG_MFRAGS + k), (double)sum[k] / 1e6);
+        }
+      }
+    }
+    used[slot] = 0;
+  }
+  void begin(Kind k) {
+    if (!q[0][0]) {
+      glGenQueries(kRing * kMax, &q[0][0]);
+    }
+    if (used[slot] < kMax) {
+      kind[slot][used[slot]] = k;
+      glBeginQuery(0x82F4, q[slot][used[slot]]);  // GL_FRAGMENT_SHADER_INVOCATIONS_ARB
+      active = true;
+    }
+  }
+  void end() {
+    if (active) {
+      glEndQuery(0x82F4);
+      used[slot]++;
+      active = false;
+    }
+  }
+};
+BgFragCount g_bg_frags;
+
+std::vector<perf::Group> perf_groups_jak1(const std::vector<BucketCategory>& cats) {
+  using jak1::BucketId;
+  std::vector<perf::Group> out(cats.size(), perf::Group::NONE);
+  for (size_t i = 0; i < cats.size(); i++) {
+    switch (cats[i]) {
+      case BucketCategory::TEX:
+        out[i] = perf::Group::TEX;
+        break;
+      case BucketCategory::TFRAG:
+        out[i] = perf::Group::TFRAG;
+        break;
+      case BucketCategory::SHRUB:
+        out[i] = perf::Group::SHRUB;
+        break;
+      case BucketCategory::GENERIC:
+        out[i] = perf::Group::GENERIC;
+        break;
+      case BucketCategory::MERC:
+        out[i] = perf::Group::MERC;
+        break;
+      case BucketCategory::SPRITE:
+        out[i] = perf::Group::SPRITE;
+        break;
+      default:
+        break;
+    }
+  }
+  auto set = [&](BucketId id, perf::Group g) { out[(int)id] = g; };
+  set(BucketId::SKY_DRAW, perf::Group::SKY);
+  set(BucketId::TFRAG_TRANS0_AND_SKY_BLEND_LEVEL0, perf::Group::SKY_BLEND);
+  set(BucketId::TFRAG_TRANS1_AND_SKY_BLEND_LEVEL1, perf::Group::SKY_BLEND);
+  set(BucketId::SHADOW, perf::Group::SHADOW);
+  set(BucketId::MERC_EYES_AFTER_PRIS, perf::Group::EYES);
+  set(BucketId::OCEAN_NEAR, perf::Group::OCEAN_NEAR);
+  set(BucketId::DEPTH_CUE, perf::Group::DEPTH_CUE);
+  set(BucketId::DEBUG, perf::Group::DIRECT);
+  set(BucketId::DEBUG_NO_ZBUF, perf::Group::DIRECT);
+  set(BucketId::SUBTITLE, perf::Group::DIRECT);
+  return out;
+}
+}  // namespace
+
 void OpenGLRenderer::init_bucket_renderers_jak1() {
   using namespace jak1;
   m_bucket_renderers.resize((int)BucketId::MAX_BUCKETS);
@@ -881,11 +1021,12 @@ void OpenGLRenderer::init_bucket_renderers_jak1() {
     m_bucket_renderers[i]->init_textures(*m_render_state.texture_pool, GameVersion::Jak1);
   }
   sky_cpu_blender->init_textures(*m_render_state.texture_pool, m_version);
+  m_perf_groups = perf_groups_jak1(m_bucket_categories);
   sky_gpu_blender->init_textures(*m_render_state.texture_pool, m_version);
+  m_vista = std::make_unique<VistaRenderer>(anim_slot_array());
 }
 
-namespace {
-Fbo make_fbo(int w, int h, int msaa, bool make_zbuf_and_stencil) {
+Fbo make_fbo(int w, int h, int msaa, bool make_zbuf_and_stencil, bool fp16) {
   Fbo result;
   bool use_multisample = msaa > 1;
 
@@ -901,23 +1042,33 @@ Fbo make_fbo(int w, int h, int msaa, bool make_zbuf_and_stencil) {
   glActiveTexture(GL_TEXTURE0);
   if (use_multisample) {
     glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, tex);
-    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, msaa, GL_RGBA8, w, h, GL_TRUE);
+    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, msaa, fp16 ? GL_RGBA16F : GL_RGBA8, w, h,
+                            GL_TRUE);
   } else {
     glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, fp16 ? GL_RGBA16F : GL_RGBA8, w, h, 0, GL_RGBA,
+                 fp16 ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE, nullptr);
   }
   // make depth and stencil buffers that will hold the... depth and stencil buffers
   if (make_zbuf_and_stencil) {
+    // a texture rather than a renderbuffer, so screen-space passes can sample it without a copy
     GLuint zbuf;
-    glGenRenderbuffers(1, &zbuf);
+    glGenTextures(1, &zbuf);
     result.zbuf_stencil_id = zbuf;
-    glBindRenderbuffer(GL_RENDERBUFFER, zbuf);
+    result.zbuf_is_texture = true;
+    const GLenum ztarget = use_multisample ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
+    glBindTexture(ztarget, zbuf);
     if (use_multisample) {
-      glRenderbufferStorageMultisample(GL_RENDERBUFFER, msaa, GL_DEPTH24_STENCIL8, w, h);
+      glTexImage2DMultisample(ztarget, msaa, GL_DEPTH24_STENCIL8, w, h, GL_TRUE);
     } else {
-      glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
+      glTexImage2D(ztarget, 0, GL_DEPTH24_STENCIL8, w, h, 0, GL_DEPTH_STENCIL,
+                   GL_UNSIGNED_INT_24_8, nullptr);
+      glTexParameteri(ztarget, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      glTexParameteri(ztarget, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+      glTexParameteri(ztarget, GL_TEXTURE_MAX_LEVEL, 0);
     }
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, zbuf);
+    glBindTexture(ztarget, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, ztarget, zbuf, 0);
   }
   // attach texture to framebuffer as target for colors
 
@@ -970,7 +1121,70 @@ Fbo make_fbo(int w, int h, int msaa, bool make_zbuf_and_stencil) {
 
   return result;
 }
+
+namespace {
+/// Sets the frame camera (has_pc_data) from the first tfrag bucket's port data before any
+/// bucket runs, so the Jak 1 ocean mid and far (bucket 4) see this frame's camera.
+void prime_camera_jak1(DmaFollower dma, SharedRenderState* rs) {
+  const u32 base = rs->buckets_base;
+  const int buckets[2] = {(int)jak1::BucketId::TFRAG_LEVEL0, (int)jak1::BucketId::TFRAG_LEVEL1};
+  for (int b : buckets) {
+    const u32 start = base + 16 * b;
+    const u32 end = start + 16;
+    while (dma.current_tag_offset() != start) {
+      dma.read_and_advance();
+    }
+    while (dma.current_tag_offset() != end) {
+      auto t = dma.read_and_advance();
+      if (t.size_bytes == sizeof(TfragPcPortData) &&
+          t.vifcode1().kind == VifCode::Kind::PC_PORT) {
+        TfragPcPortData port;
+        memcpy(&port, t.data, sizeof(TfragPcPortData));
+        apply_stereo_eye(&port.camera, rs);
+        update_render_state_from_pc_settings(rs, port);
+        return;
+      }
+    }
+  }
+}
 }  // namespace
+
+double OpenGLRenderer::calm_median_ms() const {
+  if (m_calm_n < kPrerollCalmMinSamples) {
+    return 0;
+  }
+  std::array<float, 32> v = m_calm_ring;
+  std::nth_element(v.begin(), v.begin() + m_calm_n / 2, v.begin() + m_calm_n);
+  return v[m_calm_n / 2];
+}
+
+void OpenGLRenderer::preroll_step() {
+  // the previous frame's interval, present and GPU waits included
+  const auto now = std::chrono::steady_clock::now();
+  const bool have = m_frame_t.time_since_epoch().count() != 0;
+  const double ms = have ? std::chrono::duration<double, std::milli>(now - m_frame_t).count() : 0;
+  m_frame_t = now;
+  if (!m_preroll_on) {
+    if (have && m_last_pmode_alp != 0) {
+      m_calm_ring[m_calm_i] = (float)ms;
+      m_calm_i = (m_calm_i + 1) % (int)m_calm_ring.size();
+      m_calm_n = std::min(m_calm_n + 1, (int)m_calm_ring.size());
+    }
+    return;
+  }
+  if (++m_preroll_frames == 1) {
+    m_preroll_cap_t = now;
+  }
+  m_preroll_calm = ms < m_preroll_calm_ms ? m_preroll_calm + 1 : 0;
+  const bool capped =
+      std::chrono::duration<double, std::milli>(now - m_preroll_cap_t).count() >= kPrerollMaxMs;
+  if (capped || m_preroll_calm >= kPrerollCalmFrames) {
+    m_preroll_on = false;
+    lg::info("pre-roll: {} black frames after the blackout load, {:.0f} ms (calm < {:.1f} ms{})",
+             m_preroll_frames, std::chrono::duration<double, std::milli>(now - m_preroll_t).count(),
+             m_preroll_calm_ms, capped ? ", capped" : "");
+  }
+}
 
 void OpenGLRenderer::blit_display(ScopedProfilerNode& prof) {
   if (m_blit_displays) {
@@ -984,34 +1198,103 @@ void OpenGLRenderer::blit_display(ScopedProfilerNode& prof) {
 void OpenGLRenderer::render(DmaFollower dma, const RenderOptions& settings) {
   m_profiler.clear();
   m_render_state.reset();
+  m_render_state.stereo_active =
+      m_version == GameVersion::Jak1 && (Gfx::g_global_settings.stereo_enable || settings.xr);
+  m_xr_repeat = settings.xr && settings.xr_repeat;
+  m_render_state.display_tick++;
+  m_render_state.game_frame_new = !m_xr_repeat;
+  m_render_state.eye_slot = 0;
+  if (!m_render_state.stereo_active && m_stereo_fbo.valid) {
+    m_stereo_fbo.clear();
+  }
+  if (!m_render_state.stereo_active && m_xr_sdr_fbo.valid) {
+    m_xr_sdr_fbo.clear();
+  }
   m_render_state.ee_main_memory = g_ee_main_mem;
   m_render_state.offset_of_s7 = offset_of_s7();
+  m_mv_blackout = settings.pmode_alp_register == 0;
+  m_probe_shot = settings.save_screenshot;
+  const bool scaled = m_version == GameVersion::Jak1 && settings.display_w > 0 &&
+                      settings.display_h > 0 &&
+                      (settings.display_w != settings.game_res_w ||
+                       settings.display_h != settings.game_res_h);
+  m_display_w = scaled ? settings.display_w : 0;
+  m_display_h = scaled ? settings.display_h : 0;
+  perf::frame_begin(settings.game_res_w, settings.game_res_h, settings.msaa_samples);
+  preroll_step();
 
   {
     g_current_renderer = "frame-setup";
     auto prof = m_profiler.root()->make_scoped_child("frame-setup");
+    perf::Scope ps(perf::Group::SETUP);
     setup_frame(settings);
     if (settings.gpu_sync) {
       glFinish();
     }
   }
+  m_upscaler.decide(settings, m_render_state.stereo_active);
+  if (!m_render_state.stereo_active && m_motion_vectors_eye[1].allocated()) {
+    m_motion_vectors_eye[1].shutdown(&m_render_state);
+  }
+  if (!m_render_state.stereo_active) {
+    m_ssao.release_history(1);
+  }
 
   {
     g_current_renderer = "loader";
     auto prof = m_profiler.root()->make_scoped_child("loader");
+    perf::AddMs hitch_t(perf::Counter::HITCH_LOADER_MS);
+    if (m_last_pmode_alp != 0 && settings.pmode_alp_register == 0) {
+      m_blackout_levels = m_render_state.loader->levels_loaded();
+      m_preroll_calm_ms = std::max(kPrerollCalmFloorMs, kPrerollCalmScale * calm_median_ms());
+    }
     if (m_last_pmode_alp == 0 && settings.pmode_alp_register != 0 && m_enable_fast_blackout_loads) {
       // blackout, load everything and don't worry about frame rate
       m_render_state.loader->update_blocking(*m_render_state.texture_pool);
+      if (m_render_state.loader->levels_loaded() != m_blackout_levels) {
+        // a level came in during this blackout: its first draws build pipelines
+        m_preroll_on = true;
+        m_preroll_calm = m_preroll_frames = 0;
+        m_preroll_t = m_frame_t = std::chrono::steady_clock::now();
+      } else {
+        lg::info("pre-roll: none, the blackout loaded no level");
+      }
 
     } else {
       m_render_state.loader->update(*m_render_state.texture_pool);
     }
   }
+  perf::count(perf::Counter::BLACKOUT,
+              settings.pmode_alp_register == 0 || m_preroll_on ? 1 : 0);
 
   // render the buckets!
   {
     auto prof = m_profiler.root()->make_scoped_child("buckets");
-    dispatch_buckets(dma, prof, settings.gpu_sync);
+    static GpuTimer frame_timer("frame");
+    const bool frame_timing = Gfx::g_global_settings.pbr_timing;
+    if (frame_timing) {
+      frame_timer.begin();
+    }
+    perf::Scope ps(perf::Group::BUCKETS);
+    ui_layer_begin(m_version == GameVersion::Jak1 ? settings.xr : nullptr);
+    // nothing draws into an eye after its upscale (2D layer, no debug views): eye 0 can wait
+    const auto& gsd = Gfx::g_global_settings;
+    // any pass drawing into render_fb after SPRITE outside the 2D canvas must be excluded here
+    m_upscaler.arm_fsr4_defer(settings.xr && m_render_state.stereo_active &&
+                              m_render_state.ui_canvas_fb[0] != 0 && gsd.ssao_view == 0 &&
+                              gsd.mv_view == 0 && !gsd.ssao_depth_debug);
+    if (m_render_state.stereo_active) {
+      dispatch_buckets_stereo(dma, prof, settings.gpu_sync,
+                              m_version == GameVersion::Jak1 ? settings.xr : nullptr);
+    } else {
+      dispatch_buckets(dma, prof, settings.gpu_sync);
+    }
+    if (m_render_state.ui_canvas_fb[0]) {
+      ui_layer_finish(*settings.xr);
+    }
+    if (frame_timing) {
+      frame_timer.end();
+    }
     if (m_texture_animator) {
       // if animation requests weren't made, assume the level is unloaded and the textures should
       // reset.
@@ -1023,6 +1306,7 @@ void OpenGLRenderer::render(DmaFollower dma, const RenderOptions& settings) {
   {
     g_current_renderer = "blit-display";
     auto prof = m_profiler.root()->make_scoped_child("blit-display");
+    perf::Scope ps(perf::Group::BLIT_DISPLAY);
     blit_display(prof);
   }
 
@@ -1031,8 +1315,19 @@ void OpenGLRenderer::render(DmaFollower dma, const RenderOptions& settings) {
   {
     g_current_renderer = "pcrtc";
     auto prof = m_profiler.root()->make_scoped_child("pcrtc");
-    do_pcrtc_effects(settings.pmode_alp_register, settings.brightness_contrast_color,
-                     settings.brightness_contrast_alpha, &m_render_state, prof);
+    const bool pcrtc_timing =
+        m_version == GameVersion::Jak1 && Gfx::g_global_settings.ssao_gpu_timing;
+    if (pcrtc_timing) {
+      m_pcrtc_timer.begin();
+    }
+    perf::Scope ps(perf::Group::PCRTC);
+    do_pcrtc_effects(m_preroll_on ? 0.f : settings.pmode_alp_register,
+                     settings.brightness_contrast_color,
+                     settings.brightness_contrast_alpha, &m_render_state, prof,
+                     !settings.save_screenshot);
+    if (pcrtc_timing) {
+      m_pcrtc_timer.end();
+    }
     if (settings.gpu_sync) {
       glFinish();
     }
@@ -1040,34 +1335,68 @@ void OpenGLRenderer::render(DmaFollower dma, const RenderOptions& settings) {
 
   m_last_pmode_alp = settings.pmode_alp_register;
 
+  if (settings.xr && settings.xr->rendered) {
+    xr_seq_capture(*settings.xr);
+  }
+
   if (settings.save_screenshot) {
     g_current_renderer = "screenshot";
     auto prof = m_profiler.root()->make_scoped_child("screenshot");
     int read_buffer;
     int x, y, w, h, fbo_id;
 
+    if (m_fbo_state.hdr && !bug_report::owns(settings.screenshot_path)) {
+      save_hdr_scene(prof, settings.screenshot_path,
+                     !settings.internal_res_screenshot &&
+                         !(Gfx::g_hdr_present.active && Gfx::g_hdr_present.hdr));
+    }
     if (settings.internal_res_screenshot) {
       Fbo* screenshot_src;
       // can't screenshot from a multisampled buffer directly -
-      if (m_fbo_state.resources.resolve_buffer.valid) {
+      // a calibration pattern is drawn by the final pass, so it goes through that pass too
+      if (m_fbo_state.hdr || Gfx::g_global_settings.hdr_cal_pattern != 0) {
+        screenshot_src = hdr_screenshot_source(prof);
+        read_buffer = GL_COLOR_ATTACHMENT0;
+      } else if (m_render_state.stereo_active && m_stereo_fbo.valid) {
+        screenshot_src = &m_stereo_fbo;
+        read_buffer = GL_COLOR_ATTACHMENT0;
+      } else if (m_upscaler.upscaled()) {
+        // after the upscale and the text buckets, before the final pass and any HDR encode
+        screenshot_src = m_upscaler.display_src();
+        read_buffer = GL_COLOR_ATTACHMENT0;
+      } else if (m_fbo_state.resources.resolve_buffer.valid) {
         screenshot_src = &m_fbo_state.resources.resolve_buffer;
         read_buffer = GL_COLOR_ATTACHMENT0;
       } else {
         screenshot_src = m_fbo_state.render_fbo;
-        read_buffer = GL_FRONT;
+        read_buffer = GL_COLOR_ATTACHMENT0;  // an FBO has no GL_FRONT (single-sample shots)
       }
       w = screenshot_src->width;
       h = screenshot_src->height;
       x = 0;
       y = 0;
       fbo_id = screenshot_src->fbo_id;
+    } else if (Gfx::g_hdr_present.active && Gfx::g_hdr_present.hdr) {
+      // the window holds scRGB; save the SDR tonemap of the game image instead
+      Fbo* src = hdr_screenshot_source(prof);
+      read_buffer = GL_COLOR_ATTACHMENT0;
+      w = src->width;
+      h = src->height;
+      x = 0;
+      y = 0;
+      fbo_id = src->fbo_id;
     } else {
-      read_buffer = GL_BACK;
+      // SDR through DXGI: the window's image is in the RGBA8 stand-in
+      fbo_id = Gfx::window_fbo();
+      read_buffer = fbo_id ? GL_COLOR_ATTACHMENT0 : GL_BACK;
       w = settings.draw_region_width;
       h = settings.draw_region_height;
       x = m_render_state.draw_offset_x;
       y = m_render_state.draw_offset_y;
-      fbo_id = 0;  // window
+    }
+    if (settings.xr && settings.xr->rendered && !bug_report::owns(settings.screenshot_path)) {
+      // before the main PNG: the rig takes that one's arrival as the shot being complete
+      save_xr_eyes(*settings.xr, settings.screenshot_path);
     }
     finish_screenshot(settings.screenshot_path, w, h, x, y, fbo_id, read_buffer,
                       settings.quick_screenshot);
@@ -1082,6 +1411,10 @@ void OpenGLRenderer::render(DmaFollower dma, const RenderOptions& settings) {
     if (settings.gpu_sync) {
       glFinish();
     }
+  }
+
+  if (m_version == GameVersion::Jak1) {
+    m_inspect.frame(&m_render_state);
   }
 
   if (settings.draw_loader_window) {
@@ -1143,6 +1476,81 @@ void OpenGLRenderer::draw_renderer_selection_window() {
   ImGui::Checkbox("Sky CPU", &m_render_state.use_sky_cpu);
   ImGui::Checkbox("Occlusion Cull", &m_render_state.use_occlusion_culling);
   ImGui::Checkbox("Blackout Loads", &m_enable_fast_blackout_loads);
+  if (m_version == GameVersion::Jak1 && ImGui::TreeNode("Stereo")) {
+    auto& gs = Gfx::g_global_settings;
+    ImGui::Checkbox("Enable (side by side)", &gs.stereo_enable);
+    ImGui::SliderFloat("IPD (m)", &gs.stereo_ipd_m, 0.f, 0.1f);
+    ImGui::SliderFloat("World scale", &gs.stereo_world_scale, 0.01f, 1.f, "%.3f",
+                       ImGuiSliderFlags_Logarithmic);
+    ImGui::Checkbox("Swap eyes (cross-eyed)", &gs.stereo_swap_eyes);
+    ImGui::Checkbox("OpenXR", &gs.xr_enable);
+    ImGui::SliderFloat("Head translation", &gs.xr_pos_scale, 0.f, 1.f);
+    if (ImGui::Button("Recentre (F6)")) {
+      gs.xr_recentre_requests++;
+    }
+    ImGui::TextUnformatted(xr::status_line().c_str());
+    ImGui::TreePop();
+  }
+  if (m_version == GameVersion::Jak1 && ImGui::TreeNode("SSAO")) {
+    m_ssao.draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (m_version == GameVersion::Jak1 && ImGui::TreeNode("Motion vectors")) {
+    mvr().draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (m_version == GameVersion::Jak1 && ImGui::TreeNode("FSR 3")) {
+    m_upscaler.fsr3(m_render_state.eye_slot).draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (m_version == GameVersion::Jak1 && ImGui::TreeNode("DLSS")) {
+    m_upscaler.dlss().draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (m_version == GameVersion::Jak1 && ImGui::TreeNode("FSR 4")) {
+    m_upscaler.fsr4(0).draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (m_version == GameVersion::Jak1 && ImGui::TreeNode("Motion blur")) {
+    m_motion_blur.draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (m_version == GameVersion::Jak1 && ImGui::TreeNode("Inspect")) {
+    m_inspect.draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (m_version == GameVersion::Jak1 && ImGui::TreeNode("Bloom")) {
+    m_bloom.draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (m_version == GameVersion::Jak1 && ImGui::TreeNode("Emissive lights")) {
+    m_emissive_lights.draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (ImGui::TreeNode("Level heightfield")) {
+    heightfield_draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (m_actor_shadows && ImGui::TreeNode("Actor shadows")) {
+    m_actor_shadows->draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (m_version == GameVersion::Jak1 && ImGui::TreeNode("Sun")) {
+    unbake_draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (m_version == GameVersion::Jak1 && ImGui::TreeNode("Materials")) {
+    pbr_draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (m_version == GameVersion::Jak1 && ImGui::TreeNode("SSAO Depth")) {
+    m_ssao_depth.draw_debug_window();
+    ImGui::TreePop();
+  }
+  if (m_vista && ImGui::TreeNode("Vista")) {
+    m_vista->draw_debug_window();
+    ImGui::TreePop();
+  }
 
   if (m_texture_animator && ImGui::TreeNode("Texture Animator")) {
     m_texture_animator->draw_debug_window();
@@ -1188,6 +1596,12 @@ void OpenGLRenderer::draw_renderer_selection_window() {
 /*!
  * Pre-render frame setup.
  */
+bool OpenGLRenderer::scene_hdr() const {
+  return m_version == GameVersion::Jak1 &&
+         (Gfx::g_global_settings.hdr_target ||
+          (Gfx::g_hdr_present.active && Gfx::g_hdr_present.hdr));
+}
+
 void OpenGLRenderer::setup_frame(const RenderOptions& settings) {
   // SDL controls the window framebuffer, so we just update the size:
   auto& window_fb = m_fbo_state.resources.window;
@@ -1202,10 +1616,15 @@ void OpenGLRenderer::setup_frame(const RenderOptions& settings) {
   window_fb.multisample_count = 1;
   window_fb.multisampled = false;
 
+  const bool hdr = settings.scene_hdr;
   // see if the render FBO is still applicable
+  bool rebuilt = false;
   if (settings.save_screenshot || window_resized || !m_fbo_state.render_fbo ||
+      hdr != m_fbo_state.hdr ||
       !m_fbo_state.render_fbo->matches(settings.game_res_w, settings.game_res_h,
                                        settings.msaa_samples)) {
+    rebuilt = true;
+    perf::AddMs hitch_t(perf::Counter::HITCH_TARGET_MS);
     // doesn't match, set up a new one for these settings
     lg::info("FBO Setup: requested {}x{}, msaa {}", settings.game_res_w, settings.game_res_h,
              settings.msaa_samples);
@@ -1219,7 +1638,9 @@ void OpenGLRenderer::setup_frame(const RenderOptions& settings) {
 
     // create a fbo to render to, with the desired settings
     m_fbo_state.resources.render_buffer =
-        make_fbo(settings.game_res_w, settings.game_res_h, settings.msaa_samples, true);
+        make_fbo(settings.game_res_w, settings.game_res_h, settings.msaa_samples, true, hdr);
+    m_fbo_state.hdr = hdr;
+    lg::info("FBO Setup: colour {}", hdr ? "RGBA16F" : "RGBA8");
     m_fbo_state.render_fbo = &m_fbo_state.resources.render_buffer;
 
     if (settings.msaa_samples != 1) {
@@ -1229,7 +1650,7 @@ void OpenGLRenderer::setup_frame(const RenderOptions& settings) {
       // we'll need a temporary fbo to do the msaa resolve step
       // non-multisampled, and doesn't need z/stencil
       m_fbo_state.resources.resolve_buffer =
-          make_fbo(settings.game_res_w, settings.game_res_h, 1, false);
+          make_fbo(settings.game_res_w, settings.game_res_h, 1, false, hdr);
     } else {
       lg::info("FBO Setup: not using second temporary buffer");
     }
@@ -1242,7 +1663,7 @@ void OpenGLRenderer::setup_frame(const RenderOptions& settings) {
   ASSERT_MSG(!m_fbo_state.render_fbo->is_window, "window fbo");
 
   if (m_version == GameVersion::Jak1) {
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, Gfx::window_fbo());
     glViewport(0, 0, m_fbo_state.resources.window.width, m_fbo_state.resources.window.height);
     glClearColor(0.0, 0.0, 0.0, 0.0);
     glClearDepth(0.0);
@@ -1274,6 +1695,11 @@ void OpenGLRenderer::setup_frame(const RenderOptions& settings) {
       (settings.window_framebuffer_height - m_render_state.draw_region_h) / 2;
 
   m_render_state.render_fb = m_fbo_state.render_fbo->fbo_id;
+  m_render_state.render_fb_depth_tex =
+      m_fbo_state.render_fbo->zbuf_is_texture ? *m_fbo_state.render_fbo->zbuf_stencil_id : 0;
+  m_render_state.hdr_target = m_fbo_state.hdr;
+  m_render_state.render_scale =
+      m_display_h > 0 ? (float)settings.game_res_h / (float)m_display_h : 1.f;
 
   if (m_render_state.draw_region_w <= 0 || m_render_state.draw_region_h <= 0) {
     // trying to draw to 0 size region... opengl doesn't like this.
@@ -1286,6 +1712,37 @@ void OpenGLRenderer::setup_frame(const RenderOptions& settings) {
   m_render_state.render_fb_w = settings.game_res_w;
   m_render_state.render_fb_h = settings.game_res_h;
   glViewport(0, 0, settings.game_res_w, settings.game_res_h);
+
+  const std::array<s64, 14> key = {settings.window_framebuffer_width,
+                                   settings.window_framebuffer_height,
+                                   settings.game_res_w,
+                                   settings.game_res_h,
+                                   settings.msaa_samples,
+                                   hdr,
+                                   m_render_state.render_fb,
+                                   m_render_state.render_fb_depth_tex,
+                                   m_render_state.stereo_active,
+                                   settings.xr != nullptr,
+                                   m_render_state.draw_region_w,
+                                   m_render_state.draw_region_h,
+                                   m_render_state.draw_offset_x,
+                                   m_render_state.draw_offset_y};
+  static_assert(std::is_trivially_copyable_v<GfxGlobalSettings>);
+  const auto* gs = reinterpret_cast<const u8*>(&Gfx::g_global_settings);
+  const bool gs_changed = std::memcmp(gs, m_glq_settings.data(), m_glq_settings.size()) != 0;
+  if (rebuilt || key != m_glq_key || gs_changed) {
+    if (gs_changed && !rebuilt && key == m_glq_key && m_glq_settings_logs < 16) {
+      size_t at = 0;
+      while (at < m_glq_settings.size() && gs[at] == m_glq_settings[at]) {
+        at++;
+      }
+      m_glq_settings_logs++;
+      lg::info("glq: settings changed at byte {}, cached GL state dropped", at);
+    }
+    glq::invalidate_state();
+    m_glq_key = key;
+    std::memcpy(m_glq_settings.data(), gs, m_glq_settings.size());
+  }
 }
 
 void OpenGLRenderer::dispatch_buckets_jak1(DmaFollower dma,
@@ -1294,6 +1751,21 @@ void OpenGLRenderer::dispatch_buckets_jak1(DmaFollower dma,
   // The first thing the DMA chain should be a call to a common default-registers chain.
   // this chain resets the state of the GS. After this is buckets
   m_category_times.fill(0);
+  // SANDOVER_BG_PROBE: the draw target after each stage before the buckets, where it is not
+  // the frame's render target (logged with the bucket line)
+  static const bool probe_on = std::getenv("SANDOVER_BG_PROBE") != nullptr;
+  std::string stages;
+  auto probe_stage = [&](const char* name) {
+    if (!probe_on) {
+      return;
+    }
+    GLint fb = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fb);
+    if (fb != (GLint)m_render_state.render_fb) {
+      stages += fmt::format(" {}:{}", name, fb);
+    }
+  };
+  probe_stage("entry");
 
   m_render_state.buckets_base =
       dma.current_tag_offset() + 16;  // offset by 1 qw for the initial call
@@ -1323,13 +1795,283 @@ void OpenGLRenderer::dispatch_buckets_jak1(DmaFollower dma,
   ASSERT(dma.current_tag_offset() == m_render_state.next_bucket);
   m_render_state.next_bucket += 16;
 
+  const auto& gs = Gfx::g_global_settings;
+  const bool ssao_capture =
+      gs.ssao_depth_capture || gs.ssao_depth_debug || gs.ssao_msaa_probe_request;
+  const int ssao_bucket = ssao_capture ? SsaoDepth::capture_bucket_jak1() : -1;
+  const bool gpu_timing = gs.ssao_gpu_timing;
+  const bool vista = gs.vista_enable && m_vista;
+  const bool ao = gs.ssao_enable;
+  const bool em_lights =
+      gs.emissive_lights_enable && m_render_state.version == GameVersion::Jak1;
+  // the AO pipeline's depth copy, normals and stencil also feed the tile lights
+  const bool ssao = ao || em_lights;
+  m_render_state.ssao_stencil = ssao;
+  stencil_marks::begin(&m_render_state, ssao);
+  probe_stage("stencil-marks");
+  if (ssao) {
+    perf::Scope ps(perf::Group::SSAO_TARGETS);
+    m_ssao.begin_normals(&m_render_state);
+  } else if (m_ssao.normals_attached()) {
+    m_ssao.end_normals(&m_render_state);
+  }
+  const bool bloom = gs.bloom_enable && m_render_state.version == GameVersion::Jak1;
+  m_render_state.emissive_mask = m_render_state.version == GameVersion::Jak1 &&
+                                 ((ao && gs.ssao_emissive) || bloom || em_lights);
+  m_render_state.light_material = em_lights && gs.light_highlights &&
+                                  gs.light_highlights_strength > 0.f &&
+                                  pbr_active(&m_render_state);
+  {
+    perf::Scope ps(perf::Group::SSAO_TARGETS);
+    m_ssao.begin_emissive(&m_render_state, m_render_state.emissive_mask);
+  }
+  probe_stage("ssao-targets");
+  m_inspect.begin(&m_render_state, gs.inspect_enable && !m_render_state.stereo_active);
+  if (!vista) {
+    m_render_state.vista_drawn = false;
+  }
+  m_render_state.vista_frame_fog = vista ? gs.vista_fog_mode : VISTA_FOG_MAIN;
+  if (gpu_timing) {
+    m_ssao_depth.frame_timer().begin();
+  }
+  prime_camera_jak1(dma, &m_render_state);
+  probe_stage("prime-camera");
+  const bool temporal = m_upscaler.temporal();
+  if (gs.mv_enable || temporal || motion_vectors::wanted() || mvr().allocated()) {
+    perf::Scope ps(perf::Group::MOTION_VECTORS);
+    // the second eye cuts with the first, so both histories restart together
+    const bool eye1 = m_render_state.stereo_active && m_render_state.eye_slot == 1;
+    mvr().begin_frame(&m_render_state, m_render_state.has_pc_data, m_mv_blackout, temporal,
+                      eye1 && m_stereo_cut);
+    if (m_render_state.stereo_active && m_render_state.eye_slot == 0) {
+      m_stereo_cut = !mvr().frame_valid();
+    }
+  }
+  probe_stage("motion-vectors");
+  m_upscaler.begin_frame(m_render_state, m_display_w, m_display_h);
+  const bool motion_blur = m_motion_blur.begin_frame(&m_render_state, mvr());
+  // XR 2D layer: the HUD sprites go to its canvas with the text buckets
+  const bool ui_layer = m_render_state.ui_canvas_fb[0] != 0;
+  if (ui_layer) {
+    m_render_state.defer_hud_sprites = true;
+  }
+  auto* hud_sprite = ui_layer ? dynamic_cast<Sprite3*>(
+                                    m_bucket_renderers[(int)jak1::BucketId::SPRITE].get())
+                              : nullptr;
+  probe_stage("motion-blur");
+  heightfield_prepare(&m_render_state);
+  probe_stage("heightfield");
+  canopy_vol_prepare(&m_render_state);
+  probe_stage("canopy");
+  if (m_actor_shadows) {
+    auto p = prof.make_scoped_child("actor-shadows");
+    perf::Scope ps(perf::Group::ACTOR_SHADOWS);
+    m_actor_shadows->prepass(dma, &m_render_state, *m_merc2, *m_generic2, p);
+  }
+  probe_stage("actor-shadows");
+  const bool actor_shadows = m_render_state.shadow.active;
+  const bool water = water_active(&m_render_state);
+  m_render_state.water_depth_tex = 0;
+  m_render_state.water_shoal_tex = 0;
+  inland_water::set_depth(0, nullptr);
+
+  const bool count_frags = (gs.shadow_probe & SHADOW_PROBE_FRAGS) != 0;
+  if (count_frags) {
+    g_bg_frags.frame_begin();
+  }
+  // background depth prepass: per run of buckets, the opaque depth first (BgPrepass)
+  const int bgp = gs.bg_prepass;
+  const bool bg_prepass = (bgp & (BG_PREPASS_ON | BG_PREPASS_SHRUB)) && gs.sandover_path &&
+                          !m_render_state.stereo_active && !m_render_state.no_multidraw &&
+                          !inspect::active();
+  int bg_run_last = -1;
+  int bg_cuts = 0;
+  auto run_prepass = [&](const DmaFollower& from, int first, int last, ScopedProfilerNode& p) {
+    perf::Scope ps(perf::Group::BG_PREPASS);
+    if (count_frags) {
+      g_bg_frags.begin(BgFragCount::PRE);
+    }
+    DmaFollower pdma = from;
+    const auto saved_next = m_render_state.next_bucket;
+    m_render_state.bg_prepass = true;
+    m_render_state.bg_prepass_cut = false;
+    SsaoRenderer::color_lock(true);
+    for (int b = first; b <= last; b++) {
+      const auto cat = m_bucket_categories[b];
+      if (!m_render_state.bg_prepass_cut &&
+          (cat == BucketCategory::TFRAG || cat == BucketCategory::TIE ||
+           cat == BucketCategory::SHRUB)) {
+        m_bucket_renderers[b]->render(pdma, &m_render_state, p);
+      } else {
+        while (pdma.current_tag_offset() != m_render_state.next_bucket) {
+          pdma.read_and_advance();
+        }
+      }
+      if (b < last) {
+        m_render_state.next_bucket += 16;
+      }
+    }
+    m_render_state.next_bucket = saved_next;
+    SsaoRenderer::color_lock(false);
+    m_render_state.bg_prepass = false;
+    bg_prepass_reset_programs(&m_render_state);
+    if (count_frags) {
+      g_bg_frags.end();
+    }
+    bg_cuts += m_render_state.bg_prepass_cut ? 1 : 0;
+    return !m_render_state.bg_prepass_cut;
+  };
+  // SANDOVER_BG_PROBE: draw target at each bucket start and draws per category, logged on
+  // screenshot frames and on frames whose buckets start off the render target
+  static const bool probe = std::getenv("SANDOVER_BG_PROBE") != nullptr;
+  // SANDOVER_BG_PROBE_SKIP=3,4: buckets not drawn (which renderer produced a region)
+  static const std::string probe_skip =
+      "," + std::string(std::getenv("SANDOVER_BG_PROBE_SKIP") ? std::getenv("SANDOVER_BG_PROBE_SKIP")
+                                                              : "") +
+      ",";
+  std::array<u32, (int)BucketCategory::MAX_CATEGORIES> draws{};
+  u32 sky_draws = 0;
+  std::string bad;
+  if (probe) {
+    GLint fb = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fb);
+    if (fb != (GLint)m_render_state.render_fb) {
+      bad += fmt::format(" pre:{}", fb);
+    }
+    if (!stages.empty()) {
+      bad += " stages" + stages;
+    }
+  }
+  // the buckets draw into whatever is bound: never start them on a target a prepass left
+  static const bool probe_noguard = probe && std::getenv("SANDOVER_BG_PROBE_NOGUARD");
+  if (!probe_noguard) {
+    glBindFramebuffer(GL_FRAMEBUFFER, m_render_state.render_fb);
+  }
   // loop over the buckets!
   for (size_t bucket_id = 0; bucket_id < m_bucket_renderers.size(); bucket_id++) {
     auto& renderer = m_bucket_renderers[bucket_id];
     auto bucket_prof = prof.make_scoped_child(renderer->name_and_id());
     g_current_renderer = renderer->name_and_id();
+    if (ssao) {
+      if (bucket_id == 0) {
+        stencil_marks::before_sky();
+      }
+      SsaoRenderer::set_bucket_stencil((int)bucket_id);
+    }
     // lg::info("Render: {} start", g_current_renderer);
-    renderer->render(dma, &m_render_state, bucket_prof);
+    if (actor_shadows && bucket_id == (int)jak1::BucketId::SHADOW) {
+      // the shadow maps and the landing disc replace the stencil shadow
+      while (dma.current_tag_offset() != m_render_state.next_bucket) {
+        dma.read_and_advance();
+      }
+    } else if (ui_layer && bucket_id >= (int)jak1::BucketId::DEBUG) {
+      // XR: the debug, HUD text and subtitle buckets and the held HUD sprites: the 2D layer
+      const DmaFollower start = dma;
+      ui_canvas_draw(m_render_state, [&](int k) {
+        if (hud_sprite && bucket_id == (int)jak1::BucketId::DEBUG) {
+          hud_sprite->flush_deferred_hud(&m_render_state, bucket_prof, k == 0);
+        }
+        dma = start;
+        renderer->render(dma, &m_render_state, bucket_prof);
+      });
+      if (m_render_state.eye_slot != 0) {
+        if (hud_sprite && bucket_id == (int)jak1::BucketId::DEBUG) {
+          hud_sprite->drop_deferred_hud();
+        }
+        while (dma.current_tag_offset() != m_render_state.next_bucket) {
+          dma.read_and_advance();
+        }
+      }
+    } else {
+      // FSR 3's reactive mask compares the scene before and after the sprite bucket
+      if (bucket_id == (int)jak1::BucketId::SPRITE) {
+        m_upscaler.pre_sprite(m_render_state, m_fbo_state.hdr);
+      }
+      // the near ocean draws after the actors: re-copy the depth so a swimmer is not fogged
+      // as deep as the seabed behind him
+      if (bucket_id == (int)jak1::BucketId::OCEAN_NEAR && water && m_render_state.water_depth_tex) {
+        auto p = bucket_prof.make_scoped_child("water-depth-near");
+        perf::Scope pd(perf::Group::WATER_DEPTH);
+        m_water_depth_near.capture(&m_render_state, p, true);
+        m_render_state.water_depth_tex = m_water_depth_near.depth_tex();
+      }
+      if (bg_prepass) {
+        using jak1::BucketId;
+        const int b = (int)bucket_id;
+        int last = -1;
+        if (bgp & BG_PREPASS_ON) {
+          if (b == (int)BucketId::TFRAG_LEVEL0) {
+            last = (bgp & BG_PREPASS_CROSS_LEVEL) ? (int)BucketId::TIE_LEVEL1
+                                                  : (int)BucketId::TIE_LEVEL0;
+          } else if (b == (int)BucketId::TFRAG_LEVEL1 && !(bgp & BG_PREPASS_CROSS_LEVEL)) {
+            last = (int)BucketId::TIE_LEVEL1;
+          }
+        }
+        if ((bgp & BG_PREPASS_SHRUB) &&
+            (b == (int)BucketId::SHRUB_NORMAL_LEVEL0 || b == (int)BucketId::SHRUB_NORMAL_LEVEL1)) {
+          last = b;
+        }
+        if (last >= 0) {
+          const bool exact = run_prepass(dma, b, last, bucket_prof);
+          m_render_state.bg_prepass_no_writes = exact && (bgp & BG_PREPASS_NO_WRITES);
+          bg_run_last = last;
+        }
+      }
+      const auto bucket_group =
+          bucket_id < m_perf_groups.size() ? m_perf_groups[bucket_id] : perf::Group::NONE;
+      perf::Scope ps(bucket_group);
+      // buckets without a group are timed by id while profiling
+      std::optional<perf::Scope> ps_id;
+      if (bucket_group == perf::Group::NONE && perf::on()) {
+        ps_id.emplace(perf::Group::BUCKETS, "bucket", std::to_string(bucket_id));
+      }
+      const auto cat = m_bucket_categories[bucket_id];
+      const bool bg = count_frags && (cat == BucketCategory::TFRAG || cat == BucketCategory::TIE ||
+                                      cat == BucketCategory::SHRUB);
+      if (bg) {
+        g_bg_frags.begin(cat == BucketCategory::TFRAG ? BgFragCount::TFRAG
+                         : cat == BucketCategory::TIE ? BgFragCount::TIE
+                                                      : BgFragCount::SHRUB);
+      }
+      if (probe) {
+        GLint fb = 0;
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fb);
+        if (fb != (GLint)m_render_state.render_fb && bad.size() < 400) {
+          bad += fmt::format(" {}:{}", bucket_id, fb);
+        }
+      }
+      if (probe && probe_skip.find("," + std::to_string(bucket_id) + ",") != std::string::npos) {
+        while (dma.current_tag_offset() != m_render_state.next_bucket) {
+          dma.read_and_advance();
+        }
+      } else {
+        renderer->render(dma, &m_render_state, bucket_prof);
+      }
+      if (probe) {
+        draws[(int)cat] += bucket_prof.draw_calls();
+        if (bucket_id <= 4) {
+          sky_draws += bucket_prof.draw_calls();
+        }
+      }
+      if (bg) {
+        g_bg_frags.end();
+      }
+      if ((int)bucket_id == bg_run_last) {
+        m_render_state.bg_prepass_no_writes = false;
+        bg_run_last = -1;
+      }
+    }
+    // with motion blur the reactive mask waits for the blur and the deferred HUD sprites
+    if (!motion_blur && bucket_id == (int)jak1::BucketId::SPRITE) {
+      m_upscaler.post_sprite(m_render_state, *m_fbo_state.render_fbo->tex_id);
+    }
+    if (ssao) {
+      SsaoRenderer::set_bucket_normals(&m_render_state, (int)bucket_id + 1);
+      if (bucket_id == (int)jak1::BucketId::OCEAN_MID_AND_FAR) {
+        stencil_marks::after_sky(&m_render_state);
+      }
+    }
+    m_inspect.set_bucket(&m_render_state, (int)bucket_id + 1);
     if (sync_after_buckets) {
       auto pp = scoped_prof("finish");
       glFinish();
@@ -1339,7 +2081,9 @@ void OpenGLRenderer::dispatch_buckets_jak1(DmaFollower dma,
     //  should have ended at the start of the next chain
     ASSERT(dma.current_tag_offset() == m_render_state.next_bucket);
     m_render_state.next_bucket += 16;
-    vif_interrupt_callback(bucket_id);
+    if (!m_render_state.stereo_repeat_pass) {
+      vif_interrupt_callback(bucket_id);
+    }
     m_category_times[(int)m_bucket_categories[bucket_id]] += bucket_prof.get_elapsed_time();
 
     // hack to draw the collision mesh in the middle the drawing
@@ -1347,6 +2091,235 @@ void OpenGLRenderer::dispatch_buckets_jak1(DmaFollower dma,
       auto p = prof.make_scoped_child("collision-draw");
       m_collide_renderer.render(&m_render_state, p);
     }
+
+    if (vista && bucket_id == 31 - 1) {
+      auto p = prof.make_scoped_child("vista");
+      perf::Scope ps(perf::Group::VISTA);
+      if (count_frags) {
+        g_bg_frags.begin(BgFragCount::VISTA);
+      }
+      auto cam = [&](jak1::BucketId id) {
+        auto* tf = dynamic_cast<TFragment*>(m_bucket_renderers[(int)id].get());
+        return tf ? tf->camera_this_frame(m_render_state.frame_idx) : nullptr;
+      };
+      m_vista->render(&m_render_state, p, cam(jak1::BucketId::TFRAG_LEVEL0),
+                      cam(jak1::BucketId::TFRAG_LEVEL1));
+      if (count_frags) {
+        g_bg_frags.end();
+      }
+    }
+
+    // the sun: after the opaque background (and vista), before the transparent buckets
+    if (gs.sun_disc && bucket_id == 31 - 1) {
+      // a child of the live bucket node: a new child of `prof` can move bucket_prof's node
+      auto p = bucket_prof.make_scoped_child("sun-disc");
+      const TfragPcPortData* ports[2];
+      for (int i = 0; i < 2; i++) {
+        auto* tf = dynamic_cast<TFragment*>(
+            m_bucket_renderers[(int)(i ? jak1::BucketId::TFRAG_LEVEL1 : jak1::BucketId::TFRAG_LEVEL0)]
+                .get());
+        ports[i] = tf ? tf->camera_this_frame(m_render_state.frame_idx) : nullptr;
+      }
+      m_sun_disc.render(&m_render_state, p, ports);
+    }
+    if (bg_prepass && bucket_id == 31 - 1) {
+      perf::count(perf::Counter::BG_PREPASS_CUTS, bg_cuts);
+    }
+    // the sky, ocean and merc prop marks of buckets 0-30, written once the background is drawn
+    if (ssao && bucket_id == 31 - 1) {
+      stencil_marks::write(&m_render_state);
+    }
+
+    if (vista && (int)bucket_id == (int)jak1::BucketId::TFRAG_ICE_LEVEL1) {
+      auto p = prof.make_scoped_child("vista-alpha");
+      perf::Scope ps(perf::Group::VISTA_ALPHA);
+      m_vista->render_alpha(&m_render_state, p);
+    }
+
+    if (vista && (int)bucket_id == (int)jak1::BucketId::GENERIC_TFRAG_TEX_LEVEL1) {
+      perf::Scope ps(perf::Group::VISTA, "vista-part", "hiz-build");
+      m_vista->prepare_hiz(&m_render_state);
+    }
+
+    // water shading: the mid ocean draws after the opaque tfrag and tie of both levels, so it
+    // can read the depth under its surface
+    auto* ocean = bucket_id == (int)jak1::BucketId::GENERIC_TFRAG_TEX_LEVEL1
+                      ? dynamic_cast<OceanMidAndFar*>(
+                            m_bucket_renderers[(int)jak1::BucketId::OCEAN_MID_AND_FAR].get())
+                      : nullptr;
+    // also when the toggle flipped on after the frame started and the mid was kept back; no
+    // copy in a frame without ocean (perf bit 13)
+    const bool ocean_drawn = !Gfx::perf_opt(PERF_OPT_WATER + 1) ||
+                             (ocean && ocean->drawn_in_frame(m_render_state.frame_idx));
+    if (ocean && ((water && ocean_drawn) || ocean->mid_pending())) {
+      auto p = prof.make_scoped_child("water-depth");
+      {
+        perf::Scope ps(perf::Group::WATER_DEPTH);
+        m_water_depth.capture(&m_render_state, p, true);
+      }
+      m_render_state.water_depth_tex = m_water_depth.depth_tex();
+      m_render_state.water_shoal_tex = m_render_state.water_depth_tex;
+      const int ocean_bucket = (int)jak1::BucketId::OCEAN_MID_AND_FAR;
+      if (ssao) {
+        SsaoRenderer::set_bucket_stencil(ocean_bucket);
+        SsaoRenderer::set_bucket_normals(&m_render_state, ocean_bucket);
+      }
+      m_inspect.set_bucket(&m_render_state, ocean_bucket);
+      auto pm = prof.make_scoped_child("ocean-mid-deferred");
+      if (ssao) {
+        stencil_marks::ocean(&m_render_state, false, m_render_state.water_depth_tex);
+      }
+      {
+        perf::Scope ps(perf::Group::OCEAN_MID);
+        ocean->flush_mid_deferred(&m_render_state, pm);
+      }
+      if (ssao) {
+        stencil_marks::ocean(&m_render_state, true, 0);
+        SsaoRenderer::set_bucket_stencil((int)bucket_id);
+        SsaoRenderer::set_bucket_normals(&m_render_state, (int)bucket_id + 1);
+      }
+      m_inspect.set_bucket(&m_render_state, (int)bucket_id + 1);
+    }
+
+    if ((int)bucket_id == ssao_bucket) {
+      auto p = prof.make_scoped_child("ssao-depth-capture");
+      perf::Scope ps(perf::Group::SSAO_DEPTH);
+      m_ssao_depth.capture(&m_render_state, p);
+    }
+
+    if (ssao && bucket_id == (int)jak1::BucketId::GENERIC_PRIS) {
+      auto p = prof.make_scoped_child("ssao");
+      {
+        perf::Scope ps(perf::Group::SSAO);
+        m_ssao.render(&m_render_state, p, ao && !(gs.ssao_prereq_probe & 128));
+      }
+      if (m_ssao.have_frame()) {
+        inland_water::set_depth(m_ssao.csz_texture(), m_ssao.proj_info());
+      }
+      if (Gfx::g_global_settings.shadow_contact > 0) {
+        auto pc = prof.make_scoped_child("contact-shadows");
+        perf::Scope ps(perf::Group::CONTACT_SHADOWS);
+        m_contact_shadows.render(&m_render_state, pc, m_ssao, m_upscaler.temporal());
+      } else {
+        m_contact_shadows.release();
+      }
+      if (swamp_mist_wanted(&m_render_state)) {
+        auto pm = prof.make_scoped_child("swamp-mist");
+        perf::Scope ps(perf::Group::SWAMP_MIST);
+        m_swamp_mist.render(&m_render_state, pm, m_ssao);
+      }
+    }
+    // a sea mist (Misty Island) draws over the near ocean
+    if (ssao && bucket_id == (int)jak1::BucketId::OCEAN_NEAR &&
+        swamp_mist_wanted(&m_render_state, true)) {
+      auto pm = prof.make_scoped_child("swamp-mist");
+      perf::Scope ps(perf::Group::SWAMP_MIST);
+      m_swamp_mist.render(&m_render_state, pm, m_ssao, true);
+    }
+
+    if (!em_lights && g_burst_frame >= 0 && bucket_id == (int)jak1::BucketId::SPRITE) {
+      lg::info("EMLIGHTS f={} off ssao={} lights={}", g_burst_frame, gs.ssao_enable,
+               gs.emissive_lights_enable);
+    }
+    if (em_lights && bucket_id == (int)jak1::BucketId::SPRITE) {
+      auto p = prof.make_scoped_child("emissive-lights");
+      perf::Scope ps(perf::Group::EMISSIVE_LIGHTS);
+      m_emissive_lights.render(&m_render_state, p, m_ssao, m_ssao.emissive_texture(),
+                               m_ssao.emissive_samples());
+    }
+    // motion blur: the velocity pass moves up here, then the blur, then the HUD sprites held back
+    bool mv_resolved = false;
+    if (motion_blur && bucket_id == (int)jak1::BucketId::SPRITE) {
+      {
+        auto p = prof.make_scoped_child("motion-vectors");
+        perf::Scope ps(perf::Group::MOTION_VECTORS);
+        mvr().resolve(&m_render_state, p);
+        mv_resolved = true;
+      }
+      auto p = prof.make_scoped_child("motion-blur");
+      perf::Scope ps(perf::Group::MOTION_BLUR);
+      m_motion_blur.render(&m_render_state, p, mvr());
+    }
+    if (bucket_id == (int)jak1::BucketId::SPRITE) {
+      auto* sprite = dynamic_cast<Sprite3*>(renderer.get());
+      if (sprite && sprite->hud_deferred() && !ui_layer) {
+        auto p = prof.make_scoped_child("hud-sprites");
+        if (ssao) {
+          SsaoRenderer::set_bucket_stencil((int)bucket_id);
+          SsaoRenderer::set_bucket_normals(&m_render_state, (int)bucket_id);
+        }
+        m_inspect.set_bucket(&m_render_state, (int)bucket_id);
+        sprite->flush_deferred_hud(&m_render_state, p);
+        if (ssao) {
+          SsaoRenderer::set_bucket_normals(&m_render_state, (int)bucket_id + 1);
+        }
+        m_inspect.set_bucket(&m_render_state, (int)bucket_id + 1);
+      }
+      if (motion_blur) {
+        m_upscaler.post_sprite(m_render_state, *m_fbo_state.render_fbo->tex_id);
+      }
+    }
+    if (bloom && bucket_id == (int)jak1::BucketId::SPRITE) {
+      auto p = prof.make_scoped_child("bloom");
+      perf::Scope ps(perf::Group::BLOOM);
+      m_bloom.render(&m_render_state, p, m_ssao.emissive_texture(), m_ssao.emissive_samples());
+    }
+    // the sun's starburst and wash: a camera effect over the scene and its bloom, under the HUD
+    if (gs.sun_disc && bucket_id == (int)jak1::BucketId::SPRITE) {
+      auto p = prof.make_scoped_child("sky-flare");
+      m_sun_disc.render_flare(&m_render_state, p);
+    }
+    // the scene is complete; the debug, HUD text and subtitle buckets follow
+    if (motion_vectors::frame().active && !mv_resolved &&
+        bucket_id == (int)jak1::BucketId::SPRITE) {
+      auto p = prof.make_scoped_child("motion-vectors");
+      perf::Scope ps(perf::Group::MOTION_VECTORS);
+      mvr().resolve(&m_render_state, p);
+    }
+    // the temporal upscale (or native antialiasing); the text buckets draw after it
+    if (bucket_id == (int)jak1::BucketId::SPRITE) {
+      m_upscaler.run(&m_render_state, prof, mvr(), *m_fbo_state.render_fbo->tex_id,
+                     m_fbo_state.hdr);
+    }
+  }
+
+  if (probe && (m_probe_shot || !bad.empty())) {
+    static int lines = 0;
+    if (m_probe_shot || lines++ < 200) {
+      lg::info("bgprobe: frame {} shot {} eye {} fb {} {}x{} | sky {} tfrag {} tie {} shrub {} "
+               "merc {} generic {} sprite {} ocean {} tex {} other {} | off-target buckets:{}",
+               m_render_state.frame_idx, m_probe_shot,
+               m_render_state.stereo_active ? m_probe_eye : -1, m_render_state.render_fb,
+               m_render_state.render_fb_w, m_render_state.render_fb_h, sky_draws,
+               draws[(int)BucketCategory::TFRAG], draws[(int)BucketCategory::TIE],
+               draws[(int)BucketCategory::SHRUB], draws[(int)BucketCategory::MERC],
+               draws[(int)BucketCategory::GENERIC], draws[(int)BucketCategory::SPRITE],
+               draws[(int)BucketCategory::OCEAN], draws[(int)BucketCategory::TEX],
+               draws[(int)BucketCategory::OTHER], bad.empty() ? " none" : bad);
+    }
+  }
+
+  m_inspect.end(&m_render_state);
+
+  if (ssao) {
+    SsaoRenderer::reset_stencil();
+    auto p = prof.make_scoped_child("ssao-view");
+    perf::Scope ps(perf::Group::SSAO_VIEW);
+    m_ssao.draw_view(&m_render_state, p);
+  }
+
+  if (motion_vectors::frame().active) {
+    auto p = prof.make_scoped_child("motion-vectors-view");
+    perf::Scope ps(perf::Group::MOTION_VECTORS_VIEW);
+    mvr().draw_view(&m_render_state, p);
+  }
+
+  if (ssao_capture && gs.ssao_depth_debug) {
+    auto p = prof.make_scoped_child("ssao-depth-debug");
+    m_ssao_depth.draw_debug(&m_render_state, p);
+  }
+  if (gpu_timing) {
+    m_ssao_depth.frame_timer().end();
   }
 
   // TODO ending data.
@@ -1450,7 +2423,16 @@ void OpenGLRenderer::dispatch_buckets(DmaFollower dma,
   g_current_renderer = "dispatch-buckets pre";
 
   m_render_state.version = m_version;
-  m_render_state.frame_idx++;
+  if (!m_render_state.stereo_repeat_pass) {
+    m_render_state.frame_idx++;
+  }
+  const bool stereo = m_render_state.stereo_active;
+  perf::set_eye(stereo ? m_render_state.eye_slot : 0);
+  Timer eye_cpu;
+  std::optional<perf::Scope> eye_scope;
+  if (stereo) {
+    eye_scope.emplace(perf::Group::EYE);
+  }
   switch (m_version) {
     case GameVersion::Jak1:
       dispatch_buckets_jak1(dma, prof, sync_after_buckets);
@@ -1464,6 +2446,11 @@ void OpenGLRenderer::dispatch_buckets(DmaFollower dma,
       break;
     default:
       ASSERT(false);
+  }
+  if (stereo) {
+    eye_scope.reset();
+    perf::count(perf::Counter::EYE_CPU_MS, eye_cpu.getMs());
+    perf::set_eye(0);
   }
 
   g_current_renderer = "dispatch-buckets post";
@@ -1578,6 +2565,7 @@ void OpenGLRenderer::finish_screenshot(const std::string& output_name,
                                        GLuint fbo,
                                        int read_buffer,
                                        bool quick_screenshot) {
+  Timer frame_timer;
   std::vector<u32> buffer(width * height);
   glPixelStorei(GL_PACK_ALIGNMENT, 1);
   GLint oldbuf, oldreadbuf;
@@ -1609,7 +2597,19 @@ void OpenGLRenderer::finish_screenshot(const std::string& output_name,
     }
   }
 
-  file_util::write_rgba_png(output_name, buffer.data(), width, height);
+  if (bug_report::owns(output_name)) {
+    auto gl_str = [](GLenum e) {
+      auto s = glGetString(e);
+      return s ? std::string((const char*)s) : std::string();
+    };
+    Timer report_timer;
+    bug_report::deliver(std::move(buffer), width, height,
+                        {gl_str(GL_VENDOR), gl_str(GL_RENDERER), gl_str(GL_VERSION)});
+    lg::info("bug report frame: {:.1f} ms on the render thread, {:.1f} ms of it the report",
+             frame_timer.getMs(), report_timer.getMs());
+  } else {
+    file_util::write_rgba_png(output_name, buffer.data(), width, height);
+  }
   glReadBuffer(oldreadbuf);
   glBindFramebuffer(GL_READ_FRAMEBUFFER, oldbuf);
 }
@@ -1618,9 +2618,32 @@ void OpenGLRenderer::do_pcrtc_effects(float alp,
                                       int brightness_contrast_color,
                                       int brightness_contrast_alpha,
                                       SharedRenderState* render_state,
-                                      ScopedProfilerNode& prof) {
+                                      ScopedProfilerNode& prof,
+                                      bool direct_ok) {
+  // direct: write the swapchain image here, skipping the stand-in and the separate encode
+  const auto& win = m_fbo_state.resources.window;
+  // SDR: the blackout fade blends in 8 bits, which a scale before the write would not match
+  const bool hdr_out = Gfx::g_hdr_present.active && Gfx::g_hdr_present.hdr;
+  const hdr::DirectTarget direct =
+      hdr::begin_direct(win.width, win.height, direct_ok && (hdr_out || alp >= 1));
   Fbo* window_blit_src = nullptr;
-  if (m_fbo_state.resources.resolve_buffer.valid) {
+  // perf-opt bit 19: at 1:1 the final pass averages the MSAA samples itself, no resolve
+  const Fbo* ms_src = nullptr;
+  if (!(render_state->stereo_active && m_stereo_fbo.valid) && !m_upscaler.upscaled() &&
+      m_fbo_state.resources.resolve_buffer.valid && direct_ok && Gfx::perf_opt(PERF_OPT_POST + 3) &&
+      m_fbo_state.render_fbo->multisampled &&
+      m_fbo_state.render_fbo->width == render_state->draw_region_w &&
+      m_fbo_state.render_fbo->height == render_state->draw_region_h) {
+    ms_src = m_fbo_state.render_fbo;
+  }
+  if (render_state->stereo_active && m_stereo_fbo.valid) {
+    window_blit_src = &m_stereo_fbo;
+  } else if (m_upscaler.upscaled()) {
+    window_blit_src = m_upscaler.display_src();  // the upscaled scene with the text buckets
+  } else if (ms_src && !direct.check) {
+    window_blit_src = &m_fbo_state.resources.resolve_buffer;  // not read
+  } else if (m_fbo_state.resources.resolve_buffer.valid) {
+    perf::Scope ps(perf::Group::PCRTC_RESOLVE);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, m_fbo_state.render_fbo->fbo_id);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_fbo_state.resources.resolve_buffer.fbo_id);
     glBlitFramebuffer(0,                                            // srcX0
@@ -1639,46 +2662,264 @@ void OpenGLRenderer::do_pcrtc_effects(float alp,
     window_blit_src = &m_fbo_state.resources.render_buffer;
   }
 
-  glDisable(GL_DEPTH_TEST);
-  glDisable(GL_BLEND);
-  glViewport(render_state->draw_offset_x, render_state->draw_offset_y, render_state->draw_region_w,
-             render_state->draw_region_h);
-  glBindTexture(GL_TEXTURE_2D, *window_blit_src->tex_id);
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-  glBindVertexArray(screen_vao);
-  glBindBuffer(GL_ARRAY_BUFFER, screen_vbo);
-
+  perf::Scope post_scope(perf::Group::PCRTC_POST);
+  static glq::SavedState saved("pcrtc", kGlq);
+  saved.capture();
+  const bool cull = saved.cull(), scissor = saved.scissor();
   float color = (float)brightness_contrast_color / 128.0f;
   float alpha = (float)brightness_contrast_alpha / 128.0f;
   auto& shader = render_state->shaders[ShaderId::POST_PROCESSING];
+  // a check frame also draws the stand-in, for the presenter to compare the two paths
+  const int passes = direct.fbo && direct.check ? 2 : 1;
+  for (int pass = 0; pass < passes; pass++) {
+    const bool to_direct = direct.fbo && pass == 0;
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    if (to_direct) {
+      glBindFramebuffer(GL_FRAMEBUFFER, direct.fbo);
+      glDisable(GL_CULL_FACE);
+      glDisable(GL_SCISSOR_TEST);
+      if (render_state->draw_region_w != win.width || render_state->draw_region_h != win.height ||
+          render_state->draw_offset_x != 0 || render_state->draw_offset_y != 0) {
+        glViewport(0, 0, win.width, win.height);
+        glClearColor(0.f, 0.f, 0.f, 0.f);
+        glClear(GL_COLOR_BUFFER_BIT);
+      }
+      glViewport(render_state->draw_offset_x,
+                 direct.h - render_state->draw_offset_y - render_state->draw_region_h,
+                 render_state->draw_region_w, render_state->draw_region_h);
+    } else if (direct.fbo && !hdr_out) {
+      // SDR check reference: the GL window itself, as the GL swap presented it
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+      glDisable(GL_SCISSOR_TEST);
+      glViewport(0, 0, win.width, win.height);
+      glClearColor(0.f, 0.f, 0.f, 0.f);
+      glClear(GL_COLOR_BUFFER_BIT);
+      scissor ? glEnable(GL_SCISSOR_TEST) : glDisable(GL_SCISSOR_TEST);
+      glViewport(render_state->draw_offset_x, render_state->draw_offset_y,
+                 render_state->draw_region_w, render_state->draw_region_h);
+    } else {
+      glViewport(render_state->draw_offset_x, render_state->draw_offset_y,
+                 render_state->draw_region_w, render_state->draw_region_h);
+      glBindFramebuffer(GL_FRAMEBUFFER, Gfx::window_fbo());
+    }
+    glBindTexture(GL_TEXTURE_2D, *window_blit_src->tex_id);
+
+    glBindVertexArray(screen_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, screen_vbo);
+
+    shader.activate();
+    glUniform1i(GLQ_LOC(kGlq, shader.id(), "tex_T0"), 0);
+    set_tonemap_uniforms(shader, Gfx::g_hdr_present.active && Gfx::g_hdr_present.hdr);
+    // a check frame's second pass is the reference: resolve, stand-in, separate encode
+    const bool use_ms = ms_src && pass == 0;
+    if (use_ms) {
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, *ms_src->tex_id);
+      glActiveTexture(GL_TEXTURE0);
+      glUniform1i(GLQ_LOC(kGlq, shader.id(), "ms_samples"), ms_src->multisample_count);
+    }
+    if (to_direct) {
+      glUniform1i(GLQ_LOC(kGlq, shader.id(), "direct_flip"), 1);
+      glUniform1i(GLQ_LOC(kGlq, shader.id(), "hdr_pq"), direct.pq ? 1 : 0);
+      glUniform1f(GLQ_LOC(kGlq, shader.id(), "hdr_scale"), alp < 1 ? alp : 1.f);
+    }
+    if (brightness_contrast_color < 0) {
+      // subtractive blend - note that color is already negative
+      float color_neg = color * alpha;
+      glUniform4f(GLQ_LOC(kGlq, shader.id(), "color_mult"), 1.0f, 1.0f, 1.0f, alpha);
+      glUniform4f(GLQ_LOC(kGlq, shader.id(), "color_add"), color_neg, color_neg, color_neg, 0.0f);
+    } else {
+      // additive blend
+      glUniform4f(GLQ_LOC(kGlq, shader.id(), "color_mult"), 1.0f, 1.0f, 1.0f, alpha);
+      glUniform4f(GLQ_LOC(kGlq, shader.id(), "color_add"), color, color, color, 0.0f);
+    }
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glActiveTexture(GL_TEXTURE0);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+    if (use_ms) {
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
+      glActiveTexture(GL_TEXTURE0);
+      glUniform1i(GLQ_LOC(kGlq, shader.id(), "ms_samples"), 0);
+    }
+
+    if (to_direct) {
+      glUniform1i(GLQ_LOC(kGlq, shader.id(), "direct_flip"), 0);
+      cull ? glEnable(GL_CULL_FACE) : glDisable(GL_CULL_FACE);
+      scissor ? glEnable(GL_SCISSOR_TEST) : glDisable(GL_SCISSOR_TEST);
+    }
+
+    glEnable(GL_BLEND);
+    if (alp < 1 && !to_direct) {
+      glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ZERO);
+      glBlendEquation(GL_FUNC_ADD);
+
+      m_blackout_renderer.draw(Vector4f(0, 0, 0, 1.f - alp), render_state, prof);
+    }
+    glEnable(GL_DEPTH_TEST);
+  }
+}
+
+void OpenGLRenderer::set_tonemap_uniforms(const Shader& shader, bool hdr_out) {
+  const auto& gs = Gfx::g_global_settings;
+  // mode -1 passes the RGBA8 source through untouched
+  const int mode = m_fbo_state.hdr ? gs.tonemap_mode : -1;
+  glUniform1i(GLQ_LOC(kGlq, shader.id(), "tm_mode"), mode);
+  glUniform1f(GLQ_LOC(kGlq, shader.id(), "tm_exposure"), gs.tonemap_exposure);
+  glUniform1f(GLQ_LOC(kGlq, shader.id(), "tm_knee"), gs.tonemap_knee);
+  glUniform1f(GLQ_LOC(kGlq, shader.id(), "tm_toon_knee"), gs.tonemap_toon_knee);
+  glUniform1f(GLQ_LOC(kGlq, shader.id(), "tm_toon_range"), gs.tonemap_toon_range);
+  glUniform2f(GLQ_LOC(kGlq, shader.id(), "tm_white"), gs.tonemap_white_start,
+              gs.tonemap_white_full);
+  glUniform2f(GLQ_LOC(kGlq, shader.id(), "tm_halo"), gs.tonemap_halo_start, gs.tonemap_halo_full);
+  const auto& h = Gfx::g_hdr_present;
+  glUniform1i(GLQ_LOC(kGlq, shader.id(), "hdr_out"), hdr_out ? 1 : 0);
+  glUniform4f(GLQ_LOC(kGlq, shader.id(), "hdr_nits"), h.paper_white_nits, h.peak_nits, h.black_nits,
+              h.knee);
+  glUniform1f(GLQ_LOC(kGlq, shader.id(), "hdr_saturation"), h.saturation);
+  glUniform1f(GLQ_LOC(kGlq, shader.id(), "hdr_ref_nits"),
+              h.desktop_white_nits > 0.f ? h.desktop_white_nits : 200.f);
+  glUniform1i(GLQ_LOC(kGlq, shader.id(), "hdr_cal"), gs.hdr_cal_pattern);
+  glUniform1i(GLQ_LOC(kGlq, shader.id(), "hdr_pq"), 0);
+  glUniform1f(GLQ_LOC(kGlq, shader.id(), "hdr_scale"), 1.f);
+  glUniform1i(GLQ_LOC(kGlq, shader.id(), "direct_flip"), 0);
+  glUniform1i(GLQ_LOC(kGlq, shader.id(), "tex_ms"), 1);
+  glUniform1i(GLQ_LOC(kGlq, shader.id(), "ms_samples"), 0);
+}
+
+/// The FP16 buffer the final pass tonemaps: bloom and emissive composited, before the tonemap.
+Fbo* OpenGLRenderer::hdr_scene_fbo() {
+  if (m_render_state.stereo_active && m_stereo_fbo.valid) {
+    return &m_stereo_fbo;
+  }
+  if (m_upscaler.upscaled()) {
+    return m_upscaler.display_src();
+  }
+  if (m_fbo_state.resources.resolve_buffer.valid) {
+    return &m_fbo_state.resources.resolve_buffer;
+  }
+  return &m_fbo_state.resources.render_buffer;
+}
+
+/*!
+ * With the FP16 target on, read the untonemapped scene (hdr_scene_fbo) and write it next to the
+ * screenshot as <path minus .png>.exr: half-float RGB, display-encoded (not linearised), 1.0 = SDR
+ * white. The EXR header records the tonemap and which image the PNG is (window_png: the presented
+ * back buffer with brightness/contrast; otherwise the internal-resolution tonemap without them).
+ * Also logs the range of the image and, with SANDOVER_HDR_MASK set, writes <path>.hdr.png:
+ * R = max channel above 1 (0..2 -> 0..255), G = max channel / 2, B = negative.
+ */
+void OpenGLRenderer::save_hdr_scene(ScopedProfilerNode& prof,
+                                    const std::string& path,
+                                    bool window_png) {
+  auto p = prof.make_scoped_child("hdr-exr");
+  Fbo* src = hdr_scene_fbo();
+  const int w = src->width, h = src->height;
+  std::vector<float> px((size_t)w * h * 4);
+  glPixelStorei(GL_PACK_ALIGNMENT, 1);
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, src->fbo_id);
+  glReadBuffer(GL_COLOR_ATTACHMENT0);
+  glReadPixels(0, 0, w, h, GL_RGBA, GL_FLOAT, px.data());
+  float max_c = 0.f;
+  size_t over = 0, under = 0, bad = 0;
+  for (size_t i = 0; i < px.size(); i += 4) {
+    bool o = false, u = false;
+    for (int c = 0; c < 3; c++) {
+      float v = px[i + c];
+      if (!std::isfinite(v)) {
+        bad++;
+        continue;
+      }
+      max_c = std::max(max_c, v);
+      o |= v > 1.f;
+      u |= v < 0.f;
+    }
+    over += o;
+    under += u;
+  }
+  const bool has_png_ext = path.size() > 4 && path.substr(path.size() - 4) == ".png";
+  const std::string stem = has_png_ext ? path.substr(0, path.size() - 4) : path;
+  if (std::getenv("SANDOVER_HDR_MASK")) {
+    std::vector<u32> mask((size_t)w * h);
+    for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+        const float* q = &px[((size_t)(h - 1 - y) * w + x) * 4];
+        float m = std::max({q[0], q[1], q[2]});
+        float lo = std::min({q[0], q[1], q[2]});
+        u32 r = (u32)(std::clamp(m - 1.f, 0.f, 1.f) * 255.f);
+        u32 g = (u32)(std::clamp(m * 0.5f, 0.f, 1.f) * 255.f);
+        u32 b = lo < 0.f ? 255u : 0u;
+        mask[(size_t)y * w + x] = 0xff000000 | (b << 16) | (g << 8) | r;
+      }
+    }
+    file_util::write_rgba_png(stem + ".hdr.png", mask.data(), w, h);
+  }
+  const double n = (double)w * h;
+  lg::info("hdr-stats: max {:.4f} over1 {:.5f} neg {:.5f} nonfinite {}", max_c, over / n, under / n,
+           bad);
+
+  const auto& gs = Gfx::g_global_settings;
+  const exr::StringAttrs attrs = {
+      {"sandoverTonemapMode", gs.tonemap_mode == (int)TonemapMode::FILMIC ? "filmic"
+                              : gs.tonemap_mode == (int)TonemapMode::TOON ? "toon"
+                                                                           : "clamp"},
+      {"sandoverTonemapExposure", fmt::format("{}", gs.tonemap_exposure)},
+      {"sandoverTonemapKnee", fmt::format("{}", gs.tonemap_knee)},
+      {"sandoverTonemapToonKnee", fmt::format("{}", gs.tonemap_toon_knee)},
+      {"sandoverTonemapToonRange", fmt::format("{}", gs.tonemap_toon_range)},
+      {"sandoverTonemapWhiteStart", fmt::format("{}", gs.tonemap_white_start)},
+      {"sandoverTonemapWhiteFull", fmt::format("{}", gs.tonemap_white_full)},
+      {"sandoverTonemapHaloStart", fmt::format("{}", gs.tonemap_halo_start)},
+      {"sandoverTonemapHaloFull", fmt::format("{}", gs.tonemap_halo_full)},
+      {"sandoverPng", window_png ? "window" : "internal"},
+  };
+  if (!exr::write_rgb_half(stem + ".exr", px.data(), w, h, 4, true, attrs)) {
+    lg::error("failed to write {}.exr", stem);
+  }
+}
+
+/*!
+ * With the FP16 target on, tonemap the (resolved) game-resolution image into an RGBA8 buffer for
+ * internal-resolution screenshots, without the brightness/contrast terms, like the RGBA8 path.
+ */
+Fbo* OpenGLRenderer::hdr_screenshot_source(ScopedProfilerNode& prof) {
+  auto p = prof.make_scoped_child("hdr-screenshot");
+  Fbo* src = hdr_scene_fbo();
+  const int w = src->width, h = src->height;
+  if (!m_hdr_ldr_fbo.matches(w, h, 1)) {
+    m_hdr_ldr_fbo.clear();
+    m_hdr_ldr_fbo = make_fbo(w, h, 1, false);
+  }
+  tonemap_to_sdr(*src, m_hdr_ldr_fbo);
+  return &m_hdr_ldr_fbo;
+}
+
+/// The final pass's tonemap of an FP16 buffer into an RGBA8 one of the same size, without the
+/// brightness/contrast terms.
+void OpenGLRenderer::tonemap_to_sdr(const Fbo& src, Fbo& dst) {
+  glDisable(GL_DEPTH_TEST);
+  glDisable(GL_BLEND);
+  glBindFramebuffer(GL_FRAMEBUFFER, dst.fbo_id);
+  glViewport(0, 0, dst.width, dst.height);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, *src.tex_id);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  auto& shader = m_render_state.shaders[ShaderId::POST_PROCESSING];
   shader.activate();
   glUniform1i(glGetUniformLocation(shader.id(), "tex_T0"), 0);
-  if (brightness_contrast_color < 0) {
-    // subtractive blend - note that color is already negative
-    float color_neg = color * alpha;
-    glUniform4f(glGetUniformLocation(shader.id(), "color_mult"), 1.0f, 1.0f, 1.0f, alpha);
-    glUniform4f(glGetUniformLocation(shader.id(), "color_add"), color_neg, color_neg, color_neg,
-                0.0f);
-  } else {
-    // additive blend
-    glUniform4f(glGetUniformLocation(shader.id(), "color_mult"), 1.0f, 1.0f, 1.0f, alpha);
-    glUniform4f(glGetUniformLocation(shader.id(), "color_add"), color, color, color, 0.0f);
-  }
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glActiveTexture(GL_TEXTURE0);
+  set_tonemap_uniforms(shader, false);
+  glUniform4f(glGetUniformLocation(shader.id(), "color_mult"), 1.f, 1.f, 1.f, 1.f);
+  glUniform4f(glGetUniformLocation(shader.id(), "color_add"), 0.f, 0.f, 0.f, 0.f);
+  glBindVertexArray(screen_vao);
+  glBindBuffer(GL_ARRAY_BUFFER, screen_vbo);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);
-
-  glEnable(GL_BLEND);
-  if (alp < 1) {
-    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ZERO);
-    glBlendEquation(GL_FUNC_ADD);
-
-    m_blackout_renderer.draw(Vector4f(0, 0, 0, 1.f - alp), render_state, prof);
-  }
   glEnable(GL_DEPTH_TEST);
 }

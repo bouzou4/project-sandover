@@ -261,6 +261,13 @@
   "Get the status of an existing level."
   (let ((lev (level-get *level* level-name))) (if lev (-> lev status))))
 
+;; og:preserve-this sandover: 1 while a level slot (index) has vista landmark actors
+(define *vista-landmark-on* (new 'static 'array int32 3 0 0 0))
+
+(define-extern vista-landmarks-kill-level (function level none))
+
+(define-extern vista-landmarks-update (function none))
+
 (defmethod level-status-set! ((this level) (want-status symbol))
   "Change the status of a level, performing any cleanup and prep work as necessary.
    Only change loading statuses in order!
@@ -597,6 +604,8 @@
 
 (defmethod birth ((this level))
   "Birth a level to make it alive! It must be loaded."
+  ;; og:preserve-this sandover: display-only landmark copies go before the real actors
+  (#when PC_PORT (if (nonzero? (-> *vista-landmark-on* (-> this index))) (vista-landmarks-kill-level this)))
   (case (-> this status)
     (('loaded)
      (protect (loading-level
@@ -657,6 +666,7 @@
 
 (defmethod unload! ((this level))
   "Unloads the level. This does not free the heap. The level will be made inactive and ready to be loaded some other time."
+  (#when PC_PORT (if (nonzero? (-> *vista-landmark-on* (-> this index))) (vista-landmarks-kill-level this)))
   (deactivate this)
   (when (!= (-> this status) 'inactive)
     ;; if we linked art group, unlink it.
@@ -1207,6 +1217,8 @@
         (if (-> s4-0 inside-boxes?) (set! (-> s4-0 meta-inside?) #t)))))
   ;; update load state machine (the level-border one)
   (update! *load-state*)
+  ;; og:preserve-this sandover: vista landmark actors (pc/features/vista-landmarks.gc)
+  (#when PC_PORT (vista-landmarks-update))
   ;; checkpoint assignment
   (dotimes (s5-2 (-> this length))
     (let ((s4-1 (-> this level s5-2)))

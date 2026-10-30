@@ -114,6 +114,9 @@ Config make_config_via_json(nlohmann::json& json) {
   config.disassemble_data = json.at("disassemble_data").get<bool>();
   config.process_tpages = json.at("process_tpages").get<bool>();
   config.write_tpage_imports = json.at("write_tpage_imports").get<bool>();
+  if (json.contains("write_texture_levels")) {
+    config.write_texture_levels = json.at("write_texture_levels").get<bool>();
+  }
   config.process_game_text = json.at("process_game_text").get<bool>();
   config.process_game_count = json.at("process_game_count").get<bool>();
   config.process_art_groups = json.at("process_art_groups").get<bool>();

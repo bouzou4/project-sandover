@@ -1,0 +1,21 @@
+# Self-lit textures under the world sun map (fix/world-shadow-selflit-textures): glow prop
+# crystals by day. Run with `--play-look`; before = master bin, after = the branch bin.
+# Mountain Pass cameras from mountain-pass-crystals.yaml (ogr-cave-crystal-01: self-lit once its
+# prop row is in prop_lights.json); cave cameras are the bug-report cameras 0020 and 0022 at
+# their bundle resolution (their vanilla frames are reused); snow from crystal-lights.yaml.
+set: world-shadow-selflit
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 90
+  effects: on
+  wind: off
+  particles: off
+  jak: hide
+shots:
+  - {name: pass-mid-crystal, continue: ogre-end, hour: 12, camera: {pos: [1819815.9, 155902.0, -13302689.8], rot: [-0.7656, 0.0, 0.6433, 0.0601, 0.9956, 0.0715, -0.6405, 0.0934, -0.7623]}}
+  - {name: pass-ledge-crystal, continue: ogre-end, hour: 12, camera: {pos: [2186412.0, 175783.9, -13291806.7], rot: [0.1273, 0.0, -0.9919, -0.1119, 0.9936, -0.0144, 0.9855, 0.1128, 0.1265]}}
+  - {name: pass-end-crystals, continue: ogre-end, hour: 12, camera: {pos: [3809402.9, 166764.5, -14088941.6], rot: [-0.4843, 0.0, 0.8749, -0.177, 0.9793, -0.098, -0.8568, -0.2023, -0.4743]}}
+  - {name: cave-0020, continue: robocave-bottom, hour: 12, resolution: [3840, 2160], camera: {pos: [5197760.5, -81160.453125, -11526058.0], rot: [-0.8577626943588257, 0.0, 0.514046311378479, -0.06161731481552124, 0.9927899241447449, -0.10281748324632645, -0.5103399753570557, -0.11986712366342545, -0.8515781164169312]}}
+  - {name: cave-0022, continue: maincave-to-darkcave, hour: 12, resolution: [3840, 2160], camera: {pos: [3904763.75, 174727.703125, -12384558.0], rot: [-0.14911556243896484, 0.0, 0.9888197183609009, -0.11898557841777802, 0.9927338361740112, -0.01794293522834778, -0.9816347360610962, -0.12033085525035858, -0.1480320692062378]}}
+  - {name: snow-crystal-crate, continue: snow-by-ice-lake, hour: 12, settle_frames: 300, jak_pos: [3307596.2, 1030909.6, -14203750.7], camera: {pos: [3325070.7, 1044071.0, -14184731.6], rot: [-0.7518, 0.0000, 0.6594, -0.2449, 0.9285, -0.2792, -0.6122, -0.3714, -0.6980]}}

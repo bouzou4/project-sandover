@@ -1,6 +1,9 @@
 #pragma once
 
+#include <unordered_map>
+
 #include "game/graphics/opengl_renderer/BucketRenderer.h"
+#include "game/graphics/opengl_renderer/Materials.h"
 
 class Generic2 {
  public:
@@ -20,6 +23,27 @@ class Generic2 {
 
   void draw_debug_window();
   bool empty() { return m_empty; }
+
+  /// One depth target of the actor shadow pre-pass (Jak 1); see ActorShadows.h.
+  struct ShadowView {
+    GLuint fbo = 0;
+    int size = 0;
+    const float* cam_to_clip = nullptr;  // 16 floats, column-major
+  };
+  /// Draw one Jak 1 generic bucket's depth-writing, non-HUD geometry into each view instead of
+  /// the frame (actor shadow pre-pass).
+  void render_shadow(DmaFollower& dma,
+                     SharedRenderState* render_state,
+                     const std::vector<ShadowView>& views);
+  GLint m_iw_loc = -1;  // inland water (InlandWater.h): `iw_kind`, -1 while off this do_draws
+  int m_iw_kind = 0;
+  std::unordered_map<u32, int> m_iw_tbp;
+  bool m_pbr = false;  // material shading on for the current do_draws (Materials.h)
+  PbrDrawState m_pbr_draw;
+  std::unordered_map<u32, std::pair<int, std::pair<GLuint, float>>> m_pbr_tbp;  // per do_draws
+  bool m_canopy = false;
+  int m_canopy_emitter = -1;
+  std::unordered_map<u32, s64> m_canopy_tbp;  // texture combo per tbp (-1: none), per do_draws
 
   struct Vertex {
     math::Vector<float, 3> xyz;
@@ -205,6 +229,10 @@ class Generic2 {
         hvdf_offset, use_full_matrix, full_matrix;
     GLuint gfx_hack_no_tex;
     GLuint warp_sample_mode;
+    GLuint stereo_eye_x;
+    GLuint eye_on;
+    GLuint eye_rot;
+    GLuint eye_t;
   } m_ogl;
 
   bool m_empty = false;

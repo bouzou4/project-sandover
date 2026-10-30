@@ -1,0 +1,53 @@
+# Performance profile spots for sandover-perf (kb/howto/perf.md): one instance visits each spot
+# with every Sandover effect on (the play defaults), waits for the vista loader, then reads the
+# engine's PERF-* timer windows, optionally once per effect switched off.
+# Cameras come from other manifests (named per shot) so the frames can be compared with them.
+# Particles, wind and time-of-day effects are on: frames should cost what play costs.
+set: perf
+defaults:
+  resolution: [3840, 2160]
+  msaa: 2
+  settle_frames: 120
+  effects: on
+  wind: on
+  particles: on
+  jak: show
+  wait_vista: true
+  wait_log_timeout: 90
+shots:
+  # heavy ocean: beach shoreline, low over open sea, high over village1 and the sea (water.yaml,
+  # neighbours.yaml high-noon)
+  - {name: beach-shore, continue: beach-start, hour: 15, camera: {pos: [-716800.0, 11468.8, -184320.0], rot: [-0.707107, 0.0, -0.707107, 0.019992, 0.9996, -0.019992, 0.706824, -0.028273, -0.706824]}}
+  - {name: open-sea-low, continue: misty-start, hour: 18, camera: {pos: [600000.0, 49152.0, 2000000.0], rot: [-0.848559, 0.0, 0.529101, -0.018476, 0.99939, -0.029631, -0.528779, -0.034919, -0.848041]}}
+  - {name: open-sea-high, continue: village1-hut, hour: 12, camera: {pos: [-491520.0, 1843200.0, 409600.0], rot: [-0.978371, 0.0, -0.206856, 0.041902, 0.979268, -0.198186, 0.202567, -0.202567, -0.958088]}}
+  # many lights: village1 at night (continue camera), vista neighbours: hut roof (neighbours.yaml)
+  - {name: village1-night, continue: village1-hut, hour: 23}
+  - {name: hut-roof, continue: village1-hut, hour: 12, camera: {pos: [-614400.0, 450560.0, 614400.0], rot: [-0.992877, 0.0, -0.119145, 0.001352, 0.999936, -0.011266, 0.119138, -0.011346, -0.992813]}}
+  # dense foliage (continue camera), temple top toward misty (landmarks2 temple-top-dusk), and a
+  # low camera 1 m above Jak's feet, behind him on the temple top (emissive jungle-temple-top-noon)
+  - {name: jungle, continue: jungle-start, hour: 12}
+  - {name: temple-top, continue: jungle-start, hour: 18, camera: {pos: [1483980.8, 638976.0, -987545.6], rot: [0.802639, 0.0, 0.596466, -0.052259, 0.996154, 0.070323, -0.594172, -0.087615, 0.799552]}}
+  - {name: low-behind-jak, continue: jungle-start, hour: 12, jak_pos: [1456966.9, 454246.4, -972185.6], camera: {pos: [1471631.1, 457932.8, -987746.5], rot: [0.7278, 0.0, 0.6858, -0.2454, 0.9338, 0.2604, -0.6404, -0.3578, 0.6796]}}
+  # interiors
+  - {name: sunken, continue: sunken-start, hour: 12}
+  - {name: maincave, continue: maincave-start, hour: 22, camera: {pos: [4528044.6, 169275.7, -12977985.7], rot: [0.9848, 0.0, -0.1736, 0.1114, 0.7671, 0.6318, 0.1332, -0.6416, 0.7554]}}
+  - {name: darkcave, continue: darkcave-start, hour: 12}
+  - {name: snow, continue: snow-start, hour: 12}
+  # swamp look (water, wet, mist): pond-se of swamp-directions.yaml, 3 m over open water,
+  # and its dock1 (the swamp-dock1 continue camera)
+  - {name: swamp, continue: swamp-start, hour: 14.819, camera: {pos: [2224296.2, 12288.0, -8193260.0], rot: [-0.707107, 0.0, -0.707107, 0.147016, 0.978148, -0.147016, 0.691655, -0.207912, -0.691655]}}
+  - {name: swamp-dock1, continue: swamp-dock1, hour: 14.819, camera: from_continue}
+  # passes new since the 2026-09-27 baseline, at play-session cameras (runs/20260926-1011-play,
+  # snapshot number in the name or comment; camera, Jak, continue and hour from its sidecar):
+  # lamps lighting and shadowing Jak at night (0011 village1 hut, 0013 village2)
+  - {name: village1-hut-lamps, continue: village1-hut, hour: 22.4819, jak_pos: [-89212.516, 12279.427, -312984.656], camera: {pos: [-48743.242, 28409.5, -310308.969], rot: [-0.176494, 0.0, 0.984302, -0.116623, 0.992956, -0.020911, -0.977368, -0.118482, -0.175251]}}
+  - {name: village2-night-lamps, continue: village2-start, hour: 3.1503, jak_pos: [1480276.125, 93529.055, -6235200.5], camera: {pos: [1444407.25, 112838.617, -6208895.0], rot: [-0.592276, 0.0, -0.805735, 0.105434, 0.991402, -0.077502, 0.798807, -0.130854, -0.587183]}}
+  # maincave dark eco crystals and cave mushrooms (0021)
+  - {name: maincave-crystals, continue: maincave-to-robocave, hour: 12.5508, jak_pos: [4714544.0, 45075.59, -12254603.0], camera: {pos: [4769205.5, 80964.367, -12304959.0], rot: [0.640089, -0.000003, 0.7683, -0.201402, 0.965029, 0.167796, -0.741433, -0.262142, 0.617705]}}
+  # darkcave near pitch black, crystal lights, Jak and a chest or crate (0024, 0025)
+  - {name: darkcave-0024, continue: darkcave-start, hour: 14.9664, jak_pos: [3831361.5, 158281.875, -11795829.0], camera: {pos: [3873233.0, 177109.719, -11804118.0], rot: [0.196384, 0.0, 0.980527, -0.134885, 0.990493, 0.027015, -0.971205, -0.137564, 0.194517]}}
+  - {name: darkcave-0025, continue: darkcave-start, hour: 12.2589, jak_pos: [3539527.75, 231473.859, -11801888.0], camera: {pos: [3558064.25, 252568.062, -11754170.0], rot: [-0.962138, 0.0, 0.272563, -0.031377, 0.993352, -0.110761, -0.270751, -0.11512, -0.955741]}}
+  # boss levels: ogre-race and finalboss-start instead of the fight continues, so no boss intro
+  # takes the camera; ogre-race frames the canyon approach, not the Klaww arena itself
+  - {name: ogre, continue: ogre-race, hour: 12}
+  - {name: finalboss, continue: finalboss-start, hour: 12}

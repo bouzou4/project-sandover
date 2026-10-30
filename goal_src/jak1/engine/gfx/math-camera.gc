@@ -51,6 +51,10 @@
 
 (define-extern sprite-distorter-generate-tables (function none))
 
+;; sandover: in an XR session the game renders the head's view (pc-get-xr-cull, cam-update)
+(define *xr-cull-active* #f)
+(define *xr-cull-data* (new 'global 'matrix))
+
 (defun update-math-camera ((math-cam math-camera) (video-mode symbol) (aspect symbol))
   "Compute some one-time camera constants.  These should only change when changing aspect ratio."
   ;; the x/y ratio are frustum slopes
@@ -202,6 +206,20 @@
         (set! (-> math-cam sprite-2d-hvdf z) (-> math-cam hvdf-off z))
         (set! (-> math-cam pfog0) fog-slope)
         (set! (-> math-cam pfog1) hvdf-w))))
+  ;; og:preserve-this sandover: in XR the projection (and so the culling and the GS range) covers
+  ;; the drawn head view; the 2D sprite matrix above keeps the game's
+  (#when PC_PORT
+    (when *xr-cull-active*
+      (let ((xr (-> *xr-cull-data* vector 3 x))
+            (yr (-> *xr-cull-data* vector 3 y)))
+        ;; the game's own tangents: for the engine's 2D consumers and convert-to-hud-object
+        (set! (-> *xr-cull-data* vector 3 z) (-> math-cam x-ratio))
+        (set! (-> *xr-cull-data* vector 3 w) (-> math-cam y-ratio))
+        (pc-set-xr-game-tan (-> math-cam x-ratio) (-> math-cam y-ratio))
+        (*! (-> math-cam perspective vector 0 x) (/ (-> math-cam x-ratio) xr))
+        (*! (-> math-cam perspective vector 1 y) (/ (-> math-cam y-ratio) yr))
+        (set! (-> math-cam x-ratio) xr)
+        (set! (-> math-cam y-ratio) yr))))
   ;; sets up some giftags, but they are totally wrong.
   ;; they use 32-bit variables to store 64-bit parts of the tag.
   0

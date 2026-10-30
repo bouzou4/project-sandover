@@ -1,0 +1,56 @@
+# Sky bodies: Jak 3 style sun and moon on the sun row (sandover/kb/howto/lighting.md, "Sky
+# bodies"). pc-set-sun-option 20-29; all arms run with --play-look --wait-vista and the variant as
+# --goal-after-load; (pc-set-sun-option 18 1000000) keeps the HDR values in the EXR.
+#   A: today, the earlier disc (sky-bodies preset disc): no moon, no stars
+#   B: Jak 3 style sun, moon and stars (preset jak3, the engine default)
+# Cameras are those of existing frames (paths per shot); the two new views keep a known-good
+# position and only turn the camera toward the body. Positions in px from the gk log lines
+# SKY-BODIES (B, C) and SUN-DISC (A).
+schema: 1
+set: sky-sun-moon
+variants:
+  A: "(pc-set-sun-option 29 1) (pc-set-sun-option 20 0) (pc-set-sun-option 10 1000000) (pc-set-sun-option 18 1000000)"
+  B: "(pc-set-sun-option 29 1) (pc-set-sun-option 10 1000000) (pc-set-sun-option 18 1000000)"
+defaults:
+  resolution: [3840, 2160]
+  msaa: 4
+  effects: on
+  wind: off
+  particles: on
+  jak: hide
+  actors: freeze
+shots:
+  # sun-disc-001/B2/beach-windmill-sunrise: the sun 12 degrees up over the sea
+  - name: beach-windmill-sunrise
+    continue: beach-start
+    hour: 7.0
+    settle_frames: 300
+    camera:
+      pos: [-491520.0, 245760.0, -245760.0]
+      rot: [0.999804, 0.0, -0.019798, 0.000783, 0.999217, 0.039557, 0.019783, -0.039565, 0.999021]
+  # sun-disc-001/B2/village1-palm-sunset: the low sun at the edge of the top frond
+  - name: village1-palm-sunset
+    continue: village1-hut
+    hour: 17.75
+    settle_frames: 300
+    camera:
+      pos: [-780740.125, 214715.09375, 880475.0]
+      rot: [-0.991205, 0.0, 0.132333, -0.012636, 0.995431, -0.094643, -0.131728, -0.095483, -0.986677]
+  # sun-disc-001/B2/village1-sky-noon's position, turned to the noon sun (71 degrees
+  # up, azimuth -101) and pitched up 60 degrees: the sun about 11 degrees above the centre
+  - name: village1-noon-zenith
+    continue: village1-hut
+    hour: 12.0
+    settle_frames: 120
+    camera:
+      pos: [-417669.9375, 88881.171875, 651142.75]
+      rot: [-0.189095, 0.0, 0.981959, 0.850401, 0.5, 0.163761, -0.490979, 0.866025, -0.094548]
+  # the same position at 23:00, turned to the moon (night slot 6: 65 degrees up, azimuth 61) and
+  # pitched up 50 degrees: the moon about 15 degrees above the centre, stars around it
+  - name: village1-moon-night
+    continue: village1-hut
+    hour: 23.0
+    settle_frames: 120
+    camera:
+      pos: [-417669.9375, 88881.171875, 651142.75]
+      rot: [0.489382, 0.0, -0.872069, -0.668044, 0.642788, -0.374889, 0.560555, 0.766044, 0.314569]

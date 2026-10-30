@@ -5,8 +5,10 @@
 
 #include "gfx.h"
 
+#include <chrono>
 #include <cstdio>
 #include <functional>
+#include <mutex>
 #include <utility>
 
 #include "display.h"
@@ -29,6 +31,47 @@ std::function<void()> vsync_callback;
 GfxGlobalSettings g_global_settings;
 game_settings::DebugSettings g_debug_settings;
 SplashScreen g_splash;
+HdrPresentState g_hdr_present;
+std::atomic<bool> g_fsr3_supported = false;
+std::atomic<bool> g_dlss_supported = false;
+std::atomic<bool> g_fsr4_supported = false;
+std::atomic<int> g_xr_game_hz = 0;
+std::atomic<bool> g_xr_session_running = false;
+std::atomic<int> g_xr_eye_w = 0;
+std::atomic<int> g_xr_eye_h = 0;
+namespace {
+std::mutex g_xr_cull_mutex;
+XrCullView g_xr_cull;
+XrCullView g_xr_cull_handed;
+}  // namespace
+void set_xr_cull_view(const XrCullView& v) {
+  std::lock_guard<std::mutex> lk(g_xr_cull_mutex);
+  g_xr_cull = v;
+}
+XrCullView get_xr_cull_view() {
+  std::lock_guard<std::mutex> lk(g_xr_cull_mutex);
+  return g_xr_cull;
+}
+void note_xr_cull_handed(const XrCullView& v) {
+  const double now =
+      std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+  std::lock_guard<std::mutex> lk(g_xr_cull_mutex);
+  g_xr_cull_handed = v;
+  g_xr_cull_handed.handed_s = now;
+}
+void note_xr_game_tan(float tan_x, float tan_y) {
+  std::lock_guard<std::mutex> lk(g_xr_cull_mutex);
+  if (g_xr_cull_handed.valid) {
+    g_xr_cull_handed.game_tan_x = tan_x;
+    g_xr_cull_handed.game_tan_y = tan_y;
+  }
+}
+XrCullView take_xr_cull_handed() {
+  std::lock_guard<std::mutex> lk(g_xr_cull_mutex);
+  const XrCullView v = g_xr_cull_handed;
+  g_xr_cull_handed = {};
+  return v;
+}
 
 const GfxRendererModule* GetRenderer(GfxPipeline pipeline) {
   switch (pipeline) {

@@ -1,0 +1,131 @@
+# SSAO presets: the four ambient occlusion quality tiers of the settings menu, in the order
+# `(pc-set-ssao-preset n)` and the `ssao-quality` row index them (0 low .. 3 ultra). All run GTAO
+# (XeGTAO port, `kb/findings/2026-10-18-gtao.md`); `deep`, the medium tier, is the default and
+# the play look, tuned to read as the old SAO `deep` at a glance.
+# This file is the source of truth: the engine's built-in table is generated from it
+# (`sandover-preset gen-header ssao`) and rig captures
+# apply it directly (`sandover-capture run ... --preset ssao=<name>`).
+# `off` is the toggle state, not a preset. Parameters are internal and never shown.
+#
+# radius          XeGTAO effect radius, metres (times its 1.457 multiplier; 4096 game units per metre)
+# intensity       darkening at full occlusion on background pixels: intensity x occlusion^0.5
+#                 (the response curve, SAO deep's shape); capped at 0.8 with merc_weight
+# merc_weight     strength multiplier on character pixels (pris buckets 48-56)
+# luma_floor      u8 luminance below which a pixel gets no AO (applied in cave levels)
+# cave_scale      strength multiplier while a fixed-slot cave level is loaded
+# gtao_slices     XeGTAO slices per pixel
+# gtao_steps      XeGTAO steps per slice side
+# gtao_full_res   1: AO and its denoise at full resolution, 0: half
+# gtao_thin       XeGTAO thin occluder compensation (its thickness heuristic), 0..0.7
+# caption         one line for the screening grid: what visibly differs, never parameters
+
+[meta]
+schema = 2
+phase = "ssao"
+chosen = "deep"
+round = 4
+pick_set = "auto-v0"
+
+[space.radius]
+min = 0.1
+max = 1.5
+scale = "log"
+
+[space.intensity]
+min = 0.1
+max = 1.0
+scale = "linear"
+
+[space.merc_weight]
+min = 0.5
+max = 3.0
+scale = "linear"
+
+[presets.deep-low]
+role = "quality"
+label = "Low"
+caption = "deep on XeGTAO's lowest budget, 1 slice x 2 steps, half resolution"
+radius = 1.25
+intensity = 0.7
+merc_weight = 1.5
+luma_floor = 4
+cave_scale = 0.5
+gtao_slices = 1
+gtao_steps = 2
+gtao_full_res = 0
+gtao_thin = 0.0
+
+[presets.deep]
+role = "anchor"
+label = "Medium"
+caption = "heavy, stylised shading on everything (the old SAO deep look)"
+radius = 1.25
+intensity = 0.7
+merc_weight = 1.5
+luma_floor = 4
+cave_scale = 0.5
+gtao_slices = 2
+gtao_steps = 2
+gtao_full_res = 0
+gtao_thin = 0.0
+
+[presets.deep-high]
+role = "quality"
+label = "High"
+caption = "deep with 2 slices x 3 steps"
+radius = 1.25
+intensity = 0.7
+merc_weight = 1.5
+luma_floor = 4
+cave_scale = 0.5
+gtao_slices = 2
+gtao_steps = 3
+gtao_full_res = 0
+gtao_thin = 0.0
+
+[presets.deep-ultra]
+role = "quality"
+label = "Ultra"
+caption = "deep with 3 slices x 3 steps at full resolution"
+radius = 1.25
+intensity = 0.67
+merc_weight = 1.5
+luma_floor = 4
+cave_scale = 0.5
+gtao_slices = 3
+gtao_steps = 3
+gtao_full_res = 1
+gtao_thin = 0.0
+
+[anchor]
+objective = "min_flip_vs_vanilla"
+tuned_on = ""
+
+[[rounds]]
+round = 1
+shown = ["faithful", "contact", "soft", "grounded", "deep"]
+picked = "deep"
+generator = "seed"
+
+[[rounds]]
+round = 2
+shown = ["deep", "deep-crease", "deep-bias", "deep-wide", "deep-shallow"]
+picked = ""
+generator = "refine"
+# No pick recorded. The crease threshold only slightly reduced the facet lines. Revision 3 removes them at the source instead: real surface normals.
+
+[[rounds]]
+round = 3
+shown = ["deep"]
+picked = "deep"
+generator = "human-direct"
+# deep on real normals (normal target on, crease angle 0), judged from the before/after on
+# the two reported shots; it was approved directly and skipped the comparison.
+
+[[rounds]]
+round = 4
+shown = ["deep"]
+picked = "deep"
+generator = "human-direct"
+# Design decision 2026-10-19: GTAO on all four tiers, the SAO kernel and its presets deleted;
+# deep (medium) is GTAO tuned to read as the SAO deep look.

@@ -1,0 +1,18 @@
+# actor shadow spike: village1 at night next to the hut lamps, flame effect slot on. Jak is
+# moved to the village1-demo-convo spot by editing the village1-hut continue point, and the
+# camera is that continue point's (see kb/howto/shadows.md).
+set: shadows-lamp
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 90
+  effects: off
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - name: village1-lamps-h23
+    continue: village1-hut
+    hour: 23
+    effects: on
+    camera: { pos: [-559085.2, 202996.53, 826054.25], rot: [0.7868, 0.0, -0.6171, 0.0775, 0.992, 0.0989, 0.6122, -0.1257, 0.7806] }

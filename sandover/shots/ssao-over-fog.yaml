@@ -1,0 +1,34 @@
+# SSAO over fog, revision 3 (fix/ssao-over-fog): AO fades by the combined transmission of the fog
+# each surface received (game fog, unified fog, haze; carried in the normal target) and the ground
+# mist drawn after the composite (the swamp's, or Misty Island's sea mist; swamp_mist.glsl at the
+# same pixel), raised to the exponent pc-set-ssao-param 18.
+# Run with --play-look, and the arm on the command line:
+#   A (fix off): --goal-after-load "(pc-set-ssao-param 18 0)"
+#   B (fix on):  --goal-after-load "(pc-set-ssao-param 18 1000000)"
+# Pinned so A/B differ only by the effect: particles off, wind off, actors frozen, every game
+# clock at 100000 s by the stage hook, the Sandover wave clock at 120 s (pc-set-water 90).
+# Cameras: the game's swamp-game and swamp-dock2 continue cameras (wide views down the misted
+# swamp); Misty from misty-mist-002 sidecars: misty-crossing-noon (1.5 m over the sea,
+# the misted south shore and cliffs) and misty-shore-jak (beach behind Jak, the misted pillar and
+# far shore); the control is eco-reference's blue-cluster-noon (village1, close, no mist): A = B.
+set: ssao-over-fog
+looks:
+  BASE: &BASE
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-water 90 120000000)'
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 120
+  hour: 14.819
+  effects: on
+  wind: off
+  particles: off
+  actors: freeze
+  jak: show
+shots:
+  - {name: swamp-game, continue: swamp-game, camera: from_continue, goals_after_load: *BASE, wait_vista: true}
+  - {name: swamp-dock2, continue: swamp-dock2, camera: from_continue, goals_after_load: *BASE, wait_vista: true}
+  - {name: misty-crossing-noon, continue: misty-start, hour: 12, camera: {pos: [500000.0, 6144.0, 3000000.0], rot: [0.758398, -0.000000, 0.651792, 0.011206, 0.999852, -0.013039, -0.651695, 0.017193, 0.758286]}, goals_after_load: *BASE, wait_vista: true}
+  - {name: misty-shore-jak, continue: misty-start, hour: 12, jak_pos: [164249.6, 15073.3, 3390668.8], camera: {pos: [135331.8, 29491.2, 3415490.6], rot: [-0.529962, 0.000000, -0.848021, 0.037902, 0.999001, -0.023687, 0.847174, -0.044695, -0.529433]}, goals_after_load: *BASE, wait_vista: true}
+  - {name: control-blue-cluster, continue: village1-hut, hour: 12, camera: {pos: [63049.0, 98104.5, 37021.3], rot: [0.342, -0.0, 0.9397, -0.6087, 0.7619, 0.2215, -0.7159, -0.6477, 0.2606]}, goals_after_load: *BASE, wait_vista: true}

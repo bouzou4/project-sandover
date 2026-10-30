@@ -1,0 +1,30 @@
+# World sun map: the static world casts sun shadows into cascades, and the world, actors and
+# water take them. Cameras reuse frames that exist:
+# - village1-edge-1500: terrain-sun-001/A/edge (16:00), Jak beside a palm on grass
+# - beach-arch-1315: terrain-sun-005/B (roof cover parity)
+# - jungle-tunnel-1200 and -1830: retired, the camera sits inside a machine; never shoot them
+# - beach-whole-1730: sky-hue-003/A/beach-whole-midday, long evening shadows
+# Arms, one instance each:
+#   A play look today: --play-look --goal-after-load "(pc-set-shadow-option 32 0)"
+#                      --goal-after-load "(pc-set-shadow-option 33 0)" --goal-after-load "(pc-set-shadow-option 34 0)"
+#   B map on:          --play-look (engine defaults: options 32-34 on)
+set: world-sun-shadows-002
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 60
+  effects: on
+  wind: off
+  particles: on
+  jak: show
+shots:
+  - {name: village1-edge-1500, continue: village1-hut, hour: 15, jak_pos: [260096.0, 58368.0, -250880.0],
+     camera: {pos: [278921.5, 67809.3, -273943.3], rot: [0.858, 0.0, 0.5137, -0.1076, 0.9778, 0.1798, -0.5023, -0.2095, 0.8389]}}
+# - {name: jungle-tunnel-1200, continue: jungle-start, hour: 12, jak_pos: [1758003.2, 119111.7, -892518.4],
+#    camera: {pos: [1743883.5, 124928.0, -880670.5], rot: [-0.6428, 0.0, -0.766, 0.0846, 0.9939, -0.071, 0.7614, -0.1104, -0.6389]}}
+# - {name: jungle-tunnel-1830, continue: jungle-start, hour: 18.5, jak_pos: [1758003.2, 119111.7, -892518.4],
+#    camera: {pos: [1743883.5, 124928.0, -880670.5], rot: [-0.6428, 0.0, -0.766, 0.0846, 0.9939, -0.071, 0.7614, -0.1104, -0.6389]}}
+  - {name: beach-arch-1315, continue: beach-start, hour: 13.2444, jak_pos: [-516096.0, 4096.0, -462848.0],
+     camera: {pos: [-531926.0, 23811.5, -425510.03], rot: [-0.818749, 0.0, -0.574151, 0.06982, 0.992579, -0.099565, 0.56989, -0.121606, -0.812673]}}
+  - {name: beach-whole-1730, continue: beach-start, hour: 17.5, jak_pos: [-603285.938, 1371.31, -797224.062],
+     camera: {pos: [-568795.625, 22465.25, -759387.875], rot: [-0.738013, 0.0, 0.674787, -0.082014, 0.992586, -0.089699, -0.669784, -0.121541, -0.732542]}}

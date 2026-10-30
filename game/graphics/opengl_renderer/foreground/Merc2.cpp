@@ -1,10 +1,25 @@
 #include "Merc2.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include "common/global_profiler/GlobalProfiler.h"
 #include "common/util/fnv.h"
 #include "common/util/simd_util.h"
 
+#include "game/graphics/opengl_renderer/ActorShadows.h"
+#include "game/graphics/opengl_renderer/EmissiveTable.h"
 #include "game/graphics/opengl_renderer/EyeRenderer.h"
+#include "game/graphics/opengl_renderer/GlQueries.h"
+#include "game/graphics/opengl_renderer/InlandWater.h"
+#include "game/graphics/opengl_renderer/InspectRenderer.h"
+#include "game/graphics/opengl_renderer/LavaField.h"
+#include "game/graphics/opengl_renderer/Materials.h"
+#include "game/graphics/opengl_renderer/MotionVectors.h"
+#include "game/graphics/opengl_renderer/Neighbours.h"
+#include "game/graphics/opengl_renderer/PerfTimers.h"
+#include "game/graphics/opengl_renderer/SsaoRenderer.h"
+#include "game/graphics/opengl_renderer/StencilMarks.h"
 #include "game/graphics/opengl_renderer/background/background_common.h"
 
 #include "third-party/imgui/imgui.h"
@@ -67,6 +82,14 @@ Merc2::Merc2(ShaderLibrary& shaders, const std::vector<GLuint>* anim_slot_array)
                GL_DYNAMIC_DRAW);
   glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
+  // previous-frame bones (motion vectors), bound once so ub_prev_bones is always backed
+  glGenBuffers(1, &m_prev_bones_buffer);
+  glBindBuffer(GL_UNIFORM_BUFFER, m_prev_bones_buffer);
+  glBufferData(GL_UNIFORM_BUFFER, MAX_SHADER_BONE_VECTORS * sizeof(math::Vector4f), temp.data(),
+               GL_DYNAMIC_DRAW);
+  glBindBuffer(GL_UNIFORM_BUFFER, 0);
+  glBindBufferRange(GL_UNIFORM_BUFFER, 2, m_prev_bones_buffer, 0, 128 * sizeof(ShaderMercMat));
+
   // annoyingly, glBindBufferRange can have alignment restrictions that vary per platform.
   // the GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT gives us the minimum alignment for views into the bone
   // buffer. The bone buffer stores things per-16-byte "quadword".
@@ -109,7 +132,13 @@ Merc2::~Merc2() {
   }
 
   glDeleteBuffers(1, &m_bones_buffer);
+  glDeleteBuffers(1, &m_prev_bones_buffer);
   glDeleteVertexArrays(1, &m_vao);
+  for (auto& f : m_fur_q) {
+    if (!f.q.empty()) {
+      glDeleteQueries((GLsizei)f.q.size(), f.q.data());
+    }
+  }
 }
 
 /*!
@@ -219,7 +248,7 @@ void Merc2::model_mod_draws(int num_effects,
                             const tfrag3::MercModel* model,
                             const LevelData* lev,
                             const u8* input_data,
-                            const DmaTransfer& setup,
+                            const SharedRenderState* render_state,
                             ModBuffers* mod_opengl_buffers,
                             MercDebugStats* stats) {
   auto p = scoped_prof("update-verts");
@@ -258,7 +287,7 @@ void Merc2::model_mod_draws(int num_effects,
     // get pointers to the fragment and fragment control data
     u32 goal_addr;
     memcpy(&goal_addr, input_data + 4 * ei, 4);
-    const u8* ee0 = setup.data - setup.data_offset;
+    const u8* ee0 = (const u8*)render_state->ee_main_memory;
     const u8* merc_effect = ee0 + goal_addr;
     u16 frag_cnt;
     memcpy(&frag_cnt, merc_effect + 18, 2);
@@ -413,6 +442,14 @@ void Merc2::handle_pc_model(const DmaTransfer& setup,
   strcpy(name, (const char*)setup.data);
   input_data += 128;
 
+  if (!render_state->vista_medres_hidden.empty() && render_state->vista_drawn &&
+      neighbours::is_medres_of(name, render_state->vista_medres_hidden)) {
+    return;
+  }
+  if (m_shadow_views && !casts_actor_shadow(name)) {
+    return;
+  }
+
   // Look up the model by name in the loader.
   // This will return a reference to this model's data, plus a reference to the level's data
   // for stuff shared between models of the same level
@@ -497,9 +534,13 @@ void Merc2::handle_pc_model(const DmaTransfer& setup,
   input_data += sizeof(VuLights);
 
   u64 uses_water = 0;
+  u32 mv_pid = 0, mv_dc = 0;
   if (render_state->version == GameVersion::Jak1) {
     // jak 1 figures out water at runtime sadly
     memcpy(&uses_water, input_data, 8);
+    // pid of the drawing process and its draw-control (pc-merc-draw-request)
+    memcpy(&mv_pid, input_data + 8, 4);
+    memcpy(&mv_dc, input_data + 12, 4);
     input_data += 16;
   }
 
@@ -516,10 +557,87 @@ void Merc2::handle_pc_model(const DmaTransfer& setup,
     // read goal addr of matrix (matrix data isn't known at merc dma time, bones runs after)
     u32 addr;
     memcpy(&addr, &matrix_array[i * 4], 4);
-    const u8* real_addr = setup.data - setup.data_offset + addr;
+    const u8* real_addr = (const u8*)render_state->ee_main_memory + addr;
     ASSERT(input_data[i] < MAX_SKEL_BONES);
     // get the matrix data
     memcpy(&skel_matrix_buffer[input_data[i]], real_addr, sizeof(MercMat));
+  }
+  u32 caster_skip = 0;
+  if (m_shadow_views && i > 0) {
+    const auto& t = skel_matrix_buffer[input_data[0]].tmat[3];
+    if (t.w() != 0.f) {
+      m_shadow_actor_pos.emplace_back(t.x() / t.w(), t.y() / t.w(), t.z() / t.w());
+      const bool player = strncmp(name, "eichar", 6) == 0;
+      if (!m_have_shadow_player && player) {
+        m_shadow_player_pos = m_shadow_actor_pos.back();
+        m_have_shadow_player = true;
+      }
+      const auto& root = m_shadow_actor_pos.back();
+      for (size_t v = 0; v < m_shadow_views->size() && v < 32 && !player; v++) {
+        const auto& f = (*m_shadow_views)[v].fixture;
+        if (f.w() > 0.f && (root - f.xyz()).squared_length() < f.w() * f.w()) {
+          caster_skip |= 1u << v;
+        }
+      }
+    }
+  }
+  float cover = 0.f;
+  if (render_state->shadow.terrain > 0.f && i > 0 && !is_light_emitter(name)) {
+    const auto& t = skel_matrix_buffer[input_data[0]].tmat[3];
+    if (t.w() != 0.f) {
+      cover = actor_shadows_cover(render_state,
+                                  math::Vector3f(t.x() / t.w(), t.y() / t.w(), t.z() / t.w()));
+    }
+  }
+  if (m_shadow_views && !m_have_shadow_lights) {
+    m_shadow_lights = current_lights;
+    m_have_shadow_lights = true;
+  }
+  // motion vectors: this model's bones from the previous frame, by actor identity
+  const bool mv = motion_vectors::frame().active && !m_shadow_views &&
+                  render_state->version == GameVersion::Jak1;
+  bool mv_prev = false;
+  ShaderMercMat prev_matrix_buffer[MAX_SKEL_BONES];
+  if (mv) {
+    mv_roll(render_state->frame_idx);
+    const u64 key = mv_pid ? ((u64)mv_pid << 32) | mv_dc : 0;
+    u64 mask[2] = {0, 0};
+    for (int k = 0; k < i; k++) {
+      mask[input_data[k] >> 6] |= 1ull << (input_data[k] & 63);
+    }
+    if (!render_state->game_frame_new) {
+      // an XR redraw of the chain: the bones have not moved since the last display frame
+      if (m_mv_cam && m_mv_cam->prev_ok) {
+        mv_prev = true;
+        for (int k = 0; k < bone_count; k++) {
+          prev_matrix_buffer[k] = skel_matrix_buffer[k];
+        }
+      }
+    } else if (key) {
+      auto prev = m_mv_prev.find(key);
+      if (m_mv_cam && m_mv_cam->prev_ok && prev != m_mv_prev.end() &&
+          (prev->second.mask[0] & mask[0]) == mask[0] &&
+          (prev->second.mask[1] & mask[1]) == mask[1]) {
+        mv_prev = true;
+        for (int k = 0; k < bone_count; k++) {
+          prev_matrix_buffer[k] = skel_matrix_buffer[k];
+        }
+        for (int k = 0; k < i; k++) {
+          for (int j = 0; j < 4; j++) {
+            prev_matrix_buffer[input_data[k]].tmat[j] = prev->second.tmat[input_data[k]][j];
+          }
+        }
+      }
+      auto& rec = m_mv_cur[key];
+      rec.mask[0] = mask[0];
+      rec.mask[1] = mask[1];
+      for (int k = 0; k < i; k++) {
+        for (int j = 0; j < 4; j++) {
+          rec.tmat[input_data[k]][j] = skel_matrix_buffer[input_data[k]].tmat[j];
+        }
+      }
+    }
+    motion_vectors::count_merc(mv_prev, key != 0);
   }
   input_data += 128 + 16 * i;
 
@@ -571,7 +689,7 @@ void Merc2::handle_pc_model(const DmaTransfer& setup,
   if (model_uses_pc_blerc) {
     model_mod_blerc_draws(num_effects, model, lev, mod_opengl_buffers, blerc_weights, stats);
   } else if (model_uses_mod) {  // only if we've enabled, this path is slow.
-    model_mod_draws(num_effects, model, lev, input_data, setup, mod_opengl_buffers, stats);
+    model_mod_draws(num_effects, model, lev, input_data, render_state, mod_opengl_buffers, stats);
   }
 
   // stats
@@ -609,7 +727,8 @@ void Merc2::handle_pc_model(const DmaTransfer& setup,
   }
 
   // allocate bones in shared bone buffer to be sent to GPU at flush-time
-  u32 first_bone = alloc_bones(bone_count, skel_matrix_buffer);
+  u32 first_bone =
+      alloc_bones(bone_count, skel_matrix_buffer, mv_prev ? prev_matrix_buffer : nullptr);
 
   // allocate lights
   if (current_lights.w1) {
@@ -618,6 +737,11 @@ void Merc2::handle_pc_model(const DmaTransfer& setup,
     }
   }
   u32 lights = alloc_lights(current_lights);
+  m_caster_cover[lights] = cover;
+  m_caster_skip[lights] = caster_skip;
+  m_light_rig_sun[lights] =
+      render_state->shadow.active && !is_light_emitter(name) ? sun_share_of_rig(current_lights) : 0.f;
+  m_light_cover[lights] = cover * m_light_rig_sun[lights];
   stats->num_lights++;
 
   u64 hash = fnv64(model->name);
@@ -627,6 +751,12 @@ void Merc2::handle_pc_model(const DmaTransfer& setup,
   args.jak1_water_mode = uses_water;
   args.disable_fog = model_disables_fog;
   args.hash = hash;
+  args.model_name = &model->name;
+  args.emitter = is_light_emitter(model->name.c_str());
+  args.mv_prev = mv_prev;
+  args.mv_hud = (mv_pid & 0x40000000) != 0;
+  args.level = lev;
+  args.model = model;
   args.lights = lights;
   args.first_bone = first_bone;
   args.no_texture = render_state->version == GameVersion::Jak3 && model_no_texture;
@@ -650,6 +780,11 @@ void Merc2::handle_pc_model(const DmaTransfer& setup,
     auto& effect = model->effects[ei];
 
     bool should_envmap = effect.has_envmap && !model_disables_envmap;
+    // inland water under a sky draws its own reflection in place of the envmap layer
+    if (should_envmap && !effect.all_draws.empty() &&
+        inland_water::replaces_envmap(render_state, lev, effect.all_draws[0].tree_tex_id)) {
+      should_envmap = false;
+    }
     bool should_mod = (model_uses_pc_blerc || model_uses_mod) && effect.has_mod_draw;
 
     if (should_mod) {
@@ -690,6 +825,17 @@ void Merc2::handle_pc_model(const DmaTransfer& setup,
 }
 
 void Merc2::draw_debug_window(MercDebugStats* stats) {
+  auto& gs = Gfx::g_global_settings;
+  ImGui::Checkbox("Fur shells", &gs.fur_enable);
+  ImGui::SliderInt("Fur shell count", &gs.fur_shells, 1, 64);
+  ImGui::SliderFloat("Fur length m", &gs.fur_length_m, 0.f, 0.15f);
+  ImGui::SliderFloat("Fur density", &gs.fur_density, 4.f, 256.f);
+  ImGui::SliderFloat("Fur gravity", &gs.fur_gravity, 0.f, 2.f);
+  ImGui::SliderFloat("Fur curl", &gs.fur_curl, 0.f, 1.f);
+  ImGui::SliderFloat("Fur root darkening", &gs.fur_root_dark, 0.f, 1.f);
+  ImGui::SliderInt("Fur view", &gs.fur_view, 0, 1);
+  ImGui::SliderFloat("Fur size exponent", &gs.fur_size_exp, 0.f, 2.f);
+  ImGui::SliderFloat("Fur size ref m/uv", &gs.fur_size_ref_m, 0.02f, 1.f);
   ImGui::Text("Models   : %d", stats->num_models);
   ImGui::Text("Effects  : %d", stats->num_effects);
   ImGui::Text("Draws (p): %d", stats->num_predicted_draws);
@@ -730,6 +876,7 @@ void Merc2::draw_debug_window(MercDebugStats* stats) {
 
 void Merc2::init_shader_common(Shader& shader, Uniforms* uniforms, bool include_lights) {
   auto id = shader.id();
+  uniforms->program = (GLuint)id;
   shader.activate();
   if (include_lights) {
     uniforms->light_direction[0] = glGetUniformLocation(id, "light_dir0_fade");
@@ -745,22 +892,109 @@ void Merc2::init_shader_common(Shader& shader, Uniforms* uniforms, bool include_
 
   uniforms->fog = glGetUniformLocation(id, "fog_constants");
   uniforms->decal = glGetUniformLocation(id, "decal_enable");
+  uniforms->pbr_mat = glGetUniformLocation(id, "pbr_mat");
 
   uniforms->fog_color = glGetUniformLocation(id, "fog_color");
   uniforms->perspective_matrix = glGetUniformLocation(id, "perspective_matrix");
   uniforms->ignore_alpha = glGetUniformLocation(id, "ignore_alpha");
 
   uniforms->gfx_hack_no_tex = glGetUniformLocation(id, "gfx_hack_no_tex");
+
+  uniforms->fur_on = glGetUniformLocation(id, "fur_on");
+  uniforms->fur_shape = glGetUniformLocation(id, "fur_shape");
+  uniforms->fur_down = glGetUniformLocation(id, "fur_down");
+  uniforms->fur_tex = glGetUniformLocation(id, "fur_tex");
+  uniforms->fur_body = glGetUniformLocation(id, "fur_body");
+
+  uniforms->mv_on = glGetUniformLocation(id, "mv_on");
+  uniforms->mv_cam = glGetUniformLocation(id, "mv_cam");
+  uniforms->mv_prev_persp = glGetUniformLocation(id, "mv_prev_persp");
+  uniforms->mv_prev_hvdf = glGetUniformLocation(id, "mv_prev_hvdf");
+  uniforms->mv_prev_fog = glGetUniformLocation(id, "mv_prev_fog");
+  uniforms->mv_size = glGetUniformLocation(id, "mv_size");
+}
+
+void Merc2::mv_roll(u64 frame) {
+  if (frame == m_mv_frame) {
+    return;
+  }
+  if (frame == m_mv_frame + 1) {
+    std::swap(m_mv_prev, m_mv_cur);
+  } else {
+    m_mv_prev.clear();
+  }
+  m_mv_cur.clear();
+  m_mv_frame = frame;
+}
+
+void Merc2::fur_timer_begin_frame(u64 frame) {
+  auto& cur = m_fur_q[frame % kFurRing];
+  if (cur.frame == frame) {
+    return;
+  }
+  if (cur.used) {
+    double ms = 0;
+    for (u32 i = 0; i + 1 < cur.used; i += 2) {
+      GLuint64 t0 = 0, t1 = 0;
+      glGetQueryObjectui64v(cur.q[i], GL_QUERY_RESULT, &t0);
+      glGetQueryObjectui64v(cur.q[i + 1], GL_QUERY_RESULT, &t1);
+      ms += double(t1 - t0) * 1e-6;
+    }
+    m_fur_gpu_ms += ms;
+    if (++m_fur_gpu_frames == 240) {
+      lg::info("FUR-TIMING shells={} avg_ms={:.4f} n={}", Gfx::g_global_settings.fur_shells,
+               m_fur_gpu_ms / m_fur_gpu_frames, m_fur_gpu_frames);
+      m_fur_gpu_ms = 0;
+      m_fur_gpu_frames = 0;
+    }
+  }
+  cur.used = 0;
+  cur.frame = frame;
+}
+
+void Merc2::fur_timer_mark(u64 frame) {
+  auto& cur = m_fur_q[frame % kFurRing];
+  if (cur.used == cur.q.size()) {
+    cur.q.resize(cur.q.size() + 16);
+    glGenQueries(16, &cur.q[cur.used]);
+  }
+  glQueryCounter(cur.q[cur.used++], GL_TIMESTAMP);
+}
+
+void Merc2::setup_fur_uniforms(SharedRenderState* render_state, const Uniforms& uniforms) {
+  const auto& gs = Gfx::g_global_settings;
+  // world down (-y) in camera space: row 1 of the world-to-camera rotation, negated
+  math::Vector3f down(0.f, 1.f, 0.f);
+  if (render_state->has_pc_data) {
+    const auto& r = frame_camera(*render_state).rot[1];
+    math::Vector3f d(-r.x(), -r.y(), -r.z());
+    if (d.squared_length() > 1e-6f) {
+      down = d.normalized();
+    }
+  }
+  glUniform4f(uniforms.fur_shape, (float)gs.fur_shells, gs.fur_length_m * 4096.f, gs.fur_gravity,
+              gs.fur_curl);
+  glUniform3f(uniforms.fur_down, down.x(), down.y(), down.z());
+  GLint sample_buffers = 0;
+  glGetIntegerv(GL_SAMPLE_BUFFERS, &sample_buffers);
+  glUniform4f(uniforms.fur_tex, gs.fur_density, gs.fur_root_dark, (float)gs.fur_view,
+              sample_buffers > 0 ? 1.f : 0.f);
 }
 
 void Merc2::switch_to_merc2(SharedRenderState* render_state) {
   render_state->shaders[ShaderId::MERC2].activate();
+  actor_shadows_set_uniforms(render_state, render_state->shaders[ShaderId::MERC2].id(), true);
+  actor_shadows_set_cave_uniforms(render_state, render_state->shaders[ShaderId::MERC2].id());
 
   // set uniforms that we know from render_state
   glUniform4f(m_merc_uniforms.fog_color, render_state->fog_color[0] / 255.f,
               render_state->fog_color[1] / 255.f, render_state->fog_color[2] / 255.f,
               render_state->fog_intensity / 255);
   glUniform1i(m_merc_uniforms.gfx_hack_no_tex, Gfx::g_global_settings.hack_no_tex);
+  SsaoRenderer::set_normal_mode(render_state->shaders[ShaderId::MERC2].id(), 2);
+  vista_atmo_foreground_uniforms(render_state, render_state->shaders[ShaderId::MERC2].id());
+  pbr_setup_merc(render_state, render_state->shaders[ShaderId::MERC2].id());
+  lava_field::setup_merc(render_state, render_state->shaders[ShaderId::MERC2].id());
 }
 
 void Merc2::switch_to_emerc(SharedRenderState* render_state) {
@@ -770,6 +1004,9 @@ void Merc2::switch_to_emerc(SharedRenderState* render_state) {
               render_state->fog_color[1] / 255.f, render_state->fog_color[2] / 255.f,
               render_state->fog_intensity / 255);
   glUniform1i(m_emerc_uniforms.gfx_hack_no_tex, Gfx::g_global_settings.hack_no_tex);
+  SsaoRenderer::set_normal_mode(render_state->shaders[ShaderId::EMERC].id(), 2);
+  vista_atmo_foreground_uniforms(render_state, render_state->shaders[ShaderId::EMERC].id());
+  actor_shadows_set_cave_uniforms(render_state, render_state->shaders[ShaderId::EMERC].id());
 }
 
 /*!
@@ -799,6 +1036,15 @@ void Merc2::render(DmaFollower& dma,
     // flush buckets to draws
     flush_draw_buckets(render_state, prof, stats);
   }
+}
+
+float Merc2::sun_share_of_rig(const VuLights& l) {
+  // the time-of-day rig (light group 0) has no third light; designed kits (hut interiors, NPCs)
+  // add a down light, so its share of lights 0 and 1 says how much of the rig is a kit
+  auto lum = [](const math::Vector4f& c) { return 0.299f * c.x() + 0.587f * c.y() + 0.114f * c.z(); };
+  const float key = lum(l.color0) + lum(l.color1);
+  const float t = std::clamp(lum(l.color2) / std::max(key, 1e-3f) / 0.15f, 0.f, 1.f);
+  return 1.f - t * t * (3.f - 2.f * t);
 }
 
 u32 Merc2::alloc_lights(const VuLights& lights) {
@@ -901,6 +1147,25 @@ void Merc2::handle_setup_dma(DmaFollower& dma, SharedRenderState* render_state) 
 
   // 8 qw's of low memory data
   memcpy(&m_low_memory, first.data + 16, sizeof(LowMemory));
+  if (render_state->eye.active) {
+    eye_camera_to_clip(m_low_memory.perspective, render_state->eye);
+  } else if (render_state->stereo_eye_x != 0.f) {
+    // bones are camera space: shift the eye in the projection (column 3 -= e * column 0)
+    m_low_memory.perspective[3] -= m_low_memory.perspective[0] * render_state->stereo_eye_x;
+  }
+
+  m_mv_cam = nullptr;
+  if (motion_vectors::frame().active && !m_shadow_views) {
+    // per eye: the previous projection is that eye's at the last display frame
+    auto& c = m_mv_cams[m_bucket * 2 + render_state->eye_slot];
+    if (render_state->display_tick != c.frame) {
+      c.prev_ok = c.frame + 1 == render_state->display_tick;
+      c.prev = c.cur;
+      c.frame = render_state->display_tick;
+    }
+    c.cur = m_low_memory;
+    m_mv_cam = &c;
+  }
 
   switch_to_merc2(render_state);
   set_uniform(m_merc_uniforms.hvdf_offset, m_low_memory.hvdf_offset);
@@ -1000,7 +1265,7 @@ void Merc2::handle_merc_chain(DmaFollower& dma,
  * Queue up some bones to be included in the bone buffer.
  * Returns the index of the first bone vector.
  */
-u32 Merc2::alloc_bones(int count, ShaderMercMat* data) {
+u32 Merc2::alloc_bones(int count, ShaderMercMat* data, const ShaderMercMat* prev) {
   u32 first_bone_vector = m_next_free_bone_vector;
   ASSERT(count * 8 + first_bone_vector <= MAX_SHADER_BONE_VECTORS);
 
@@ -1020,6 +1285,13 @@ u32 Merc2::alloc_bones(int count, ShaderMercMat* data) {
 
     for (int j = 0; j < 3; j++) {
       shader_mat[bv++] = skel_mat.nmat[j];
+    }
+    if (prev) {
+      // the vertex shader reads only X (tmat) of the previous bones
+      for (int j = 0; j < 4; j++) {
+        m_prev_bone_vector_buffer[m_next_free_bone_vector + j] = prev[i].tmat[j];
+      }
+      m_prev_bones_used = true;
     }
 
     m_next_free_bone_vector += 8;
@@ -1070,6 +1342,7 @@ Merc2::Draw* Merc2::try_alloc_envmap_draw(const tfrag3::MercDraw& mdraw,
   draw->index_count = mdraw.index_count;
   draw->mode = envmap_mode;
   draw->hash = 0;
+  draw->model_name = args.model_name;
   if (args.jak1_water_mode) {
     draw->mode.enable_ab();
     draw->mode.disable_depth_write();
@@ -1079,10 +1352,80 @@ Merc2::Draw* Merc2::try_alloc_envmap_draw(const tfrag3::MercDraw& mdraw,
   draw->light_idx = args.lights;
   draw->num_triangles = mdraw.num_triangles;
   draw->no_strip = mdraw.no_strip;
+  draw->fur_scale = 1.f;
+  if (args.emitter) {
+    draw->flags |= EMITTER;
+  }
   for (int i = 0; i < 4; i++) {
     draw->fade[i] = args.fade[i];
   }
   return draw;
+}
+
+namespace {
+/// Median sqrt(world area / UV area) over the triangles of `model`'s draws of texture `tex`:
+/// metres covered by one UV unit, so the fur strand spacing in metres is this / density.
+float merc_m_per_uv(const tfrag3::Level& level, const tfrag3::MercModel& model, s32 tex) {
+  const auto& verts = level.merc_data.vertices;
+  const auto& inds = level.merc_data.indices;
+  std::vector<float> ratios;
+  auto add_tri = [&](u32 a, u32 b, u32 c) {
+    if (a >= verts.size() || b >= verts.size() || c >= verts.size()) {
+      return;
+    }
+    const auto &va = verts[a], &vb = verts[b], &vc = verts[c];
+    const math::Vector3f e1 = (vb.pos_vec - va.pos_vec) / 4096.f;
+    const math::Vector3f e2 = (vc.pos_vec - va.pos_vec) / 4096.f;
+    const float world = e1.cross(e2).length();
+    const float uv = std::abs((vb.st[0] - va.st[0]) * (vc.st[1] - va.st[1]) -
+                              (vb.st[1] - va.st[1]) * (vc.st[0] - va.st[0]));
+    if (world > 1e-12f && uv > 1e-10f) {
+      ratios.push_back(std::sqrt(world / uv));
+    }
+  };
+  for (const auto& effect : model.effects) {
+    for (const auto& d : effect.all_draws) {
+      if (d.tree_tex_id != tex || d.eye_id != 0xff) {
+        continue;
+      }
+      const u32 end = std::min<u32>(d.first_index + d.index_count, inds.size());
+      if (d.no_strip) {
+        for (u32 i = d.first_index; i + 2 < end; i += 3) {
+          add_tri(inds[i], inds[i + 1], inds[i + 2]);
+        }
+        continue;
+      }
+      for (u32 i = d.first_index; i + 2 < end; i++) {
+        if (inds[i] != UINT32_MAX && inds[i + 1] != UINT32_MAX && inds[i + 2] != UINT32_MAX) {
+          add_tri(inds[i], inds[i + 1], inds[i + 2]);
+        }
+      }
+    }
+  }
+  if (ratios.empty()) {
+    return 0.f;
+  }
+  auto mid = ratios.begin() + ratios.size() / 2;
+  std::nth_element(ratios.begin(), mid, ratios.end());
+  return *mid;
+}
+}  // namespace
+
+float Merc2::fur_size_scale(const LevelData* lev, const tfrag3::MercModel* model, s32 tex) {
+  const auto& gs = Gfx::g_global_settings;
+  if (!gs.fur_enable || gs.fur_size_exp <= 0.f || !lev || !lev->level || !model || tex < 0 ||
+      !pbr_texture_fur(&lev->tex_class, tex)) {
+    return 1.f;
+  }
+  const auto key = std::make_tuple(lev->load_id, (const void*)model, tex);
+  auto it = m_fur_m_per_uv.find(key);
+  if (it == m_fur_m_per_uv.end()) {
+    it = m_fur_m_per_uv.emplace(key, merc_m_per_uv(*lev->level, *model, tex)).first;
+  }
+  if (it->second <= 0.f) {
+    return 1.f;
+  }
+  return std::clamp(std::pow(it->second / gs.fur_size_ref_m, gs.fur_size_exp), 1.f, 16.f);
 }
 
 Merc2::Draw* Merc2::alloc_normal_draw(const tfrag3::MercDraw& mdraw, const DrawArgs& args) {
@@ -1092,6 +1435,7 @@ Merc2::Draw* Merc2::alloc_normal_draw(const tfrag3::MercDraw& mdraw, const DrawA
   draw->index_count = mdraw.index_count;
   draw->mode = mdraw.mode;
   draw->hash = args.hash;
+  draw->model_name = args.model_name;
   if (args.jak1_water_mode) {
     draw->mode.set_ab(true);
     draw->mode.disable_depth_write();
@@ -1107,11 +1451,21 @@ Merc2::Draw* Merc2::alloc_normal_draw(const tfrag3::MercDraw& mdraw, const DrawA
   draw->light_idx = args.lights;
   draw->num_triangles = mdraw.num_triangles;
   draw->no_strip = mdraw.no_strip;
+  draw->fur_scale = fur_size_scale(args.level, args.model, draw->texture);
   if (args.ignore_alpha) {
     draw->flags |= IGNORE_ALPHA;
   }
   if (args.no_texture) {
     draw->flags |= NO_TEXTURE;
+  }
+  if (args.emitter) {
+    draw->flags |= EMITTER;
+  }
+  if (args.mv_prev) {
+    draw->flags |= MV_PREV;
+  }
+  if (args.mv_hud) {
+    draw->flags |= MV_HUD;
   }
   for (int i = 0; i < 4; i++) {
     draw->fade[i] = 0;
@@ -1183,6 +1537,9 @@ void Merc2::flush_draw_buckets(SharedRenderState* render_state,
                                ScopedProfilerNode& prof,
                                MercDebugStats* stats) {
   stats->num_draw_flush++;
+  if (render_state->merc_props && m_next_free_level_bucket && !m_shadow_views) {
+    stencil_marks::props(render_state, m_bucket, false);
+  }
   for (u32 li = 0; li < m_next_free_level_bucket; li++) {
     const auto& lev_bucket = m_level_draw_buckets[li];
     const auto* lev = lev_bucket.level;
@@ -1195,22 +1552,129 @@ void Merc2::flush_draw_buckets(SharedRenderState* render_state,
     glBindBuffer(GL_UNIFORM_BUFFER, m_bones_buffer);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, m_next_free_bone_vector * sizeof(math::Vector4f),
                     m_shader_bone_vector_buffer);
+    if (m_prev_bones_used && li == 0) {
+      glBindBuffer(GL_UNIFORM_BUFFER, m_prev_bones_buffer);
+      glBufferSubData(GL_UNIFORM_BUFFER, 0, m_next_free_bone_vector * sizeof(math::Vector4f),
+                      m_prev_bone_vector_buffer);
+    }
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
+    if (m_shadow_views) {
+      do_shadow_draws(render_state, lev_bucket.draws.data(), lev, lev_bucket.next_free_draw);
+      continue;
+    }
     switch_to_merc2(render_state);
     do_draws(lev_bucket.draws.data(), lev, lev_bucket.next_free_draw, m_merc_uniforms, prof, false,
              render_state);
     if (lev_bucket.next_free_envmap_draw) {
       switch_to_emerc(render_state);
+      inspect::write_mask(false);
       do_draws(lev_bucket.envmap_draws.data(), lev, lev_bucket.next_free_envmap_draw,
                m_emerc_uniforms, prof, true, render_state);
+      inspect::write_mask(true);
     }
   }
 
   m_next_free_light = 0;
   m_next_free_bone_vector = 0;
+  m_prev_bones_used = false;
   m_next_free_level_bucket = 0;
   m_next_mod_vtx_buffer = 0;
+}
+
+bool Merc2::is_light_emitter(const char* model_name) {
+  static constexpr const char* kEmitters[] = {"money-lod", "fuel-cell-lod", "hutlamp-lod",
+                                              "cavecrystal-lod", "dark-crystal-lod"};
+  for (const char* e : kEmitters) {
+    if (strncmp(model_name, e, strlen(e)) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool Merc2::casts_actor_shadow(const char* model_name) {
+  // emitters would also fill their own maps; windmill-one (all three beach instances): 29 m
+  // tall, the reach keeps only base fragments
+  return !is_light_emitter(model_name) && strncmp(model_name, "windmill-one-lod", 16) != 0;
+}
+
+void Merc2::render_shadow(DmaFollower& dma,
+                          SharedRenderState* render_state,
+                          ScopedProfilerNode& prof,
+                          const std::vector<ShadowView>& views) {
+  MercDebugStats stats;
+  m_shadow_views = &views;
+  handle_all_dma(dma, render_state, prof, &stats);
+  flush_draw_buckets(render_state, prof, &stats);
+  m_shadow_views = nullptr;
+}
+
+void Merc2::clear_shadow_records() {
+  m_shadow_actor_pos.clear();
+  m_have_shadow_lights = false;
+  m_have_shadow_player = false;
+}
+
+bool Merc2::shadow_first_lights(math::Vector3f* dir,
+                                math::Vector3f* color,
+                                math::Vector3f* amb) const {
+  if (!m_have_shadow_lights) {
+    return false;
+  }
+  // the three directions are the rows of the light matrix: light 0 is its first column
+  const auto& l = m_shadow_lights;
+  *dir = math::Vector3f(l.direction0.x(), l.direction1.x(), l.direction2.x());
+  *color = l.color0.xyz();
+  *amb = l.ambient.xyz();
+  return true;
+}
+
+void Merc2::do_shadow_draws(SharedRenderState* render_state,
+                            const Draw* draw_array,
+                            const LevelData* lev,
+                            u32 num_draws) {
+  auto& sh = render_state->shaders[ShaderId::MERC2_SHADOW];
+  sh.activate();
+  const GLuint id = sh.id();
+  const GLint mtx = GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "shadow_matrix");
+  const GLint ignore_alpha = GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "ignore_alpha");
+  glUniform1i(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "tex_T0"), 0);
+  const GLint caster_sun = GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "caster_sun");
+  glActiveTexture(GL_TEXTURE0);
+  glDepthFunc(GL_LESS);  // setup_merc_vao sets the frame's GEQUAL
+  for (size_t vi = 0; vi < m_shadow_views->size(); vi++) {
+    const auto& view = (*m_shadow_views)[vi];
+    const u32 view_bit = vi < 32 ? 1u << vi : 0u;
+    glBindFramebuffer(GL_FRAMEBUFFER, view.fbo);
+    glViewport(0, 0, view.size, view.size);
+    glUniformMatrix4fv(mtx, 1, GL_FALSE, view.cam_to_clip[0].data());
+    s32 last_tex = INT32_MIN;
+    for (u32 di = 0; di < num_draws; di++) {
+      const auto& draw = draw_array[di];
+      if (!draw.mode.get_depth_write_enable() || (m_caster_skip[draw.light_idx] & view_bit)) {
+        continue;
+      }
+      glBindVertexArray((draw.flags & MOD_VTX) ? draw.mod_vtx_buffer.vao : m_vao);
+      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, lev->merc_indices);
+      glBindBuffer(GL_ARRAY_BUFFER, lev->merc_vertices);
+      if (draw.texture != last_tex) {
+        if (draw.texture >= 0 && draw.texture < (int)lev->textures.size()) {
+          glBindTexture(GL_TEXTURE_2D, lev->textures.at(draw.texture));
+        } else if (draw.texture < 0 && (draw.texture & 0xffffff00) != 0xefffff00) {
+          glBindTexture(GL_TEXTURE_2D, m_anim_slot_array->at(-(draw.texture + 1)));
+        }
+        last_tex = draw.texture;
+      }
+      glUniform1i(ignore_alpha, (draw.flags & (IGNORE_ALPHA | NO_TEXTURE)) ? 1 : 0);
+      glUniform1f(caster_sun, 1.f - m_caster_cover[draw.light_idx]);
+      glBindBufferRange(GL_UNIFORM_BUFFER, 1, m_bones_buffer,
+                        sizeof(math::Vector4f) * draw.first_bone, 128 * sizeof(ShaderMercMat));
+      glDrawElements(draw.no_strip ? GL_TRIANGLES : GL_TRIANGLE_STRIP, draw.index_count,
+                     GL_UNSIGNED_INT, (void*)(sizeof(u32) * draw.first_index));
+    }
+  }
+  glBindVertexArray(m_vao);
 }
 
 void Merc2::do_draws(const Draw* draw_array,
@@ -1223,12 +1687,123 @@ void Merc2::do_draws(const Draw* draw_array,
   glBindVertexArray(m_vao);
   s32 last_tex = INT32_MIN;
   int last_light = -1;
+  const bool pbr = pbr_active(render_state) && uniforms.pbr_mat >= 0;
+  PbrDrawState pbr_draw;
+  // the program switch_to_merc2/emerc bound; a GL getter would stall the threaded driver
+  const bool known_prog = Gfx::perf_opt(PERF_OPT_GEOMETRY + 2) && uniforms.program;
+  auto current_program = [&]() {
+    GLint prog = (GLint)uniforms.program;
+    if (!known_prog) {
+      glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    }
+    return prog;
+  };
+  if (pbr) {
+    GLint prog = current_program();
+    pbr_draw.begin((GLuint)prog, &lev->tex_class, lev->pbr_maps.get());
+  }
   bool normal_vtx_buffer_bound = true;
 
+  const auto& gs = Gfx::g_global_settings;
+  const bool fur = !set_fade && gs.fur_enable && render_state->version == GameVersion::Jak1 &&
+                   uniforms.fur_on >= 0;
+  const bool fur_timing = fur && gs.ssao_gpu_timing;
+  if (fur) {
+    setup_fur_uniforms(render_state, uniforms);
+  }
+  if (fur_timing) {
+    fur_timer_begin_frame(render_state->frame_idx);
+  }
+
   bool fog_on = true;
+  // listed emissive textures (emissive_table) write their E, other depth-writing draws E = 0
+  // so the mask does not keep what was drawn behind them; merc2 program only
+  GLint em_loc = -1, em_unlit_loc = -1, em_mat_loc = -1;
+  bool em_on = false;
+  bool em_keep = false;
+  bool em_dirty = false;
+  // em_mat is set once the highlights have run, so the off path makes no extra call
+  static bool em_mat_used = false;
+  em_mat_used = em_mat_used || render_state->light_material;
+  int em_mat = em_mat_used ? -1 : 0;
+  if (render_state->emissive_mask && !set_fade && lev->level) {
+    GLint prog = current_program();
+    if ((GLuint)prog == render_state->shaders[ShaderId::MERC2].id()) {
+      em_loc = GLQ_LOC(PERF_OPT_GEOMETRY + 2, prog, "em_value");
+      em_unlit_loc = GLQ_LOC(PERF_OPT_GEOMETRY + 2, prog, "em_unlit");
+      em_mat_loc = GLQ_LOC(PERF_OPT_GEOMETRY + 2, prog, "em_mat");
+    }
+  }
+  if (render_state->light_material &&
+      (GLuint)current_program() == render_state->shaders[ShaderId::MERC2].id()) {
+    // props take the baked lights' highlight from the tile pass, the added ones from here
+    glUniform1i(GLQ_LOC(PERF_OPT_GEOMETRY + 2, current_program(), "llh_prop"),
+                render_state->merc_props ? 1 : 0);
+  }
+  GLint emitter_loc = -1;
+  GLint cover_loc = -1;
+  GLint rig_sun_loc = -1;
+  int emitter_on = -1;
+  if (render_state->shadow.active) {
+    GLint prog = current_program();
+    emitter_loc = GLQ_LOC(PERF_OPT_GEOMETRY + 2, prog, "merc_emitter");
+    cover_loc = GLQ_LOC(PERF_OPT_GEOMETRY + 2, prog, "shadow_cover");
+    rig_sun_loc = GLQ_LOC(PERF_OPT_GEOMETRY + 2, prog, "shadow_rig_sun");
+  }
+  GLint iw_loc = -1;
+  int iw_kind = 0;
+  if (!set_fade && inland_water::needs_setup(render_state, true)) {
+    GLint prog = current_program();
+    if ((GLuint)prog == render_state->shaders[ShaderId::MERC2].id()) {
+      iw_loc = inland_water::setup(render_state, (GLuint)prog, true, lev);
+    }
+  }
+  // motion vectors: object velocity into draw buffer 5 (merc2 draws into the frame only)
+  const auto& mvf = motion_vectors::frame();
+  bool mv = mvf.active && m_mv_cam && !set_fade && &uniforms == &m_merc_uniforms &&
+             uniforms.mv_on >= 0;
+  if (mv) {
+    GLint fb = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fb);
+    mv = (GLuint)fb == (GLuint)render_state->render_fb;
+  }
+  int mv_mode = -1;
+  bool mv_write = true;
+  if (mv) {
+    glUniformMatrix4fv(uniforms.mv_cam, 1, GL_FALSE, mvf.cam_reproj);
+    glUniformMatrix4fv(uniforms.mv_prev_persp, 1, GL_FALSE, &m_mv_cam->prev.perspective[0].x());
+    set_uniform(uniforms.mv_prev_hvdf, m_mv_cam->prev.hvdf_offset);
+    set_uniform(uniforms.mv_prev_fog, m_mv_cam->prev.fog);
+    glUniform2f(uniforms.mv_size, (float)mvf.fb_w, (float)mvf.fb_h);
+    SsaoRenderer::set_velocity_drawing(true);
+    glColorMaski(5, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+  }
+
+  GLint insp_prog = 0;
+  std::string insp_level;
+  if (inspect::active() && !set_fade) {
+    glGetIntegerv(GL_CURRENT_PROGRAM, &insp_prog);
+    insp_level = render_state->loader->name_of(lev);
+    if (insp_level.empty()) {
+      insp_level = "common";
+    }
+  }
 
   for (u32 di = 0; di < num_draws; di++) {
     auto& draw = draw_array[di];
+    if (insp_prog) {
+      inspect::DrawRecord rec;
+      rec.kind = inspect::MERC;
+      rec.level = insp_level;
+      rec.data = lev;
+      rec.draw = (int)di;
+      rec.tex = draw.texture;
+      rec.mode = draw.mode;
+      if (draw.model_name) {
+        rec.model = *draw.model_name;
+      }
+      inspect::set(insp_prog, inspect::add(std::move(rec)));
+    }
     if (draw.flags & MOD_VTX) {
       glBindVertexArray(draw.mod_vtx_buffer.vao);
       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, lev->merc_indices);
@@ -1243,6 +1818,50 @@ void Merc2::do_draws(const Draw* draw_array,
       }
     }
     glUniform1i(uniforms.ignore_alpha, draw.flags & DrawFlags::IGNORE_ALPHA);
+    if (emitter_loc >= 0) {
+      // emitter models and textures in the actor emissive table keep their own light
+      bool em_tex = false;
+      if (draw.texture >= 0 && lev->level && draw.texture < (int)lev->level->textures.size()) {
+        em_tex = emissive_table::find(lev->level->textures[draw.texture].combo_id) != nullptr;
+      }
+      const int on = (draw.flags & EMITTER) || em_tex ? 1 : 0;
+      if (on != emitter_on) {
+        emitter_on = on;
+        glUniform1i(emitter_loc, emitter_on);
+      }
+    }
+    if (em_loc >= 0) {
+      const emissive_table::Entry* light = nullptr;
+      if (draw.texture >= 0 && draw.texture < (int)lev->level->textures.size()) {
+        light = emissive_table::find(lev->level->textures[draw.texture].combo_id);
+      }
+      const bool write_em = light != nullptr || draw.mode.get_depth_write_enable() ||
+                            lava_field::merc_writes_emissive(render_state, &lev->tex_class, draw.texture);
+      // with the material on: unblended draws write it, depth-writing draws whose blend lands
+      // a = 1 write "none", other blended draws leave b, a alone (their alpha would blend it)
+      const bool blends = SsaoRenderer::draw_blends(draw.mode);
+      const int mat = !render_state->light_material ? 0
+                      : !blends                    ? 1
+                      : draw.mode.get_depth_write_enable() &&
+                              SsaoRenderer::blend_replaces_alpha(draw.mode)
+                          ? 2
+                          : 0;
+      const bool keep_mat = render_state->light_material && mat == 0;
+      if (write_em != em_on || keep_mat != em_keep || em_dirty) {
+        em_dirty = false;
+        em_on = write_em;
+        em_keep = keep_mat;
+        SsaoRenderer::emissive_draw_buffers(em_on, true, !em_keep);
+      }
+      glUniform1f(em_loc, light ? light->e : 0.f);
+      glUniform1f(em_unlit_loc, light ? 1.f - light->lights : 0.f);
+      if (em_mat_loc >= 0) {
+        if (mat != em_mat) {
+          em_mat = mat;
+          glUniform1i(em_mat_loc, em_mat);
+        }
+      }
+    }
 
     if (fog_on && !draw.mode.get_fog_enable()) {
       // on -> off
@@ -1282,6 +1901,16 @@ void Merc2::do_draws(const Draw* draw_array,
         fmt::print("Invalid draw.texture is {}, would have crashed.\n", draw.texture);
       }
       last_tex = draw.texture;
+      if (pbr) {
+        pbr_draw.set(draw.texture);
+      }
+      if (iw_loc >= 0) {
+        const int k = inland_water::merc_kind(render_state, lev, draw.texture);
+        if (k != iw_kind) {
+          iw_kind = k;
+          glUniform1i(iw_loc, iw_kind);
+        }
+      }
     }
 
     if ((int)draw.light_idx != last_light && !set_fade) {
@@ -1302,11 +1931,39 @@ void Merc2::do_draws(const Draw* draw_array,
       set_uniform(uniforms.light_color[1], m_lights_buffer[draw.light_idx].color1);
       set_uniform(uniforms.light_color[2], m_lights_buffer[draw.light_idx].color2);
       set_uniform(uniforms.light_ambient, m_lights_buffer[draw.light_idx].ambient);
+      if (cover_loc >= 0) {
+        glUniform1f(cover_loc, m_light_cover[draw.light_idx]);
+      }
+      if (rig_sun_loc >= 0) {
+        glUniform1f(rig_sun_loc, m_light_rig_sun[draw.light_idx]);
+      }
       last_light = draw.light_idx;
     }
 
     glUniform1i(uniforms.decal, draw.mode.get_decal());
     glUniform1i(uniforms.gfx_hack_no_tex, (draw.flags & NO_TEXTURE) != 0);
+
+    if (mv) {
+      // + 4: HUD, the object target's w is written negative (no motion blur)
+      const int mode = ((draw.flags & MV_PREV) ? 1 : 2) | ((draw.flags & MV_HUD) ? 4 : 0);
+      if (mode != mv_mode) {
+        glUniform1i(uniforms.mv_on, mode);
+        mv_mode = mode;
+      }
+      if (mode & 1) {
+        glBindBufferRange(GL_UNIFORM_BUFFER, 2, m_prev_bones_buffer,
+                          sizeof(math::Vector4f) * draw.first_bone, 128 * sizeof(ShaderMercMat));
+      }
+      // a = 1 makes plain alpha blending a replace; other blends and no depth write leave it
+      const bool write =
+          draw.mode.get_depth_write_enable() &&
+          (!SsaoRenderer::draw_blends(draw.mode) ||
+           draw.mode.get_alpha_blend() == DrawMode::AlphaBlend::SRC_DST_SRC_DST);
+      if (write != mv_write) {
+        glColorMaski(5, write, write, write, write);
+        mv_write = write;
+      }
+    }
 
     if (set_fade) {
       math::Vector4f fade =
@@ -1340,6 +1997,7 @@ void Merc2::do_draws(const Draw* draw_array,
       glDrawElements(draw.no_strip ? GL_TRIANGLES : GL_TRIANGLE_STRIP, draw.index_count,
                      GL_UNSIGNED_INT, (void*)(sizeof(u32) * draw.first_index));
       glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+      em_dirty = render_state->light_material;  // glColorMask reset output 2's mask too
 
     } else {
       setup_opengl_from_draw_mode(draw.mode, GL_TEXTURE0, use_mipmaps_for_filtering);
@@ -1349,7 +2007,48 @@ void Merc2::do_draws(const Draw* draw_array,
                         sizeof(math::Vector4f) * draw.first_bone, 128 * sizeof(ShaderMercMat));
       glDrawElements(draw.no_strip ? GL_TRIANGLES : GL_TRIANGLE_STRIP, draw.index_count,
                      GL_UNSIGNED_INT, (void*)(sizeof(u32) * draw.first_index));
+      if (fur && pbr_texture_fur(&lev->tex_class, draw.texture)) {
+        if (fur_timing) {
+          fur_timer_mark(render_state->frame_idx);
+        }
+        perf::Scope fur_scope(perf::Group::FUR);
+        glUniform1i(uniforms.fur_on, 1);
+        // strand edges become MSAA coverage; the target keeps alpha 1 as the base draw writes
+        glEnable(GL_SAMPLE_ALPHA_TO_COVERAGE);
+        glEnable(GL_SAMPLE_ALPHA_TO_ONE);
+        prof.add_draw_call();
+        prof.add_tri(draw.num_triangles * gs.fur_shells);
+        glUniform4f(uniforms.fur_shape, (float)gs.fur_shells,
+                    gs.fur_length_m * 4096.f * draw.fur_scale, gs.fur_gravity, gs.fur_curl);
+        // longer shells: root shading and face-on coverage shrink by the same factor
+        glUniform2f(uniforms.fur_body, gs.fur_root_dark / draw.fur_scale, 1.f / draw.fur_scale);
+        glDrawElementsInstanced(draw.no_strip ? GL_TRIANGLES : GL_TRIANGLE_STRIP, draw.index_count,
+                                GL_UNSIGNED_INT, (void*)(sizeof(u32) * draw.first_index),
+                                gs.fur_shells);
+        glDisable(GL_SAMPLE_ALPHA_TO_COVERAGE);
+        glDisable(GL_SAMPLE_ALPHA_TO_ONE);
+        glUniform1i(uniforms.fur_on, 0);
+        if (fur_timing) {
+          fur_timer_mark(render_state->frame_idx);
+        }
+        m_fur_draws_window++;
+      }
     }
+  }
+
+  if (em_on) {
+    SsaoRenderer::emissive_draw_buffers(false);
+  }
+  if (mv) {
+    glColorMaski(5, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glUniform1i(uniforms.mv_on, 0);
+    SsaoRenderer::set_velocity_drawing(false);
+  }
+  if (fur && render_state->frame_idx >= m_fur_log_frame + 240) {
+    lg::info("FUR: {} shelled draws in the last {} frames, {} shells", m_fur_draws_window,
+             render_state->frame_idx - m_fur_log_frame, gs.fur_shells);
+    m_fur_log_frame = render_state->frame_idx;
+    m_fur_draws_window = 0;
   }
 
   if (!normal_vtx_buffer_bound) {

@@ -1,0 +1,32 @@
+# Parallax self-shadow: the parallax close-ups (parallax-close.yaml) and the jungle temple
+# top (parallax.yaml), 4K, --play-look (temporal AA, FSR 3.1 at 100 %).
+# One instance; every shot carries its arm: off / moderate (option 43 1) / strong (43 2).
+# Probe pair first (stone wall off then strong): the runner aborts unless they differ.
+set: pom-shadow-001
+x-arms:
+  off: &off ["(pc-set-shadow-option 41 0)", "(pc-set-shadow-option 42 0)", "(pc-set-shadow-option 43 0)"]
+  moderate: &moderate ["(pc-set-shadow-option 41 0)", "(pc-set-shadow-option 42 0)", "(pc-set-shadow-option 43 1000000)"]
+  strong: &strong ["(pc-set-shadow-option 41 0)", "(pc-set-shadow-option 42 0)", "(pc-set-shadow-option 43 2000000)"]
+defaults:
+  resolution: [3840, 2160]
+  msaa: 2
+  settle_frames: 120
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - {name: probe-pom-off, continue: village1-hut, hour: 12, camera: {pos: [-430498.2, 44583.9, 324637.4], rot: [-0.918293, 0.0, 0.395902, 0.018426, 0.998916, 0.042738, -0.395473, 0.046541, -0.917298]}, goals_after_load: *off}
+  - {name: probe-pom-strong, continue: village1-hut, hour: 12, camera: {pos: [-430498.2, 44583.9, 324637.4], rot: [-0.918293, 0.0, 0.395902, 0.018426, 0.998916, 0.042738, -0.395473, 0.046541, -0.917298]}, goals_after_load: *strong}
+  - {name: village1-stonewall-close-off, continue: village1-hut, hour: 12, camera: {pos: [-430498.2, 44583.9, 324637.4], rot: [-0.918293, 0.0, 0.395902, 0.018426, 0.998916, 0.042738, -0.395473, 0.046541, -0.917298]}, goals_after_load: *off}
+  - {name: village1-stonewall-close-moderate, continue: village1-hut, hour: 12, camera: {pos: [-430498.2, 44583.9, 324637.4], rot: [-0.918293, 0.0, 0.395902, 0.018426, 0.998916, 0.042738, -0.395473, 0.046541, -0.917298]}, goals_after_load: *moderate}
+  - {name: village1-stonewall-close-strong, continue: village1-hut, hour: 12, camera: {pos: [-430498.2, 44583.9, 324637.4], rot: [-0.918293, 0.0, 0.395902, 0.018426, 0.998916, 0.042738, -0.395473, 0.046541, -0.917298]}, goals_after_load: *strong}
+  - {name: village1-sculptstone-low-off, continue: village1-hut, hour: 12, jak: hide, camera: {pos: [-535742.1, 48744.2, -73807.3], rot: [-0.586854, 0.0, 0.809693, 0.186379, 0.973147, 0.135085, -0.78795, 0.230184, -0.571095]}, goals_after_load: *off}
+  - {name: village1-sculptstone-low-moderate, continue: village1-hut, hour: 12, jak: hide, camera: {pos: [-535742.1, 48744.2, -73807.3], rot: [-0.586854, 0.0, 0.809693, 0.186379, 0.973147, 0.135085, -0.78795, 0.230184, -0.571095]}, goals_after_load: *moderate}
+  - {name: village1-sculptstone-low-strong, continue: village1-hut, hour: 12, jak: hide, camera: {pos: [-535742.1, 48744.2, -73807.3], rot: [-0.586854, 0.0, 0.809693, 0.186379, 0.973147, 0.135085, -0.78795, 0.230184, -0.571095]}, goals_after_load: *strong}
+  - {name: jungle-stonehenge-floor-graze-off, continue: jungle-start, hour: 12, camera: {pos: [1475994.4, 215486.5, -1118074.9], rot: [0.0, 0.0, 1.0, -0.5, 0.866025, 0.0, -0.866025, -0.5, 0.0]}, goals_after_load: *off}
+  - {name: jungle-stonehenge-floor-graze-moderate, continue: jungle-start, hour: 12, camera: {pos: [1475994.4, 215486.5, -1118074.9], rot: [0.0, 0.0, 1.0, -0.5, 0.866025, 0.0, -0.866025, -0.5, 0.0]}, goals_after_load: *moderate}
+  - {name: jungle-stonehenge-floor-graze-strong, continue: jungle-start, hour: 12, camera: {pos: [1475994.4, 215486.5, -1118074.9], rot: [0.0, 0.0, 1.0, -0.5, 0.866025, 0.0, -0.866025, -0.5, 0.0]}, goals_after_load: *strong}
+  - {name: jungle-temple-top-noon-off, continue: jungle-start, hour: 12, camera: {pos: [1462272.0, 462848.0, -974848.0], rot: [-0.7674, 0.0, -0.6411, 0.134, 0.9779, -0.1604, 0.627, -0.209, -0.7505]}, goals_after_load: *off}
+  - {name: jungle-temple-top-noon-moderate, continue: jungle-start, hour: 12, camera: {pos: [1462272.0, 462848.0, -974848.0], rot: [-0.7674, 0.0, -0.6411, 0.134, 0.9779, -0.1604, 0.627, -0.209, -0.7505]}, goals_after_load: *moderate}
+  - {name: jungle-temple-top-noon-strong, continue: jungle-start, hour: 12, camera: {pos: [1462272.0, 462848.0, -974848.0], rot: [-0.7674, 0.0, -0.6411, 0.134, 0.9779, -0.1604, 0.627, -0.209, -0.7505]}, goals_after_load: *strong}

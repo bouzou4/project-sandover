@@ -340,7 +340,7 @@
         ;; og:preserve-this modified for high fps
         (let ((f30-0 (* -0.025 (+ (-> self y-offset) (-> self y-travel))))
               (f28-0 (* -0.025 (- (-> self y-offset) (-> self y-travel)))))
-          (when (or (= (-> *pc-settings* target-fps) 60) ;; always run untouched if 60 FPS
+          (when (or (= (pc-game-fps) 60) ;; always run untouched if 60 FPS
                     (time-elapsed? (-> self state-time) (seconds 0.01666666)) ;; added for high-fps, gate riding like 60 fps
                     (-> self got-grow)) ;; don't gate grow recieve since grow send is gated
             (cond

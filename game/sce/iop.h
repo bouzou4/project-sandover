@@ -155,6 +155,9 @@ u32 GetSystemTimeLow();
 
 s32 CreateSema(SemaParam* param);
 s32 WaitSema(s32 sema);
+/// Debug: arm the IOP watchdog from SANDOVER_IOP_WATCHDOG; returns its limit in seconds, 0 if off.
+int StartWatchdogFromEnv(void (*extra)());
+int WatchdogSeconds();
 s32 SignalSema(s32 sema);
 s32 PollSema(s32 sema);
 

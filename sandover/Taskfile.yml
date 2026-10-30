@@ -1,0 +1,75 @@
+version: '3'
+
+# Sandover tasks. Run from anywhere with:  task -t sandover/Taskfile.yml <task>
+# Job count is always derived from the machine at run time, never hardcoded.
+
+dotenv:
+  - ../scripts/tasks/.env
+  - ../scripts/tasks/.env.default
+
+vars:
+  REPO_ROOT: '{{.ROOT_DIR}}/..'
+  BIN: './out/build/Release/bin'
+  PRESET: 'Release-windows-clang'
+  JOBS:
+    sh: 'n=${NUMBER_OF_PROCESSORS:-$(nproc 2>/dev/null || echo 4)}; j=$((n-2)); [ "$j" -lt 1 ] && j=1; echo "$j"'
+  # sccache is opt-in (ADR-0012): cold build is 1.8x slower with it on this toolchain, and
+  # ninja's incremental builds never call the launcher anyway. Set SANDOVER_SCCACHE=1
+  # before `task configure` to enable it. Superseded by ccache for cross-worktree work
+  # (ADR-0012 amendment): sccache hashes absolute paths, so it never hits across
+  # worktrees; kept here for anyone who wants a single-checkout launcher without setting
+  # up ccache's user-scope env vars.
+  SCCACHE_FLAGS:
+    sh: '[ "$SANDOVER_SCCACHE" = "1" ] && echo "-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache" || echo ""'
+  # ccache is opt-in (ADR-0012 amendment): unlike sccache, its base_dir setting rewrites
+  # absolute paths under a common ancestor before hashing, so it hits across worktrees.
+  # Set SANDOVER_CCACHE=1 before `task configure` to enable it. Requires CCACHE_BASEDIR /
+  # CCACHE_DIR / CCACHE_NOHASHDIR / CCACHE_SLOPPINESS set as *user* env vars first (see
+  # sandover/kb/howto/build-and-extract.md) — they are deliberately not set here, since a
+  # REPO_ROOT-relative default would give every worktree its own cache dir and defeat the
+  # whole point. If both SANDOVER_CCACHE and SANDOVER_SCCACHE are set, ccache wins.
+  # cached try-compile results (sandover/tools/sandover/buildseed.py): Release-windows-clang
+  # and a new build tree only; a stale group just reruns its checks
+  SEED_FLAGS:
+    sh: '[ "{{.PRESET}}" = "Release-windows-clang" ] && [ -f cmake/configure-seed.cmake ] && [ ! -f ../out/build/Release/CMakeCache.txt ] && echo "-C sandover/cmake/configure-seed.cmake" || echo ""'
+  LAUNCHER_FLAGS:
+    sh: '[ "$SANDOVER_CCACHE" = "1" ] && echo "-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache" || { [ "$SANDOVER_SCCACHE" = "1" ] && echo "-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache" || echo ""; }'
+
+env:
+  SANDOVER_ROOT: '{{.REPO_ROOT}}'
+  SANDOVER_DATA: '{{.REPO_ROOT}}/sandover/data'
+  SCCACHE_DIR: '{{.REPO_ROOT}}/sandover/data/sccache'
+  OPENGOAL_PROJ_PATH: '{{.REPO_ROOT}}'
+
+tasks:
+  configure:
+    desc: 'Generate the Release build tree (Ninja + clang; ccache if SANDOVER_CCACHE=1, else sccache if SANDOVER_SCCACHE=1)'
+    dir: '{{.REPO_ROOT}}'
+    cmds:
+      - 'cmake {{.SEED_FLAGS}} --preset={{.PRESET}} {{.LAUNCHER_FLAGS}}'
+
+  build:
+    desc: 'Build Release with ninja (jobs = logical threads - 2)'
+    dir: '{{.REPO_ROOT}}'
+    cmds:
+      - 'echo "building with {{.JOBS}} jobs"'
+      - 'ninja -C ./out/build/Release -j {{.JOBS}}'
+
+  extract:
+    desc: "Extract the game's assets from ./iso_data (levels only)"
+    dir: '{{.REPO_ROOT}}'
+    cmds:
+      - '{{.BIN}}/decompiler ./decompiler/config/$DECOMP_CONFIG ./iso_data ./decompiler_out --version $DECOMP_CONFIG_VERSION --config-override ''{"decompile_code": false, "levels_extract": true, "allowed_objects": []}'''
+
+  repl:
+    desc: 'Start the GOAL compiler REPL (run (mi) here before booting)'
+    dir: '{{.REPO_ROOT}}'
+    cmds:
+      - '{{.BIN}}/goalc --user-auto --game $GAME'
+
+  boot:
+    desc: 'Boot the compiled game in debug mode'
+    dir: '{{.REPO_ROOT}}'
+    cmds:
+      - '{{.BIN}}/gk -v --game $GAME -- -boot -fakeiso -debug'
+

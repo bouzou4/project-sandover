@@ -26,6 +26,28 @@ s16Output Synth::Tick() {
   return out;
 }
 
+void Synth::TickRouted(VoiceRouter& router) {
+  s16Output out{};
+
+  mVoices.remove_if([](std::shared_ptr<Voice>& v) { return v->Dead(); });
+  for (auto& v : mVoices) {
+    s16Output s = v->Run();
+    if (v->Owner() != 0 && router.Route(v->Owner(), s)) {
+      continue;
+    }
+    if (v->Role() != VoiceRole::Effect && router.RouteRole(v->Role(), s)) {
+      continue;
+    }
+    out += s;
+  }
+
+  out.left = ApplyVolume(out.left, mVolume.left.Get());
+  out.right = ApplyVolume(out.right, mVolume.right.Get());
+  router.EndSample(out, mVolume.left.Get());
+
+  mVolume.Run();
+}
+
 void Synth::AddVoice(std::shared_ptr<Voice> voice) {
   mVoices.emplace_front(voice);
 }

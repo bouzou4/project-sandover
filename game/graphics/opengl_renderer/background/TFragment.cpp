@@ -1,5 +1,15 @@
 #include "TFragment.h"
 
+#include "game/graphics/opengl_renderer/VistaHiZ.h"
+#include "game/graphics/opengl_renderer/GlQueries.h"
+#include "game/graphics/opengl_renderer/InspectRenderer.h"
+#include "game/graphics/opengl_renderer/LavaField.h"
+#include "game/graphics/opengl_renderer/Materials.h"
+#include "game/graphics/opengl_renderer/SsaoRenderer.h"
+#include "game/graphics/opengl_renderer/Swamp.h"
+#include "game/graphics/opengl_renderer/background/Caustics.h"
+#include "game/graphics/opengl_renderer/background/PaletteGlow.h"
+#include "game/graphics/opengl_renderer/buckets.h"
 #include "game/graphics/opengl_renderer/dma_helpers.h"
 
 #include "third-party/imgui/imgui.h"
@@ -151,6 +161,9 @@ void TFragment::render(DmaFollower& dma,
     setup_for_level(m_tree_kinds, level_name, render_state);
     TfragRenderSettings settings;
 
+    apply_stereo_eye(&m_pc_port_data.camera, render_state);
+    cave_dark_itimes(render_state, &m_pc_port_data);
+    caustic_itimes(render_state, &m_pc_port_data);
     settings.camera = m_pc_port_data.camera;
     settings.tree_idx = 0;
     if (render_state->occlusion_vis[m_level_id].valid) {
@@ -158,6 +171,7 @@ void TFragment::render(DmaFollower& dma,
     }
 
     update_render_state_from_pc_settings(render_state, m_pc_port_data);
+    m_pc_port_frame = render_state->frame_idx;
 
     auto t3prof = prof.make_scoped_child("t3");
     render_matching_trees(lod(), m_tree_kinds, settings, render_state, t3prof);
@@ -240,6 +254,30 @@ void TFragment::handle_initialization(DmaFollower& dma) {
          db_setup.vifcode1().immediate == (Buffer1_Start - Buffer0_Start));
 }
 
+const u8* TFragment::vista_hidden_draws(TreeCache& tree, const SharedRenderState* render_state) {
+  if (!m_level_data) {
+    return nullptr;
+  }
+  const char* filter = m_force_hide_filter;
+  if (!filter) {
+    if (!vista_hide_active(render_state, m_level_id)) {
+      return nullptr;
+    }
+    filter = active_vista_filter(render_state);
+  }
+  if (tree.vista_hidden.size() != tree.draws->size() || tree.vista_hidden_filter != filter) {
+    tree.vista_hidden_filter = filter;
+    tree.vista_hidden.assign(tree.draws->size(), 0);
+    for (size_t i = 0; i < tree.draws->size(); i++) {
+      s32 tex = tree.draws->at(i).tree_tex_id;
+      if (tex >= 0 && tex < (s32)m_level_data->textures.size()) {
+        tree.vista_hidden[i] = vista_name_matches(m_level_data->textures[tex].debug_name, filter);
+      }
+    }
+  }
+  return tree.vista_hidden.data();
+}
+
 std::string TFragData::print() const {
   std::string result;
   result += fmt::format("fog: {}\n", fog.to_string_aligned());
@@ -294,6 +332,7 @@ void TFragment::update_load(const std::vector<tfrag3::TFragmentTreeKind>& tree_k
         // glGenBuffers(1, &tree_cache.vertex_buffer);
         tree_cache.vertex_buffer = loader_data->tfrag_vertex_data[geom][tree_idx];
         tree_cache.vert_count = verts;
+        tree_cache.fr3_tree = (int)tree_idx;
         tree_cache.draws = &tree.draws;  // todo - should we just copy this?
         tree_cache.colors = &tree.colors;
         tree_cache.vis = &tree.bvh;
@@ -338,7 +377,7 @@ void TFragment::update_load(const std::vector<tfrag3::TFragmentTreeKind>& tree_k
 
         glGenTextures(1, &tree_cache.time_of_day_texture);
         glBindTexture(GL_TEXTURE_1D, tree_cache.time_of_day_texture);
-        glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, TIME_OF_DAY_COLOR_COUNT, 0, GL_RGBA,
+        glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, kCausticEnvOffset + TIME_OF_DAY_COLOR_COUNT, 0, GL_RGBA,
                      GL_UNSIGNED_INT_8_8_8_8, nullptr);
         glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -367,6 +406,8 @@ bool TFragment::setup_for_level(const std::vector<tfrag3::TFragmentTreeKind>& tr
     // not loaded
     m_has_level = false;
     m_textures = nullptr;
+    m_level_data = nullptr;
+    m_unbake = nullptr;
     m_level_name = "";
     discard_tree_cache();
     return false;
@@ -375,10 +416,16 @@ bool TFragment::setup_for_level(const std::vector<tfrag3::TFragmentTreeKind>& tr
   if (m_has_level && lev_data->load_id != m_load_id) {
     m_has_level = false;
     m_textures = nullptr;
+    m_level_data = nullptr;
     m_level_name = "";
     discard_tree_cache();
     return setup_for_level(tree_kinds, level, render_state);
   }
+  m_level_data = lev_data->level.get();
+  m_unbake = lev_data->unbake.get();
+  m_tex_class = &lev_data->tex_class;
+  m_tex_selflit = &lev_data->tex_selflit;
+  m_pbr_maps = lev_data->pbr_maps.get();
 
   m_load_id = lev_data->load_id;
 
@@ -427,7 +474,62 @@ void TFragment::render_tree(int geom,
   glTexSubImage1D(GL_TEXTURE_1D, 0, 0, tree.colors->color_count, GL_RGBA,
                   GL_UNSIGNED_INT_8_8_8_8_REV, m_color_result.data());
 
-  first_tfrag_draw_setup(settings.camera, render_state, ShaderId::TFRAG3);
+  const UnbakeTree* sun = nullptr;
+  if (geom == 0 && unbake_active(render_state, m_unbake) && tree.fr3_tree >= 0 &&
+      tree.fr3_tree < (int)m_unbake->tfrag.size() && m_unbake->tfrag[tree.fr3_tree].valid) {
+    sun = &m_unbake->tfrag[tree.fr3_tree];
+  }
+  const ShaderId shader_id = sun ? ShaderId::TFRAG3_SUN : ShaderId::TFRAG3;
+  first_tfrag_draw_setup(settings.camera, render_state, shader_id);
+  if (sun) {
+    unbake_set_uniforms(render_state, *m_unbake, settings.camera, unbake_texture(*sun));
+  }
+  if (geom == 0 && SsaoRenderer::normals_active() && m_unbake && tree.fr3_tree >= 0 &&
+      tree.fr3_tree < (int)m_unbake->tfrag.size() && m_unbake->tfrag[tree.fr3_tree].valid) {
+    unbake_bind_normals(render_state->shaders[shader_id].id(), m_unbake->tfrag[tree.fr3_tree]);
+  }
+  const bool emissive =
+      render_state->emissive_mask && m_my_id <= (int)jak1::BucketId::SHRUB_GENERIC_LEVEL1;
+  // actor shadows also read E, to keep shadows off emissive surfaces
+  const bool em_values =
+      emissive || (render_state->shadow.active && m_my_id <= (int)jak1::BucketId::SHRUB_GENERIC_LEVEL1);
+  if (em_values) {
+    const bool has =
+        geom == 0 && m_unbake && tree.fr3_tree >= 0 && tree.fr3_tree < (int)m_unbake->tfrag.size();
+    unbake_set_emissive_uniforms(render_state->shaders[shader_id].id(), m_unbake,
+                                 has ? &m_unbake->tfrag[tree.fr3_tree] : nullptr, settings.camera,
+                                 m_my_id >= 0);
+    if (emissive) {
+      SsaoRenderer::emissive_draw_buffers(true);
+    }
+  } else {
+    glUniform1i(GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[shader_id].id(), "em_on"), 0);
+  }
+  const GLint decal_loc =
+      sun ? GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[shader_id].id(), "decal")
+          : m_uniforms.decal;
+  water_note_background(render_state, m_unbake, settings.camera, m_level_name);
+  caustic_setup_tree(render_state, render_state->shaders[shader_id].id(), m_level_name,
+                     settings.camera.itimes, *tree.colors, tree.time_of_day_texture,
+                     CausticKind::TFRAG);
+  palette_glow_setup_tree(render_state, render_state->shaders[shader_id].id(), m_unbake,
+                          *tree.colors, tree.time_of_day_texture);
+  const bool pbr = pbr_active(render_state);
+  PbrDrawState pbr_draw;
+  if (pbr) {
+    const GLuint id = render_state->shaders[shader_id].id();
+    const bool has =
+        geom == 0 && m_unbake && tree.fr3_tree >= 0 && tree.fr3_tree < (int)m_unbake->tfrag.size();
+    pbr_setup_background(render_state, id, m_unbake,
+                         has ? &m_unbake->tfrag[tree.fr3_tree] : nullptr, settings.camera);
+    // the rain cover binds the heightfield from unit 0, the renderer convention between passes
+    glActiveTexture(GL_TEXTURE0);
+    swamp_setup_background(render_state, id, m_level_name);
+    lava_field::setup_background(render_state, id, m_level_name);
+    pbr_draw.begin(id, m_tex_class, m_pbr_maps);
+  }
+  SelfLitDraw selflit;
+  selflit.begin(render_state, render_state->shaders[shader_id].id(), m_tex_selflit);
 
   glBindVertexArray(tree.vao);
   glBindBuffer(GL_ARRAY_BUFFER, tree.vertex_buffer);
@@ -439,6 +541,9 @@ void TFragment::render_tree(int geom,
 
   cull_check_all_slow(settings.camera.planes, tree.vis->vis_nodes, settings.occlusion_culling,
                       m_cache.vis_temp.data());
+  if (m_my_id < 0 && render_state->vista_hiz && vista_hiz_applies(*tree.draws)) {
+    render_state->vista_hiz->cull(tree.vis->vis_nodes, m_cache.vis_temp.data());
+  }
 
   u32 total_tris;
   if (render_state->no_multidraw) {
@@ -454,9 +559,18 @@ void TFragment::render_tree(int geom,
   }
 
   prof.add_tri(total_tris);
+  const u8* vista_hidden = vista_hidden_draws(tree, render_state);
 
+  int hl_blend = -1;  // material_blend_guard
+  int depth_only = -1;
   for (size_t draw_idx = 0; draw_idx < tree.draws->size(); draw_idx++) {
+    if (vista_hidden && vista_hidden[draw_idx]) {
+      continue;
+    }
     const auto& draw = tree.draws->operator[](draw_idx);
+    if (pbr && pbr_texture_shaft(m_tex_class, draw.tree_tex_id)) {
+      continue;
+    }
     const auto& multidraw_indices = m_cache.multidraw_offset_per_stripdraw[draw_idx];
     const auto& singledraw_indices = m_cache.draw_idx_temp[draw_idx];
 
@@ -477,8 +591,33 @@ void TFragment::render_tree(int geom,
     } else {
       glBindTexture(GL_TEXTURE_2D, m_anim_slot_array->at(-(tex_idx + 1)));
     }
-    auto double_draw = setup_tfrag_shader(render_state, draw.mode, ShaderId::TFRAG3);
-    glUniform1i(m_uniforms.decal, draw.mode.get_decal() ? 1 : 0);
+    auto double_draw = setup_tfrag_shader(render_state, draw.mode, shader_id);
+    if (!bg_prepass_draw(render_state, draw.mode, double_draw,
+                         render_state->shaders[shader_id].id(), depth_only)) {
+      continue;
+    }
+    if (emissive && render_state->light_material) {
+      SsaoRenderer::material_blend_guard(render_state->shaders[shader_id].id(),
+                                         SsaoRenderer::draw_blends(draw.mode), true, hl_blend);
+    }
+    glUniform1i(decal_loc, draw.mode.get_decal() ? 1 : 0);
+    if (inspect::active()) {
+      inspect::DrawRecord rec;
+      rec.kind = inspect::TFRAG;
+      rec.level = m_level_name;
+      rec.geom = geom;
+      rec.tree = tree.fr3_tree;
+      rec.draw = (int)draw_idx;
+      rec.tex = draw.tree_tex_id;
+      rec.mode = draw.mode;
+      std::copy(settings.camera.itimes, settings.camera.itimes + 4, rec.itimes);
+      rec.cam_trans = settings.camera.trans;
+      inspect::set(render_state->shaders[shader_id].id(), inspect::add(std::move(rec)));
+    }
+    if (pbr) {
+      pbr_draw.set(tex_idx);
+    }
+    selflit.set(tex_idx);
     tree.tris_this_frame += draw.num_triangles;
     tree.draws_this_frame++;
 
@@ -492,16 +631,21 @@ void TFragment::render_tree(int geom,
                           &m_cache.multidraw_index_offset_buffer[multidraw_indices.first],
                           multidraw_indices.second);
     }
+    if (render_state->bg_prepass) {
+      continue;
+    }
 
     switch (double_draw.kind) {
       case DoubleDrawKind::NONE:
         break;
       case DoubleDrawKind::AFAIL_NO_DEPTH_WRITE:
         prof.add_draw_call();
-        glUniform1f(glGetUniformLocation(render_state->shaders[ShaderId::TFRAG3].id(), "alpha_min"),
-                    -10.f);
-        glUniform1f(glGetUniformLocation(render_state->shaders[ShaderId::TFRAG3].id(), "alpha_max"),
-                    double_draw.aref_second);
+        glUniform1f(
+            GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[shader_id].id(), "alpha_min"),
+            -10.f);
+        glUniform1f(
+            GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[shader_id].id(), "alpha_max"),
+            double_draw.aref_second);
         glDepthMask(GL_FALSE);
         if (render_state->no_multidraw) {
           glDrawElements(tree.draw_mode, singledraw_indices.second, GL_UNSIGNED_INT,
@@ -516,6 +660,9 @@ void TFragment::render_tree(int geom,
       default:
         ASSERT(false);
     }
+  }
+  if (emissive) {
+    SsaoRenderer::emissive_draw_buffers(false);
   }
   glBindVertexArray(0);
 }
@@ -554,7 +701,7 @@ void TFragment::render_matching_trees(int geom,
       tree.rendered_this_frame = true;
       settings_copy.tree_idx = i;
       render_tree(geom, settings_copy, render_state, prof);
-      if (tree.cull_debug) {
+      if (tree.cull_debug && !render_state->bg_prepass) {
         render_tree_cull_debug(settings_copy, render_state, prof);
       }
     }
@@ -566,6 +713,9 @@ void TFragment::discard_tree_cache() {
   for (int geom = 0; geom < GEOM_MAX; ++geom) {
     for (auto& tree : m_cached_trees[geom]) {
       if (tree.kind != tfrag3::TFragmentTreeKind::INVALID) {
+        glq::invalidate_state();
+        caustic_forget_texture(tree.time_of_day_texture);
+        palette_glow_forget(tree.time_of_day_texture);
         glBindTexture(GL_TEXTURE_1D, tree.time_of_day_texture);
         glDeleteTextures(1, &tree.time_of_day_texture);
         glDeleteBuffers(1, &tree.single_draw_index_buffer);
@@ -668,15 +818,15 @@ void TFragment::render_tree_cull_debug(const TfragRenderSettings& settings,
 
   render_state->shaders[ShaderId::TFRAG3_NO_TEX].activate();
   glUniformMatrix4fv(
-      glGetUniformLocation(render_state->shaders[ShaderId::TFRAG3_NO_TEX].id(), "camera"), 1,
-      GL_FALSE, settings.camera.camera[0].data());
-  glUniform4f(
-      glGetUniformLocation(render_state->shaders[ShaderId::TFRAG3_NO_TEX].id(), "hvdf_offset"),
-      settings.camera.hvdf_off[0], settings.camera.hvdf_off[1], settings.camera.hvdf_off[2],
-      settings.camera.hvdf_off[3]);
-  glUniform1f(
-      glGetUniformLocation(render_state->shaders[ShaderId::TFRAG3_NO_TEX].id(), "fog_constant"),
-      settings.camera.fog.x());
+      GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[ShaderId::TFRAG3_NO_TEX].id(), "camera"),
+      1, GL_FALSE, settings.camera.camera[0].data());
+  glUniform4f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[ShaderId::TFRAG3_NO_TEX].id(),
+                      "hvdf_offset"),
+              settings.camera.hvdf_off[0], settings.camera.hvdf_off[1], settings.camera.hvdf_off[2],
+              settings.camera.hvdf_off[3]);
+  glUniform1f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[ShaderId::TFRAG3_NO_TEX].id(),
+                      "fog_constant"),
+              settings.camera.fog.x());
   // glDisable(GL_DEPTH_TEST);
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_GEQUAL);

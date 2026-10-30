@@ -811,6 +811,7 @@
             ((= v1-0 'reset-follow)
              (set! v0-0 (if (handle->process (-> self drawable-target)) (reset-drawable-follow) (reset-follow))))
             ((= v1-0 'teleport)
+             (pc-set-motion-vectors 4 1)
              (cond
                ((and (logtest? (-> self master-options) 2) (handle->process (-> self drawable-target))) (reset-drawable-tracking))
                ((and *target* (logtest? (-> self master-options) 2)) (reset-target-tracking)))

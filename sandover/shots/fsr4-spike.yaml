@@ -1,0 +1,22 @@
+# FSR 4 spike (findings/2026-10-22-fsr4.md): FSR 3.1 and FSR 4 at 50 % against a native MSAA 8x
+# reference of the same camera, still and during a pan (the burst frames are compared pairwise).
+# Deterministic: no particles, wind or time-of-day effects, actors frozen. One instance.
+set: fsr4-spike
+defaults:
+  resolution: [3840, 2160]
+  msaa: 8
+  settle_frames: 120
+  effects: off
+  wind: off
+  particles: off
+  jak: show
+  actors: freeze
+  wait_vista: true
+  wait_log_timeout: 90
+shots:
+  - {name: still-ref-msaa8, continue: village1-hut, hour: 12, upscaler: msaa, render_scale: 1.0, camera: {pos: [-437452.8, 53248.0, 314163.2], rot: [-0.998642, 0.0, 0.052103, -0.008916, 0.985251, -0.170883, -0.051335, -0.171115, -0.983913]}}
+  - {name: still-fsr3-50, continue: village1-hut, hour: 12, upscaler: fsr3, render_scale: 0.5, camera: {pos: [-437452.8, 53248.0, 314163.2], rot: [-0.998642, 0.0, 0.052103, -0.008916, 0.985251, -0.170883, -0.051335, -0.171115, -0.983913]}}
+  - {name: still-fsr4-50, continue: village1-hut, hour: 12, upscaler: fsr4, render_scale: 0.5, camera: {pos: [-437452.8, 53248.0, 314163.2], rot: [-0.998642, 0.0, 0.052103, -0.008916, 0.985251, -0.170883, -0.051335, -0.171115, -0.983913]}}
+  - {name: pan-ref-msaa8, continue: village1-hut, hour: 12, upscaler: msaa, render_scale: 1.0, pan: {frames: 12, yaw_deg: 0.5}, camera: {pos: [-437452.8, 53248.0, 314163.2], rot: [-0.998642, 0.0, 0.052103, -0.008916, 0.985251, -0.170883, -0.051335, -0.171115, -0.983913]}}
+  - {name: pan-fsr3-50, continue: village1-hut, hour: 12, upscaler: fsr3, render_scale: 0.5, pan: {frames: 12, yaw_deg: 0.5}, camera: {pos: [-437452.8, 53248.0, 314163.2], rot: [-0.998642, 0.0, 0.052103, -0.008916, 0.985251, -0.170883, -0.051335, -0.171115, -0.983913]}}
+  - {name: pan-fsr4-50, continue: village1-hut, hour: 12, upscaler: fsr4, render_scale: 0.5, pan: {frames: 12, yaw_deg: 0.5}, camera: {pos: [-437452.8, 53248.0, 314163.2], rot: [-0.998642, 0.0, 0.052103, -0.008916, 0.985251, -0.170883, -0.051335, -0.171115, -0.983913]}}

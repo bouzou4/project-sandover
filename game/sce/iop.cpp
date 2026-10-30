@@ -1,5 +1,6 @@
 #include "iop.h"
 
+#include <cstdlib>
 #include <cstring>
 
 #include "common/util/Assert.h"
@@ -225,6 +226,18 @@ void SleepThread() {
 
 s32 CreateSema(SemaParam* param) {
   return iop->kernel.CreateSema(param->attr, param->option, param->init_count, param->max_count);
+}
+
+int StartWatchdogFromEnv(void (*extra)()) {
+  const char* v = std::getenv("SANDOVER_IOP_WATCHDOG");
+  if (v && std::atoi(v) > 0) {
+    iop->kernel.start_watchdog(std::atoi(v), extra);
+  }
+  return iop->kernel.watchdog_seconds();
+}
+
+int WatchdogSeconds() {
+  return iop->kernel.watchdog_seconds();
 }
 
 s32 WaitSema(s32 sema) {

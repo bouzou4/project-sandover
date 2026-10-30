@@ -2,10 +2,17 @@
 
 #include "background_common.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include "common/util/os.h"
 #include "common/util/simd_util.h"
 
+#include "game/graphics/opengl_renderer/ActorShadows.h"
 #include "game/graphics/opengl_renderer/BucketRenderer.h"
+#include "game/graphics/opengl_renderer/GlQueries.h"
+#include "game/graphics/opengl_renderer/Materials.h"
+#include "game/graphics/opengl_renderer/SsaoRenderer.h"
 #include "game/graphics/pipelines/opengl.h"
 
 DoubleDraw setup_opengl_from_draw_mode(DrawMode mode, u32 tex_unit, bool mipmap) {
@@ -84,6 +91,9 @@ DoubleDraw setup_opengl_from_draw_mode(DrawMode mode, u32 tex_unit, bool mipmap)
   } else {
     glDisable(GL_BLEND);
   }
+  // the normal target survives only replacing or plain alpha blending
+  SsaoRenderer::set_normal_write(!should_enable_blend ||
+                                 mode.get_alpha_blend() == DrawMode::AlphaBlend::SRC_DST_SRC_DST);
 
   if (mode.get_clamp_s_enable()) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -157,13 +167,65 @@ DoubleDraw setup_opengl_from_draw_mode(DrawMode mode, u32 tex_unit, bool mipmap)
 DoubleDraw setup_tfrag_shader(SharedRenderState* render_state, DrawMode mode, ShaderId shader) {
   auto draw_settings = setup_opengl_from_draw_mode(mode, GL_TEXTURE0, true);
   auto sh_id = render_state->shaders[shader].id();
-  if (auto u_id = glGetUniformLocation(sh_id, "alpha_min"); u_id != -1) {
+  if (auto u_id = GLQ_LOC(PERF_OPT_GEOMETRY + 2, sh_id, "alpha_min"); u_id != -1) {
     glUniform1f(u_id, draw_settings.aref_first);
   }
-  if (auto u_id = glGetUniformLocation(sh_id, "alpha_max"); u_id != -1) {
+  if (auto u_id = GLQ_LOC(PERF_OPT_GEOMETRY + 2, sh_id, "alpha_max"); u_id != -1) {
     glUniform1f(u_id, 10.f);
   }
   return draw_settings;
+}
+
+namespace {
+// 0: not in the prepass, 1: lays depth, 2: cuts the run
+int bg_prepass_class(const DrawMode& mode) {
+  if (!mode.get_zt_enable() || !mode.get_depth_write_enable() ||
+      (mode.get_at_enable() && mode.get_alpha_test() == DrawMode::AlphaTest::NEVER)) {
+    return 0;
+  }
+  const bool blends = SsaoRenderer::draw_blends(mode);
+  const auto test = mode.get_depth_test();
+  if (blends || test == GsTest::ZTest::ALWAYS) {
+    return 2;
+  }
+  return test == GsTest::ZTest::GEQUAL ? 1 : 0;
+}
+}  // namespace
+
+bool bg_prepass_draw(SharedRenderState* rs, const DrawMode& mode, const DoubleDraw& dd,
+                     GLuint program, int& last) {
+  const int c = bg_prepass_class(mode);
+  if (!rs->bg_prepass) {
+    if (c == 1 && rs->bg_prepass_no_writes) {
+      glDepthMask(GL_FALSE);
+    }
+    return true;
+  }
+  if (c == 2 && !(Gfx::g_global_settings.bg_prepass & BG_PREPASS_NO_CUT)) {
+    rs->bg_prepass_cut = true;
+  }
+  if (c != 1 || rs->bg_prepass_cut) {
+    return false;
+  }
+  const int v = dd.aref_first > 0.f ? 2 : 1;
+  if (v != last) {
+    glUniform1i(GLQ_LOC(PERF_OPT_GEOMETRY + 2, program, "bg_depth_only"), v);
+    last = v;
+  }
+  return true;
+}
+
+void bg_prepass_note(SharedRenderState* rs, const DrawMode& mode) {
+  if (bg_prepass_class(mode) == 2 && !(Gfx::g_global_settings.bg_prepass & BG_PREPASS_NO_CUT)) {
+    rs->bg_prepass_cut = true;
+  }
+}
+
+void bg_prepass_reset_programs(SharedRenderState* rs) {
+  for (auto id : {ShaderId::TFRAG3, ShaderId::TFRAG3_SUN, ShaderId::SHRUB}) {
+    const GLuint p = rs->shaders[id].id();
+    glProgramUniform1i(p, GLQ_LOC(PERF_OPT_GEOMETRY + 2, p, "bg_depth_only"), 0);
+  }
 }
 
 std::array<math::Vector4f, 4> make_new_cam_mat(const math::Vector4f cam_T_w[4],
@@ -228,16 +290,31 @@ std::array<math::Vector4f, 4> make_new_cam_mat(const math::Vector4f cam_T_w[4],
   return result;
 }
 
-void first_tfrag_draw_setup(const GoalBackgroundCameraData& settings,
+void first_tfrag_draw_setup(const GoalBackgroundCameraData& in_settings,
                             SharedRenderState* render_state,
                             ShaderId shader) {
+  const auto& gs = Gfx::g_global_settings;
+  const int fog_mode = render_state->vista_frame_fog;
+  GoalBackgroundCameraData pushed;
+  const GoalBackgroundCameraData* sp = &in_settings;
+  if (fog_mode == VISTA_FOG_PUSH_OUT) {
+    pushed = vista_fog_camera(in_settings, gs.vista_fog_end_m);
+    sp = &pushed;
+  }
+  const GoalBackgroundCameraData& settings = *sp;
   const auto& sh = render_state->shaders[shader];
   sh.activate();
   auto id = sh.id();
-  glUniform1i(glGetUniformLocation(id, "gfx_hack_no_tex"), Gfx::g_global_settings.hack_no_tex);
-  glUniform1i(glGetUniformLocation(id, "decal"), false);
-  glUniform1i(glGetUniformLocation(id, "tex_T0"), 0);
-  glUniformMatrix4fv(glGetUniformLocation(id, "camera"), 1, GL_FALSE, settings.camera[0].data());
+  glUniform1i(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "gfx_hack_no_tex"),
+              Gfx::g_global_settings.hack_no_tex);
+  glUniform1i(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "decal"), false);
+  glUniform1i(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "tex_T0"), 0);
+  glUniformMatrix4fv(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "camera"), 1, GL_FALSE,
+                     settings.camera[0].data());
+  SsaoRenderer::set_normal_mode(id, 1);
+  if (pbr_was_used()) {
+    glUniform1i(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "pbr_on"), 0);
+  }
 
   auto newcam =
       make_new_cam_mat(settings.rot, settings.perspective, settings.fog.x(), settings.hvdf_off.z());
@@ -262,18 +339,46 @@ void first_tfrag_draw_setup(const GoalBackgroundCameraData& settings,
   fmt::print("hvdf: {}\n", settings.hvdf_off.to_string_aligned());
   */
 
-  glUniformMatrix4fv(glGetUniformLocation(id, "pc_camera"), 1, GL_FALSE, newcam[0].data());
+  glUniformMatrix4fv(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "pc_camera"), 1, GL_FALSE,
+                     newcam[0].data());
+  actor_shadows_set_uniforms(render_state, id, false);
 
-  glUniform4f(glGetUniformLocation(id, "hvdf_offset"), settings.hvdf_off[0], settings.hvdf_off[1],
-              settings.hvdf_off[2], settings.hvdf_off[3]);
-  glUniform4f(glGetUniformLocation(id, "cam_trans"), settings.trans[0], settings.trans[1],
+  glUniform4f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "hvdf_offset"), settings.hvdf_off[0],
+              settings.hvdf_off[1], settings.hvdf_off[2], settings.hvdf_off[3]);
+  glUniform4f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "cam_trans"), settings.trans[0], settings.trans[1],
               settings.trans[2], settings.trans[3]);
-  glUniform1f(glGetUniformLocation(id, "fog_constant"), settings.fog.x());
-  glUniform1f(glGetUniformLocation(id, "fog_min"), settings.fog.y());
-  glUniform1f(glGetUniformLocation(id, "fog_max"), settings.fog.z());
-  glUniform4f(glGetUniformLocation(id, "fog_color"), render_state->fog_color[0] / 255.f,
+  glUniform1f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "fog_constant"), settings.fog.x());
+  glUniform1f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "fog_min"), settings.fog.y());
+  glUniform1f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "fog_max"), settings.fog.z());
+  const VistaNeighbourFog* nb =
+      fog_mode == VISTA_FOG_UNIFIED ? render_state->vista_nb_fog : nullptr;
+  const float* tint = nb ? nb->tint : nullptr;
+  glUniform4f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "fog_color"), render_state->fog_color[0] / 255.f,
               render_state->fog_color[1] / 255.f, render_state->fog_color[2] / 255.f,
               render_state->fog_intensity / 255);
+  // the shaders apply the tint by the share of the fog it owns (atmo_combine)
+  glUniform3f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "fog_tint"), tint ? tint[0] - 1.f : 0.f,
+              tint ? tint[1] - 1.f : 0.f, tint ? tint[2] - 1.f : 0.f);
+  // x: 1 on, 2 on and at least the game's fog; y: start (m), z: density (1/m), w: 1 / scale height
+  if (fog_mode == VISTA_FOG_UNIFIED) {
+    const float h = gs.vista_atmo_height_m;
+    const float density = gs.vista_atmo_density_per_km * (nb ? nb->density_scale : 1.f);
+    glUniform4f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "atmo"), gs.vista_fog_floor ? 2.f : 1.f,
+                gs.vista_atmo_start_m, density / 1000.f, h > 0.f ? 1.f / h : 0.f);
+    if (nb && nb->max_fog >= 0.f) {
+      // atmo_fog() tops out at 255 - fog_min
+      glUniform1f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "fog_min"),
+                  255.f * (1.f - std::min(nb->max_fog, 1.f)));
+    }
+    const float pzw = std::abs(settings.perspective[2][3]);
+    glUniform1f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "atmo_wscale"),
+                pzw > 0.f ? 1.f / (pzw * 4096.f) : 0.f);
+    vista_haze_uniforms(render_state, id, nb ? nb->haze_scale : 1.f);
+    render_state->atmo_set_shaders |= 1ull << (int)shader;
+  } else if (render_state->atmo_set_shaders & (1ull << (int)shader)) {
+    glUniform4f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, id, "atmo"), 0.f, 0.f, 0.f, 0.f);
+    render_state->atmo_set_shaders &= ~(1ull << (int)shader);
+  }
 }
 
 void interp_time_of_day_slow(const math::Vector<s32, 4> itimes[4],
@@ -815,15 +920,223 @@ u32 make_all_visible_index_list(std::pair<int, int>* group_out,
   return idx_buffer_ptr;
 }
 
+namespace {
+void apply_xr_eye(GoalBackgroundCameraData* cam, const EyeView& e) {
+  // rot[i][j]: camera coordinate j of world axis i; eye rot' = rot * R^T, trans' = trans + rot t
+  float m[3][3], mn[3][3];
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      m[i][j] = cam->rot[i][j];
+    }
+  }
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      mn[i][j] = m[i][0] * e.rot[j][0] + m[i][1] * e.rot[j][1] + m[i][2] * e.rot[j][2];
+    }
+  }
+  for (int i = 0; i < 3; i++) {
+    cam->trans[i] += m[i][0] * e.t[0] + m[i][1] * e.t[1] + m[i][2] * e.t[2];
+  }
+
+  // side planes (inside: n.p - d > -r): the eye's own frustum, not the game's (in XR the game's
+  // planes are already the whole head view)
+  const float tx = e.tan_x, ty = e.tan_y;
+  const float ix = 1.f / std::sqrt(1.f + tx * tx), iy = 1.f / std::sqrt(1.f + ty * ty);
+  const float eye_n[4][3] = {{-ix, 0.f, tx * ix}, {ix, 0.f, tx * ix}, {0.f, -iy, ty * iy},
+                             {0.f, iy, ty * iy}};
+  for (int k = 0; k < 4; k++) {
+    float d = 0.f;
+    for (int i = 0; i < 3; i++) {
+      const float nw = mn[i][0] * eye_n[k][0] + mn[i][1] * eye_n[k][1] + mn[i][2] * eye_n[k][2];
+      cam->planes[i][k] = nw;
+      d += nw * cam->trans[i];
+    }
+    cam->planes[3][k] = d;
+  }
+
+  eye_world_to_clip(cam->camera, cam->perspective, e);
+  for (auto& row : cam->perspective) {
+    row.x() *= e.fov_x;
+    row.y() *= e.fov_y;
+  }
+  // rot is the full world-to-camera matrix (row 3 the translation, etie reads all of it)
+  eye_world_to_camera(cam->rot, e);
+}
+}  // namespace
+
+void apply_stereo_eye(GoalBackgroundCameraData* cam, SharedRenderState* rs) {
+  auto& g = rs->game_camera;
+  for (int i = 0; i < 4; i++) {
+    g.planes[i] = cam->planes[i];
+    g.matrix[i] = cam->camera[i];
+    g.persp[i] = cam->perspective[i];
+    g.rot[i] = cam->rot[i];
+  }
+  g.pos = cam->trans;
+  g.hvdf_off = cam->hvdf_off;
+  g.fog = cam->fog;
+  g.valid = true;
+  if (rs->eye.active) {
+    apply_xr_eye(cam, rs->eye);
+    return;
+  }
+  const float eye_x = rs->stereo_eye_x;
+  if (eye_x == 0.f) {
+    return;
+  }
+  // camera x axis in world space is column 0 of the (row-vector) rotation
+  math::Vector3f right(cam->rot[0][0], cam->rot[1][0], cam->rot[2][0]);
+  math::Vector3f delta = right * eye_x;
+  for (int i = 0; i < 3; i++) {
+    cam->trans[i] += delta[i];
+  }
+  cam->camera[3] -= cam->perspective[0] * eye_x;
+  cam->rot[3].x() -= eye_x;
+  cam->planes[3] +=
+      cam->planes[0] * delta[0] + cam->planes[1] * delta[1] + cam->planes[2] * delta[2];
+}
+
+void cave_dark_itimes(const SharedRenderState* state, TfragPcPortData* data) {
+  const float f = state->shadow.bg_dark;
+  if (!state->shadow.active || f >= 1.f || strncmp(data->level_name, "darkcave", 8) != 0) {
+    return;
+  }
+  // slot 0: itimes[0] words 0 (r | g << 16) and 1 (b | a << 16), weight in each halfword's low byte
+  auto scale = [&](u32 hw) {
+    const u32 w = (u32)std::lround((hw & 0xff) * f);
+    return (hw & 0xff00) | std::min(w, 0xffu);
+  };
+  u32 w0 = (u32)data->camera.itimes[0][0], w1 = (u32)data->camera.itimes[0][1];
+  w0 = scale(w0 & 0xffff) | (scale(w0 >> 16) << 16);
+  w1 = scale(w1 & 0xffff) | (w1 & 0xffff0000u);  // alpha unscaled
+  data->camera.itimes[0][0] = (s32)w0;
+  data->camera.itimes[0][1] = (s32)w1;
+}
+
 void update_render_state_from_pc_settings(SharedRenderState* state, const TfragPcPortData& data) {
   if (!state->has_pc_data) {
     for (int i = 0; i < 4; i++) {
       state->camera_planes[i] = data.camera.planes[i];
       state->camera_matrix[i] = data.camera.camera[i];
+      state->camera_persp[i] = data.camera.perspective[i];
+      state->camera_rot[i] = data.camera.rot[i];
     }
     state->camera_pos = data.camera.trans;
     state->camera_hvdf_off = data.camera.hvdf_off;
     state->camera_fog = data.camera.fog;
     state->has_pc_data = true;
+  }
+}
+
+bool vista_hide_active(const SharedRenderState* render_state, int level_id) {
+  const auto& gs = Gfx::g_global_settings;
+  return level_id >= 0 && render_state->version == GameVersion::Jak1 && gs.vista_enable &&
+         render_state->vista_drawn && gs.vista_hide_standins &&
+         active_vista_filter(render_state)[0];
+}
+
+const char* active_vista_filter(const SharedRenderState* render_state) {
+  const auto& gs = Gfx::g_global_settings;
+  return gs.vista_neighbours ? render_state->vista_hide_filter.c_str() : gs.vista_hide;
+}
+
+bool vista_name_matches(const std::string& name, const char* filter) {
+  std::string_view f(filter);
+  const auto slash = name.rfind('/');
+  const std::string_view base = slash == std::string::npos
+                                    ? std::string_view(name)
+                                    : std::string_view(name).substr(slash + 1);
+  while (!f.empty()) {
+    auto comma = f.find(',');
+    auto tok = f.substr(0, comma);
+    if (!tok.empty() && tok[0] == '=') {
+      tok.remove_prefix(1);
+      if (!tok.empty() && (tok == name || tok == base)) {
+        return true;
+      }
+    } else if (!tok.empty() && name.find(tok) != std::string::npos) {
+      return true;
+    }
+    if (comma == std::string_view::npos) {
+      break;
+    }
+    f.remove_prefix(comma + 1);
+  }
+  return false;
+}
+
+void vista_haze_uniforms(const SharedRenderState* render_state, GLuint program, float scale) {
+  const auto& gs = Gfx::g_global_settings;
+  const float haze = gs.vista_neighbours ? gs.vista_haze_density_per_km * scale : 0.f;
+  glUniform4f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, program, "haze"), haze / 1000.f, gs.vista_haze_start_m,
+              gs.vista_haze_max, 0.f);
+  float hc[3];
+  for (int i = 0; i < 3; i++) {
+    hc[i] = std::min(render_state->fog_color[i] / 255.f * gs.vista_haze_tint[i], 1.f);
+  }
+  glUniform3f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, program, "haze_color"), hc[0], hc[1], hc[2]);
+}
+
+void vista_atmo_foreground_uniforms(const SharedRenderState* render_state, GLuint program) {
+  const auto& gs = Gfx::g_global_settings;
+  const bool on = render_state->vista_frame_fog == VISTA_FOG_UNIFIED;
+  const float h = gs.vista_atmo_height_m;
+  const float mode = on ? (gs.vista_fog_floor ? 2.f : 1.f) : 0.f;
+  glUniform4f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, program, "atmo"), mode, gs.vista_atmo_start_m,
+              gs.vista_atmo_density_per_km / 1000.f, h > 0.f ? 1.f / h : 0.f);
+  vista_haze_uniforms(render_state, program, 1.f);
+  const auto& r = render_state->camera_rot;
+  glUniform3f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, program, "atmo_up"), r[1][0], r[1][1], r[1][2]);
+  const auto& t = render_state->camera_pos;
+  glUniform3f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, program, "atmo_cam"), t[0], t[1], t[2]);
+}
+
+GoalBackgroundCameraData vista_fog_camera(const GoalBackgroundCameraData& in, float end_m) {
+  GoalBackgroundCameraData out = in;
+  const float pzw = in.perspective[2][3];
+  const float fog_min = in.fog.y();
+  const float fog_max = in.fog.z();
+  if (pzw == 0.f || fog_min == fog_max) {
+    return out;
+  }
+  // fog value is hvdf.w + pzw * z: fog_max at the start distance, fog_min at the end
+  const float start = (fog_max - in.hvdf_off.w()) / pzw;
+  const float end = end_m * 4096.f;
+  if (end <= start) {
+    return out;
+  }
+  const float new_pzw = (fog_min - fog_max) / (end - start);
+  const float r = new_pzw / pzw;
+  out.perspective[2][3] = new_pzw;
+  out.fog.x() *= r;
+  for (auto& row : out.camera) {
+    row.w() *= r;
+  }
+  out.hvdf_off.w() = fog_max - new_pzw * start;
+  return out;
+}
+
+bool ws_world_on(const SharedRenderState* rs) {
+  return rs->world_shadow.active && rs->world_shadow.world;
+}
+
+void SelfLitDraw::begin(const SharedRenderState* rs, GLuint program, const std::vector<u8>* tex) {
+  m_tex = ws_world_on(rs) ? tex : nullptr;
+  if (!m_tex) {
+    return;  // the shaders read ws_selflit only under the map
+  }
+  m_loc = GLQ_LOC(PERF_OPT_GEOMETRY + 2, program, "ws_selflit");
+  m_last = 0;
+  glUniform1i(m_loc, 0);
+}
+
+void SelfLitDraw::set(s32 tex) {
+  if (!m_tex) {
+    return;
+  }
+  const int v = tex >= 0 && tex < (s32)m_tex->size() ? (*m_tex)[tex] : 0;
+  if (v != m_last) {
+    glUniform1i(m_loc, v);
+    m_last = v;
   }
 }

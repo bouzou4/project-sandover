@@ -1,0 +1,183 @@
+# Lava rules verification (the picked look, `strong`, now the engine default): three lava
+# cameras as vanilla (original game: no look forms, the rig boots all off), A today (the play look,
+# lava rules off) and C `strong`, to compare against revision 6's C-strong-H1: only the dark band on
+# the canyon walls (lava-class crust darkened on walls) should change. The two
+# firecanyon-diag-*-racer-death shots at the end are run separately (--only); the B look is kept
+# for them. Run with the lava candidate materials (SANDOVER_MATERIALS / SANDOVER_PBR_MAPS =
+# $SANDOVER_DATA/materials/candidates/lava-materials.csv / lava-pbr-maps); vanilla has PBR off.
+# One instance (--parallel 1); vanilla first.
+# Noise pinned: particles off (steam, sparks); every shot's stage hook moves all game clocks to
+# 100000 s (rig-set-clock); B/C/D hold the lava clock at its mean (pc-set-lava 14), keeping the
+# mood's fades. The vanilla lava palette pulse itself is not pinnable from here.
+# Cameras, each from a captured frame (BUILD-RULES camera rule):
+# - firecanyon-canyon: lava-rules-002/firecanyon-canyon-*.png (revision 2):
+#   11 m over the road at (141, 42, -468) m looking down the canyon. Jak stays at the continue
+#   point (out of frame): placed on the road he sits on hotcoals and lava on the zoomer, overheats
+#   and dies during the hold (heat 3/s on hotcoals, 20/s on lava, death at 100;
+#   target-racer.gc:475-500), so each arm caught a different phase of the death (revision 5: the
+#   vanilla shot shows him thrown off the exploded zoomer, A after the respawn, B/C mid-death).
+# - lavatube-start: the lavatube-start continue camera, as lava-rules-001/
+#   lavatube-start-*.png (lava field, crust pillars, lavafall; Jak on the launch pad). Revision 2's
+#   offline-picked cavern camera faced a rock wall.
+# - village3-lake: the village3-start golden camera, as lava-rules-002/village3-lake-*.
+# Ogre is out of this round (its camera ended inside the boss model in revision 3).
+# Every arm sets the debug view off explicitly (pc-set-lava 10 0).
+# Each look is the 0018 session's toggles (the play look) minus HDR output.
+set: lava-rules
+looks:
+  V: &V  # vanilla, clocks pinned
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+  A: &A  # off
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-ssao-preset 1)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-lava (function int int none))'
+    - '(pc-set-lava 0 0)'
+    - '(pc-set-lava 5 0)'
+    - '(pc-set-lava 10 0)'
+  B: &B  # lava
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-ssao-preset 1)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-lava (function int int none))'
+    - '(pc-set-lava 1 600000)'
+    - '(pc-set-lava 2 600000)'
+    - '(pc-set-lava 3 300000)'
+    - '(pc-set-lava 4 550000)'
+    - '(pc-set-lava 11 600000)'
+    - '(pc-set-lava 12 150000)'
+    - '(pc-set-lava 0 1000000)'
+    - '(pc-set-lava 6 2000000)'
+    - '(pc-set-lava 7 22000000)'
+    - '(pc-set-lava 8 1000000)'
+    - '(pc-set-lava 9 500000)'
+    - '(pc-set-lava 13 500000)'
+    - '(pc-set-lava 5 1000000)'
+    - '(pc-set-lava 14 1000000)'
+    - '(pc-set-lava 10 0)'
+  C: &C  # strong
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-ssao-preset 1)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(define-extern pc-set-lava (function int int none))'
+    - '(pc-set-lava 1 2500000)'
+    - '(pc-set-lava 2 1000000)'
+    - '(pc-set-lava 3 300000)'
+    - '(pc-set-lava 4 550000)'
+    - '(pc-set-lava 11 1600000)'
+    - '(pc-set-lava 12 300000)'
+    - '(pc-set-lava 0 1000000)'
+    - '(pc-set-lava 6 4500000)'
+    - '(pc-set-lava 7 22000000)'
+    - '(pc-set-lava 8 1500000)'
+    - '(pc-set-lava 9 250000)'
+    - '(pc-set-lava 13 500000)'
+    - '(pc-set-lava 5 1000000)'
+    - '(pc-set-lava 14 1000000)'
+    - '(pc-set-lava 10 0)'
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 120
+  effects: on
+  wind: on
+  particles: off
+  jak: show
+shots:
+  - {name: firecanyon-canyon-vanilla, continue: firecanyon-start, hour: 18.16, camera: {pos: [577536.0, 172032.0, -1916928.0], rot: [-0.99863, 0.0, 0.052336, -0.010881, 0.978148, -0.207627, -0.051192, -0.207912, -0.976807]},
+     goals_after_load: *V}
+  - {name: lavatube-start-vanilla, continue: lavatube-start, hour: 12,
+     goals_after_load: *V}
+  - {name: village3-lake-vanilla, continue: village3-start, hour: 12,
+     goals_after_load: *V}
+  - {name: firecanyon-canyon-A-today, continue: firecanyon-start, hour: 18.16, camera: {pos: [577536.0, 172032.0, -1916928.0], rot: [-0.99863, 0.0, 0.052336, -0.010881, 0.978148, -0.207627, -0.051192, -0.207912, -0.976807]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: lavatube-start-A-today, continue: lavatube-start, hour: 12,
+     goals_after_load: *A, wait_vista: true}
+  - {name: village3-lake-A-today, continue: village3-start, hour: 12,
+     goals_after_load: *A, wait_vista: true}
+  - {name: firecanyon-canyon-C-strong, continue: firecanyon-start, hour: 18.16, camera: {pos: [577536.0, 172032.0, -1916928.0], rot: [-0.99863, 0.0, 0.052336, -0.010881, 0.978148, -0.207627, -0.051192, -0.207912, -0.976807]},
+     goals_after_load: *C, wait_vista: true}
+  - {name: lavatube-start-C-strong, continue: lavatube-start, hour: 12,
+     goals_after_load: *C, wait_vista: true}
+  - {name: village3-lake-C-strong, continue: village3-start, hour: 12,
+     goals_after_load: *C, wait_vista: true}
+  - {name: firecanyon-diag-A-racer-death, continue: firecanyon-start, hour: 18.16, jak_pos: [573440.0, 126976.0, -2015232.0], camera: {pos: [577536.0, 172032.0, -1916928.0], rot: [-0.99863, 0.0, 0.052336, -0.010881, 0.978148, -0.207627, -0.051192, -0.207912, -0.976807]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: firecanyon-diag-B-racer-death, continue: firecanyon-start, hour: 18.16, jak_pos: [573440.0, 126976.0, -2015232.0], camera: {pos: [577536.0, 172032.0, -1916928.0], rot: [-0.99863, 0.0, 0.052336, -0.010881, 0.978148, -0.207627, -0.051192, -0.207912, -0.976807]},
+     goals_after_load: *B, wait_vista: true}

@@ -1,5 +1,7 @@
 #include "DirectRenderer.h"
 
+#include <cstdlib>
+
 #include "common/dma/gs.h"
 #include "common/log/log.h"
 #include "common/util/Assert.h"
@@ -188,6 +190,15 @@ float u32_to_sc(u32 in) {
   return (flt - 0.5) * 16.0;
 }
 
+/*!
+ * GS draws assume an 8-bit target that saturates every write; keep that on the FP16 target.
+ * The sky gradient exceeds 1.0 and its cloud layer only darkens it back into range after the clamp.
+ */
+void DirectRenderer::set_saturate(SharedRenderState* render_state, ShaderId shader) {
+  const auto id = render_state->shaders[shader].id();
+  glUniform1i(glGetUniformLocation(id, "saturate_out"), render_state->hdr_target ? 1 : 0);
+}
+
 void DirectRenderer::lookup_textures_again(SharedRenderState* render_state) {
   for (int i = 0; i < TEXTURE_STATE_COUNT; i++) {
     if (m_buffered_tex_state_currently_bound[i]) {
@@ -238,6 +249,7 @@ void DirectRenderer::flush_pending(SharedRenderState* render_state, ScopedProfil
   if (m_debug_state.disable_texture) {
     // a bit of a hack, this forces the non-textured shader always.
     render_state->shaders[ShaderId::DIRECT_BASIC].activate();
+    set_saturate(render_state, ShaderId::DIRECT_BASIC);
     m_blend_state_needs_gl_update = true;
     m_prim_gl_state_needs_gl_update = true;
   }
@@ -255,6 +267,26 @@ void DirectRenderer::flush_pending(SharedRenderState* render_state, ScopedProfil
     glDepthFunc(GL_ALWAYS);
   }
 
+  // SANDOVER_XR_SKY_LOG: the sky's GS vertices and xr_gs state for the first eye frames
+  static const bool sky_log = std::getenv("SANDOVER_XR_SKY_LOG") != nullptr;
+  static int sky_log_left = 24;
+  if (sky_log && m_xr_at_infinity && render_state->eye.active && sky_log_left > 0) {
+    sky_log_left--;
+    GLint prog = 0, on = -1;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    glGetUniformiv(prog, glGetUniformLocation(prog, "xr_gs_on"), &on);
+    const auto& g = render_state->game_camera;
+    lg::info("[xr-sky] frame {} prog {} textured {} xr_gs_on {} dirs {} verts {} tex {} hvdf {} {} {} fog {}",
+             render_state->frame_idx, prog,
+             (int)render_state->shaders[ShaderId::DIRECT_BASIC_TEXTURED].id(), on, m_xr_dirs,
+             m_prim_buffer.vert_count, (int)m_prim_gl_state.texture_enable, g.hvdf_off.x(),
+             g.hvdf_off.y(), g.hvdf_off.z(), g.fog.x());
+    for (int i = 0; i < m_prim_buffer.vert_count && i < 48; i++) {
+      const auto& v = m_prim_buffer.vertices[i];
+      lg::info("[xr-sky]  v {} gs {:.2f} {:.2f} z {:.7f}", i, v.xyzf[0] * 4096.f,
+               v.xyzf[1] * 4096.f, v.xyzf[2]);
+    }
+  }
   glBindVertexArray(m_ogl.vao);
   // render!
   // update buffers:
@@ -286,7 +318,7 @@ void DirectRenderer::flush_pending(SharedRenderState* render_state, ScopedProfil
     }
     int offset = 0;
     while (offset < m_prim_buffer.vert_count) {
-      glDepthMask(GL_TRUE);
+      glDepthMask(m_no_depth_writes ? GL_FALSE : GL_TRUE);
       glUniform1f(m_uniforms.alpha_min, m_double_draw_aref);
       glUniform1f(m_uniforms.alpha_max, 10);
       glDrawArrays(GL_TRIANGLES, offset, n_batch);
@@ -356,6 +388,16 @@ void DirectRenderer::update_gl_prim(SharedRenderState* render_state) {
     }
 
     render_state->shaders[ShaderId::DIRECT_BASIC_TEXTURED].activate();
+    set_saturate(render_state, ShaderId::DIRECT_BASIC_TEXTURED);
+    {
+      auto sg = m_stereo_parallax ? stereo_gs_parallax(*render_state) : math::Vector2f(0.f, 0.f);
+      glUniform2f(glGetUniformLocation(render_state->shaders[ShaderId::DIRECT_BASIC_TEXTURED].id(),
+                                       "stereo_gs"),
+                  sg.x(), sg.y());
+      set_xr_gs_uniforms(render_state->shaders[ShaderId::DIRECT_BASIC_TEXTURED].id(), *render_state,
+                         m_stereo_parallax ? 1 : m_xr_dirs ? 3 : (m_xr_at_infinity ? 2 : 0),
+                         m_xr_dir_z);
+    }
     glUniform1f(glGetUniformLocation(render_state->shaders[ShaderId::DIRECT_BASIC_TEXTURED].id(),
                                      "alpha_min"),
                 alpha_min);
@@ -384,6 +426,9 @@ void DirectRenderer::update_gl_prim(SharedRenderState* render_state) {
 
   } else {
     render_state->shaders[ShaderId::DIRECT_BASIC].activate();
+    set_saturate(render_state, ShaderId::DIRECT_BASIC);
+    set_xr_gs_uniforms(render_state->shaders[ShaderId::DIRECT_BASIC].id(), *render_state,
+                       m_xr_dirs ? 3 : (m_xr_at_infinity ? 2 : 0), m_xr_dir_z);
   }
 
   if (state.aa_enable) {
@@ -548,7 +593,7 @@ void DirectRenderer::update_gl_test() {
     m_test_state_needs_double_draw = false;
   }
 
-  if (state.depth_writes && !alpha_trick_to_disable) {
+  if (state.depth_writes && !alpha_trick_to_disable && !m_no_depth_writes) {
     glDepthMask(GL_TRUE);
   } else {
     glDepthMask(GL_FALSE);
@@ -1207,6 +1252,36 @@ void DirectRenderer::handle_xyzf2_common(u32 x,
     flush_pending(render_state, prof);
   }
 
+  // XR sky directions: octahedral x, y (sky_tng draw-large-polygon), z bit 23 the marker
+  const bool dir = m_xr_at_infinity && (z & 0xff800000u) == 0x800000u;
+  if (dir != m_xr_dirs || (dir && (z & 0x1ffu) != m_xr_dir_z)) {
+    flush_pending(render_state, prof);
+    m_xr_dirs = dir;
+    m_xr_dir_z = z & 0x1ffu;
+    m_prim_buffer.raw_float = dir;
+    m_prim_gl_state_needs_gl_update = true;
+  }
+  if (dir) {
+    auto unorm = [](u32 v) { return (float)(v >> 16) / 65535.f * 2.f - 1.f; };
+    float u[3] = {unorm(x), unorm(y), 0.f};
+    u[2] = 1.f - std::abs(u[0]) - std::abs(u[1]);
+    if (u[2] < 0.f) {
+      const float ox = (1.f - std::abs(u[1])) * (u[0] >= 0.f ? 1.f : -1.f);
+      const float oy = (1.f - std::abs(u[0])) * (u[1] >= 0.f ? 1.f : -1.f);
+      u[0] = ox;
+      u[1] = oy;
+    }
+    const u32 code = (((z >> 9) & 0x3fffu) << 8) | f;
+    const float len = std::exp2((float)code / 32768.f - 64.f) /
+                      std::sqrt(u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
+    u[0] *= 256.f * len;
+    u[1] *= 256.f * len;
+    u[2] *= len;
+    memcpy(&x, &u[0], 4);
+    memcpy(&y, &u[1], 4);
+    memcpy(&z, &u[2], 4);
+    f = 0;
+  }
   m_prim_building.building_stq.at(m_prim_building.building_idx) = math::Vector<float, 3>(
       m_prim_building.st_reg.x(), m_prim_building.st_reg.y(), m_prim_building.Q);
   m_prim_building.building_rgba.at(m_prim_building.building_idx) = m_prim_building.rgba_reg;
@@ -1466,6 +1541,22 @@ void DirectRenderer::PrimitiveBuffer::push(const math::Vector<u8, 4>& rgba,
                                            bool use_uv) {
   auto& v = vertices[vert_count];
   v.rgba = rgba;
+  if (raw_float) {
+    for (int k = 0; k < 3; k++) {
+      const u32 b = vert[k];
+      memcpy(&v.xyzf[k], &b, 4);
+    }
+    v.xyzf[3] = (float)vert[3];
+    v.stq = stq;
+    v.tex_unit = unit;
+    v.tcc = tcc;
+    v.decal = decal;
+    v.fog_enable = fog_enable;
+    v.use_uv = use_uv;
+    v.scissor = scissor;
+    vert_count++;
+    return;
+  }
   v.xyzf[0] = (float)vert[0] / (float)UINT32_MAX;
   v.xyzf[0] += x_off;
   v.xyzf[1] = (float)vert[1] / (float)UINT32_MAX;

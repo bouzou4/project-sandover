@@ -1,6 +1,20 @@
 #include "Shrub.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include "common/log/log.h"
+
+#include "game/graphics/opengl_renderer/VistaHiZ.h"
+#include "game/graphics/opengl_renderer/GlQueries.h"
+#include "game/graphics/opengl_renderer/InspectRenderer.h"
+#include "game/graphics/opengl_renderer/LavaField.h"
+#include "game/graphics/opengl_renderer/Materials.h"
+#include "game/graphics/opengl_renderer/SsaoRenderer.h"
+#include "game/graphics/opengl_renderer/Swamp.h"
+#include "game/graphics/opengl_renderer/buckets.h"
+#include "game/graphics/opengl_renderer/background/Caustics.h"
+#include "game/graphics/opengl_renderer/background/PaletteGlow.h"
 
 Shrub::Shrub(const std::string& name, int my_id) : BucketRenderer(name, my_id) {
   m_color_result.resize(TIME_OF_DAY_COLOR_COUNT);
@@ -43,7 +57,10 @@ void Shrub::render(DmaFollower& dma, SharedRenderState* render_state, ScopedProf
   auto pc_port_data = dma.read_and_advance();
   ASSERT(pc_port_data.size_bytes == sizeof(TfragPcPortData));
   memcpy(&m_pc_port_data, pc_port_data.data, sizeof(TfragPcPortData));
+  apply_stereo_eye(&m_pc_port_data.camera, render_state);
   m_pc_port_data.level_name[11] = '\0';
+  cave_dark_itimes(render_state, &m_pc_port_data);
+  caustic_itimes(render_state, &m_pc_port_data);
 
   if (render_state->version >= GameVersion::Jak2) {
     // jak 2 proto visibility
@@ -105,6 +122,9 @@ void Shrub::update_load(const LevelData* loader_data) {
     for (auto& name : tree.proto_names) {
       m_trees[l_tree].proto_name_to_idx[name].push_back(i++);
     }
+    m_trees[l_tree].src = &tree;
+    m_trees[l_tree].chunks.clear();
+    m_trees[l_tree].draw_chunks.clear();
     m_trees[l_tree].colors = &tree.time_of_day_colors;
     m_trees[l_tree].index_data = tree.indices.data();
     glBindBuffer(GL_ARRAY_BUFFER, m_trees[l_tree].vertex_buffer);
@@ -153,7 +173,7 @@ void Shrub::update_load(const LevelData* loader_data) {
     glActiveTexture(GL_TEXTURE10);
     glGenTextures(1, &m_trees[l_tree].time_of_day_texture);
     glBindTexture(GL_TEXTURE_1D, m_trees[l_tree].time_of_day_texture);
-    glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, TIME_OF_DAY_COLOR_COUNT, 0, GL_RGBA,
+    glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, kCausticEnvOffset + TIME_OF_DAY_COLOR_COUNT, 0, GL_RGBA,
                  GL_UNSIGNED_INT_8_8_8_8, nullptr);
     glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -192,6 +212,10 @@ bool Shrub::setup_for_level(const std::string& level, SharedRenderState* render_
   }
 
   m_textures = &lev_data->textures;
+  m_unbake = lev_data->unbake.get();
+  m_tex_class = &lev_data->tex_class;
+  m_tex_selflit = &lev_data->tex_selflit;
+  m_pbr_maps = lev_data->pbr_maps.get();
   m_load_id = lev_data->load_id;
 
   if (m_level_name != level) {
@@ -211,6 +235,9 @@ bool Shrub::setup_for_level(const std::string& level, SharedRenderState* render_
 
 void Shrub::discard_tree_cache() {
   for (auto& tree : m_trees) {
+    glq::invalidate_state();
+    caustic_forget_texture(tree.time_of_day_texture);
+    palette_glow_forget(tree.time_of_day_texture);
     glBindTexture(GL_TEXTURE_1D, tree.time_of_day_texture);
     glDeleteTextures(1, &tree.time_of_day_texture);
     glDeleteBuffers(1, &tree.index_buffer);
@@ -219,6 +246,133 @@ void Shrub::discard_tree_cache() {
   }
 
   m_trees.clear();
+}
+
+void Shrub::build_chunks(Tree& tree) {
+  // a chunk ends before a strip that would stretch it past this extent (game units)
+  constexpr float kChunkExtent = 24.f * 4096.f;
+  const auto& verts = tree.src->unpacked.vertices;
+  const auto& inds = tree.src->indices;
+  tree.chunks.clear();
+  tree.draw_chunks.clear();
+  for (const auto& draw : *tree.draws) {
+    const u32 first_chunk = tree.chunks.size();
+    const u32 end = draw.first_index_index + draw.num_indices;
+    math::Vector3f lo, hi;
+    float max_strip = 0.f;
+    u32 chunk_start = draw.first_index_index;
+    bool open = false;
+    auto close = [&](u32 chunk_end) {
+      const math::Vector3f c = (lo + hi) * 0.5f;
+      const float r = (hi - lo).length() * 0.5f;
+      tree.chunks.push_back({math::Vector4f(c.x(), c.y(), c.z(), r), chunk_start,
+                             chunk_end - chunk_start, max_strip});
+    };
+    u32 i = draw.first_index_index;
+    while (i < end) {
+      // one strip: [i, j) plus its restart index
+      math::Vector3f slo(1e30f, 1e30f, 1e30f), shi(-1e30f, -1e30f, -1e30f);
+      u32 j = i;
+      for (; j < end && inds[j] != UINT32_MAX; j++) {
+        const auto& v = verts.at(inds[j]);
+        const math::Vector3f p(v.x, v.y, v.z);
+        slo = slo.min(p);
+        shi = shi.max(p);
+      }
+      const u32 next = j < end ? j + 1 : end;
+      const math::Vector3f sext = shi - slo;
+      const float strip = std::max({sext.x(), sext.y(), sext.z()});
+      if (j > i) {
+        if (open) {
+          const math::Vector3f nlo = lo.min(slo), nhi = hi.max(shi);
+          const math::Vector3f ext = nhi - nlo;
+          if (std::max({ext.x(), ext.y(), ext.z()}) > kChunkExtent) {
+            close(i);
+            chunk_start = i;
+            lo = slo;
+            hi = shi;
+            max_strip = strip;
+          } else {
+            lo = nlo;
+            hi = nhi;
+            max_strip = std::max(max_strip, strip);
+          }
+        } else {
+          chunk_start = i;
+          lo = slo;
+          hi = shi;
+          max_strip = strip;
+          open = true;
+        }
+      }
+      i = next;
+    }
+    if (open) {
+      close(end);
+    }
+    tree.draw_chunks.emplace_back(first_chunk, (u32)tree.chunks.size() - first_chunk);
+  }
+  tree.chunk_vis.resize(tree.chunks.size());
+}
+
+bool Shrub::make_culled_multidraws(Tree& tree,
+                                   const TfragRenderSettings& settings,
+                                   const SharedRenderState* render_state) {
+  if (!tree.src) {
+    return false;
+  }
+  if (tree.draw_chunks.size() != tree.draws->size()) {
+    build_chunks(tree);
+  }
+  if (m_cache.multidraw_count_buffer.size() < tree.chunks.size()) {
+    m_cache.multidraw_count_buffer.resize(tree.chunks.size());
+    m_cache.multidraw_index_offset_buffer.resize(tree.chunks.size());
+  }
+  // sub-pixel cut: chunks whose every strip spans under a pixel at 4K width or wider
+  const bool subpx = Gfx::perf_opt(PERF_OPT_VISTA + 3);
+  // perspective xx = x-pix / (x-ratio * d) with x-pix 256, d 1024 (math-camera.gc)
+  const float xx = std::abs(settings.camera.perspective[0].x());
+  const float x_ratio = xx > 0.f ? std::clamp(256.f / (xx * 1024.f), 0.1f, 5.f) : 5.f;
+  const float px_per_rad = 0.5f * std::max(render_state->render_fb_w, 3840) / x_ratio;
+  const math::Vector3f cam = settings.camera.trans.xyz();
+  const VistaHiZ* hiz =
+      m_my_id < 0 && render_state->vista_hiz && vista_hiz_applies(*tree.draws)
+          ? render_state->vista_hiz
+          : nullptr;
+  for (size_t c = 0; c < tree.chunks.size(); c++) {
+    const auto& ch = tree.chunks[c];
+    bool vis = sphere_in_view_ref(ch.bsphere, settings.camera.planes);
+    if (vis && subpx && px_per_rad > 0.f) {
+      const float d = (ch.bsphere.xyz() - cam).length() - ch.bsphere.w();
+      vis = d <= 0.f || ch.max_strip * px_per_rad >= d;
+    }
+    if (vis && hiz) {
+      vis = hiz->visible(ch.bsphere);
+    }
+    tree.chunk_vis[c] = vis;
+  }
+  u32 md = 0;
+  for (size_t d = 0; d < tree.draws->size(); d++) {
+    const auto [first, count] = tree.draw_chunks[d];
+    const u32 md_start = md;
+    u32 run_end = UINT32_MAX;  // index just past the last emitted range, for merging
+    for (u32 c = first; c < first + count; c++) {
+      if (!tree.chunk_vis[c]) {
+        continue;
+      }
+      const auto& ch = tree.chunks[c];
+      if (md > md_start && run_end == ch.first_index) {
+        m_cache.multidraw_count_buffer[md - 1] += ch.num_indices;
+      } else {
+        m_cache.multidraw_count_buffer[md] = ch.num_indices;
+        m_cache.multidraw_index_offset_buffer[md] = (void*)(ch.first_index * sizeof(u32));
+        md++;
+      }
+      run_end = ch.first_index + ch.num_indices;
+    }
+    m_cache.multidraw_offset_per_stripdraw[d] = {(int)md_start, (int)(md - md_start)};
+  }
+  return true;
 }
 
 void Shrub::render_all_trees(const TfragRenderSettings& settings,
@@ -295,6 +449,28 @@ void Shrub::render_tree(int idx,
                   GL_UNSIGNED_INT_8_8_8_8_REV, m_color_result.data());
 
   first_tfrag_draw_setup(settings.camera, render_state, ShaderId::SHRUB);
+  caustic_setup_tree(render_state, render_state->shaders[ShaderId::SHRUB].id(), m_level_name,
+                     settings.camera.itimes, *tree.colors, tree.time_of_day_texture,
+                     CausticKind::SHRUB);
+  palette_glow_setup_tree(render_state, render_state->shaders[ShaderId::SHRUB].id(), m_unbake,
+                          *tree.colors, tree.time_of_day_texture);
+  const bool pbr = pbr_active(render_state);
+  PbrDrawState pbr_draw;
+  if (pbr) {
+    const GLuint id = render_state->shaders[ShaderId::SHRUB].id();
+    pbr_setup_background(render_state, id, m_unbake, nullptr, settings.camera);
+    // the rain cover binds the heightfield from unit 0, the renderer convention between passes
+    glActiveTexture(GL_TEXTURE0);
+    swamp_setup_background(render_state, id, m_level_name);
+    lava_field::setup_background(render_state, id, m_level_name);
+    pbr_draw.begin(id, m_tex_class, m_pbr_maps);
+  }
+  SelfLitDraw selflit;
+  selflit.begin(render_state, render_state->shaders[ShaderId::SHRUB].id(), m_tex_selflit);
+  // highlight material only: shrubs leave the emissive mask's E as it is
+  const bool material =
+      render_state->light_material && m_my_id <= (int)jak1::BucketId::SHRUB_GENERIC_LEVEL1;
+  int hl_blend = -1;  // material_blend_guard sets the material output per draw
 
   glBindVertexArray(tree.vao);
   glBindBuffer(GL_ARRAY_BUFFER, tree.vertex_buffer);
@@ -310,14 +486,22 @@ void Shrub::render_tree(int idx,
   tree.perf.tod_time.add(setup_timer.getSeconds());
 
   int last_texture = -1;
+  int depth_only = -1;
+  bool em_on = false;
+  bool draw_em = false;  // this draw writes lava E (material on)
 
   tree.perf.cull_time.add(0);
   Timer index_timer;
+  bool culled = false;
   if (render_state->no_multidraw) {
     u32 idx_buffer_size = make_all_visible_index_list(
         m_cache.draw_idx_temp.data(), m_cache.index_temp.data(), *tree.draws, tree.index_data);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx_buffer_size * sizeof(u32), m_cache.index_temp.data(),
                  GL_STREAM_DRAW);
+  } else if ((m_my_id < 0 ? Gfx::perf_opt(PERF_OPT_VISTA + 1)
+                          : Gfx::perf_opt(PERF_OPT_GEOMETRY + 3)) &&
+             make_culled_multidraws(tree, settings, render_state)) {
+    culled = true;
   } else {
     make_all_visible_multidraws(m_cache.multidraw_offset_per_stripdraw.data(),
                                 m_cache.multidraw_count_buffer.data(),
@@ -350,13 +534,54 @@ void Shrub::render_tree(int idx,
       glBindTexture(GL_TEXTURE_2D, m_textures->at(draw.tree_tex_id));
       last_texture = draw.tree_tex_id;
     }
+    selflit.set((s32)draw.tree_tex_id);
+    if (pbr) {
+      pbr_draw.set((s32)draw.tree_tex_id);
+      const bool em = lava_field::shrub_writes_emissive(
+          render_state, pbr_texture_class(m_tex_class, (s32)draw.tree_tex_id));
+      if (material) {
+        draw_em = em;
+      } else if (em != em_on) {
+        em_on = em;
+        SsaoRenderer::emissive_draw_buffers(em);
+      }
+    }
 
     glUniform1i(m_uniforms.decal, draw.mode.get_decal() ? 1 : 0);
 
     auto double_draw = setup_tfrag_shader(render_state, draw.mode, ShaderId::SHRUB);
+    if (!bg_prepass_draw(render_state, draw.mode, double_draw,
+                         render_state->shaders[ShaderId::SHRUB].id(), depth_only)) {
+      continue;
+    }
+    if (material) {
+      SsaoRenderer::material_blend_guard(render_state->shaders[ShaderId::SHRUB].id(),
+                                         SsaoRenderer::draw_blends(draw.mode), draw_em, hl_blend);
+    }
+    if (inspect::active()) {
+      inspect::DrawRecord rec;
+      rec.kind = inspect::SHRUB;
+      rec.level = m_level_name;
+      rec.geom = 0;
+      rec.tree = idx;
+      rec.draw = (int)draw_idx;
+      rec.tex = (s32)draw.tree_tex_id;
+      rec.mode = draw.mode;
+      std::copy(settings.camera.itimes, settings.camera.itimes + 4, rec.itimes);
+      rec.cam_trans = settings.camera.trans;
+      inspect::set(render_state->shaders[ShaderId::SHRUB].id(), inspect::add(std::move(rec)));
+    }
 
     prof.add_draw_call();
-    prof.add_tri(draw.num_triangles);
+    if (culled) {
+      u64 n = 0;
+      for (int k = 0; k < multidraw_indices.second; k++) {
+        n += m_cache.multidraw_count_buffer[multidraw_indices.first + k];
+      }
+      prof.add_tri((int)(draw.num_triangles * n / std::max(draw.num_indices, 1u)));
+    } else {
+      prof.add_tri(draw.num_triangles);
+    }
 
     tree.perf.draws++;
 
@@ -369,6 +594,9 @@ void Shrub::render_tree(int idx,
                           &m_cache.multidraw_index_offset_buffer[multidraw_indices.first],
                           multidraw_indices.second);
     }
+    if (render_state->bg_prepass) {
+      continue;
+    }
 
     switch (double_draw.kind) {
       case DoubleDrawKind::NONE:
@@ -376,9 +604,11 @@ void Shrub::render_tree(int idx,
       case DoubleDrawKind::AFAIL_NO_DEPTH_WRITE:
         tree.perf.draws++;
         prof.add_draw_call();
-        glUniform1f(glGetUniformLocation(render_state->shaders[ShaderId::SHRUB].id(), "alpha_min"),
+        glUniform1f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[ShaderId::SHRUB].id(),
+                            "alpha_min"),
                     -10.f);
-        glUniform1f(glGetUniformLocation(render_state->shaders[ShaderId::SHRUB].id(), "alpha_max"),
+        glUniform1f(GLQ_LOC(PERF_OPT_GEOMETRY + 2, render_state->shaders[ShaderId::SHRUB].id(),
+                            "alpha_max"),
                     double_draw.aref_second);
         glDepthMask(GL_FALSE);
         if (render_state->no_multidraw) {
@@ -396,6 +626,9 @@ void Shrub::render_tree(int idx,
     }
   }
 
+  if (em_on || material) {
+    SsaoRenderer::emissive_draw_buffers(false);
+  }
   glBindVertexArray(0);
   tree.perf.draw_time.add(draw_timer.getSeconds());
   tree.perf.tree_time.add(tree_timer.getSeconds());

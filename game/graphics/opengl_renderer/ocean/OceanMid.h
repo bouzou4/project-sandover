@@ -10,6 +10,11 @@ class OceanMid {
   OceanMid();
   void run(DmaFollower& dma, SharedRenderState* render_state, ScopedProfilerNode& prof);
   void run_jak2(DmaFollower& dma, SharedRenderState* render_state, ScopedProfilerNode& prof);
+  /// Draws the mid ocean kept back while the water shading is on (see CommonOceanRenderer).
+  void flush_deferred(SharedRenderState* render_state, ScopedProfilerNode& prof) {
+    m_common_ocean_renderer.flush_mid_deferred(render_state, prof);
+  }
+  bool mid_pending() const { return m_common_ocean_renderer.mid_pending(); }
 
  private:
   void run_call0();

@@ -20,7 +20,6 @@ DisplayManager::DisplayManager(SDL_Window* window) : m_window(window) {
     // scales
     SetProcessDPIAware();
 #endif
-    update_curr_display_info();
     update_video_modes();
     // TODO - might be a good idea to end if no monitor is connected but...?
     // Load from file now (after initializing current window settings)
@@ -52,6 +51,10 @@ void DisplayManager::initialize_window_position_from_settings() {
     m_display_settings.window_xpos = 50;
     m_display_settings.window_ypos = 50;
     m_display_settings.save_settings();
+  }
+  if (m_current_display_modes.empty()) {
+    lg::error("[DISPLAY] No displays enumerated, cannot validate window position");
+    return;
   }
 
   SDL_Rect rect;
@@ -106,7 +109,7 @@ void DisplayManager::process_sdl_event(const SDL_Event& event) {
       case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
         // NOTE - if the user changes the window to a display that doesn't support the same
         // framerate we don't handle that
-        update_curr_display_info();
+        update_curr_display_info(active_sdl_display_id());
         break;
       case SDL_EVENT_WINDOW_MOUSE_ENTER:
         if (m_input_manager && m_input_manager.value()->auto_hiding_cursor()) {
@@ -122,7 +125,6 @@ void DisplayManager::process_sdl_event(const SDL_Event& event) {
     switch (event.display.type) {
       case SDL_EVENT_DISPLAY_ADDED:
       case SDL_EVENT_DISPLAY_REMOVED:
-        update_curr_display_info();
         update_video_modes();
         break;
       case SDL_EVENT_DISPLAY_ORIENTATION:
@@ -276,6 +278,10 @@ void DisplayManager::set_display_mode(game_settings::DisplaySettings::DisplayMod
       break;
     }
     case game_settings::DisplaySettings::DisplayMode::Borderless: {
+      if (m_current_display_modes.size() <= get_active_display_index()) {
+        lg::error("Display index out of range, cannot switch to borderless");
+        break;
+      }
       // Move the window to the correct display first
       SDL_Rect rect;
       const auto sdl_display_id =
@@ -372,29 +378,44 @@ void DisplayManager::set_display_id(int display_id) {
   m_display_settings.save_settings();
 }
 
-void DisplayManager::update_curr_display_info() {
+SDL_DisplayID DisplayManager::active_sdl_display_id() {
+  if (m_display_settings.display_id < 0 ||
+      m_display_settings.display_id >= (int)m_current_display_modes.size()) {
+    return 0;
+  }
+  return m_current_display_modes.at(m_display_settings.display_id).sdl_display_id;
+}
+
+int DisplayManager::find_display_index(SDL_DisplayID sdl_display_id) {
+  if (sdl_display_id == 0) {
+    return -1;
+  }
+  for (int i = 0; i < (int)m_current_display_modes.size(); i++) {
+    if (m_current_display_modes.at(i).sdl_display_id == sdl_display_id) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// `display_id` indexes m_current_display_modes, which skips displays SDL cannot read a mode for,
+// so resolve it by SDL display id rather than by position in SDL_GetDisplays.
+void DisplayManager::update_curr_display_info(SDL_DisplayID previous_sdl_display_id) {
   lg::info("[DISPLAY] Updating current display info");
   const auto current_sdl_display_id = SDL_GetDisplayForWindow(m_window);
   if (current_sdl_display_id == 0) {
     sdl_util::log_error("could not retrieve current window's sdl display id");
-    return;
   }
-  int num_displays = 0;
-  const auto display_ids = SDL_GetDisplays(&num_displays);
-  if (num_displays < 0 || !display_ids) {
-    sdl_util::log_error("could not retrieve sdl display ids");
-    return;
-  }
-  int display_index = -1;
-  for (int i = 0; i < num_displays; i++) {
-    if (current_sdl_display_id == display_ids[i]) {
-      display_index = i;
-      break;
-    }
-  }
+  int display_index = find_display_index(current_sdl_display_id);
   if (display_index == -1) {
-    sdl_util::log_error("could not retrieve current window's display index");
-    return;
+    if (current_sdl_display_id != 0) {
+      sdl_util::log_error("could not retrieve current window's display index");
+    }
+    display_index = find_display_index(previous_sdl_display_id);
+    if (display_index == -1) {
+      display_index = 0;
+    }
+    lg::warn("[DISPLAY] Falling back to display index {}", display_index);
   }
   m_display_settings.display_id = display_index;
   lg::info("[DISPLAY] current display index is {}", m_display_settings.display_id);
@@ -409,6 +430,7 @@ void DisplayManager::update_curr_display_info() {
 
 void DisplayManager::update_video_modes() {
   lg::info("[DISPLAY] Enumerating video modes");
+  const auto previous_sdl_display_id = active_sdl_display_id();
   int num_displays = 0;
   const auto display_ids = SDL_GetDisplays(&num_displays);
   if (num_displays < 0 || !display_ids) {
@@ -416,7 +438,7 @@ void DisplayManager::update_video_modes() {
     return;
   }
 
-  m_current_display_modes.clear();
+  std::vector<DisplayMode> display_modes;
   for (int i = 0; i < num_displays; i++) {
     SDL_DisplayID display_id = display_ids[i];
     const auto curr_mode = SDL_GetCurrentDisplayMode(display_id);
@@ -455,12 +477,19 @@ void DisplayManager::update_video_modes() {
     DisplayMode new_mode = {display_id,   display_name_str, curr_mode->format,
                             curr_mode->w, curr_mode->h,     curr_mode->refresh_rate,
                             orient};
-    m_current_display_modes.push_back(new_mode);
+    display_modes.push_back(new_mode);
     lg::info(
         "[DISPLAY]: Found monitor {}, currently set to {}x{}@{}hz. Format: {}, Orientation: {}",
         new_mode.display_name, new_mode.screen_width, new_mode.screen_height, new_mode.refresh_rate,
         new_mode.sdl_pixel_format, static_cast<int>(new_mode.orientation));
   }
+  // Can be empty mid mode switch; keep the previous list rather than losing every display.
+  if (display_modes.empty()) {
+    lg::warn("[DISPLAY] No display modes enumerated, keeping the previous list");
+  } else {
+    m_current_display_modes = std::move(display_modes);
+  }
+  update_curr_display_info(previous_sdl_display_id);
   update_resolutions();
 }
 
@@ -470,6 +499,7 @@ void DisplayManager::update_resolutions() {
   const auto active_display_index = get_active_display_index();
   if (active_display_index >= m_current_display_modes.size()) {
     lg::error("Unable to enumerate resolutions, cant retrieve display mode");
+    return;
   }
   const auto active_display_mode = m_current_display_modes.at(active_display_index);
   const auto active_refresh_rate = active_display_mode.refresh_rate;

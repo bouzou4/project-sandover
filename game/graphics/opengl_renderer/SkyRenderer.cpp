@@ -128,7 +128,9 @@ void SkyBlendHandler::draw_debug_window() {
 }
 
 SkyRenderer::SkyRenderer(const std::string& name, int my_id)
-    : BucketRenderer(name, my_id), m_direct_renderer("sky-direct", my_id, 100) {}
+    : BucketRenderer(name, my_id), m_direct_renderer("sky-direct", my_id, 100) {
+  m_direct_renderer.set_xr_at_infinity(true);
+}
 
 void SkyRenderer::render(DmaFollower& dma,
                          SharedRenderState* render_state,

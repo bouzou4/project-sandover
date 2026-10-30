@@ -1,0 +1,59 @@
+# Sun glints on snow, revision 4: sunlit snow sparkles with HDR glints that bloom, and fades
+# into a bright sheen along the sun's mirror path at range. Each shot is an 8-frame burst with a
+# slow camera move, so glints twinkle. Arms A master play look (glints off) / B1 / B2 (2.5x) / C original.
+# Forms go in ONE --goal-after-load string, in this order (the settings reapply only marks):
+#   A:  (sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply)
+#       (sandover-settings-update) (pc-set-pbr-param 32 0)
+#   B1: same first three, then (pc-set-pbr-param 32 1000000)
+#   B2: same first three, then (pc-set-pbr-param 32 2500000)
+#   C:  no forms (vanilla).
+# Needs the snow ground classed `snow` in the live materials table. The flat by the snapshot's Jak
+# is in the cliff's shadow late in the day (the 17.5 h sun, 19 degrees up toward -z, is blocked
+# by the cliff for the whole flat: geometry ray test), so the low-sun shots use the 7.5 h sun
+# (19 degrees up toward +z, palette slot 0, unblocked over the flat's east half).
+schema: 1
+set: snow-glints
+variants:
+  A: ["(sandover-settings-reset! (-> *pc-settings* sandover))", "(sandover-settings-reapply)", "(sandover-settings-update)", "(pc-set-pbr-param 32 0)"]
+  B1: ["(sandover-settings-reset! (-> *pc-settings* sandover))", "(sandover-settings-reapply)", "(sandover-settings-update)", "(pc-set-pbr-param 32 1000000)"]
+  B2: ["(sandover-settings-reset! (-> *pc-settings* sandover))", "(sandover-settings-reapply)", "(sandover-settings-update)", "(pc-set-pbr-param 32 2500000)"]
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 300
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+shots:
+  # context: the snow ground of runs/20260928-0934-play/0004 (14.54 h, sun 58 degrees up)
+  - name: snow-0004-glints
+    continue: snow-start
+    hour: 14.542
+    jak_pos: [4107151.75, 1026399.625, -13540062.0]
+    camera:
+      pos: [4148876.0, 1044947.1875, -13537616.0]
+      rot: [0.014056, -0.0000003, 0.999901, -0.141349, 0.989958, 0.001987, -0.98986, -0.141363, 0.013915]
+    pan: {frames: 8, move_m: [0.0004, 0.0, 0.03]}
+  # context: 1.6 m above the sunlit east half of the snow-03 flat, 15 m east of the snapshot's
+  # Jak, walking toward the 7.5 h sun, pitched 12 degrees down (the glitter path)
+  - name: snow-grazing-sun
+    continue: snow-start
+    hour: 7.5
+    jak: hide
+    jak_pos: [4107151.75, 1026399.625, -13540062.0]
+    camera:
+      pos: [4168591.7, 1033128.5, -13601502.0]
+      rot: [0.982557, 0.0, 0.185962, -0.038664, 0.978148, 0.204285, -0.181898, -0.207912, 0.961086]
+    pan: {frames: 8, move_m: [-0.0056, 0.0, 0.0295]}
+  # detail: 0.8 m above the same flat, 35 degrees down toward the 7.5 h sun; snow 1.0-4.1 m away
+  # (frame corners and centre ray-tested, all snow-03), individual glints readable
+  - name: snow-glints-close
+    continue: snow-start
+    hour: 7.5
+    jak: hide
+    jak_pos: [4107151.75, 1026399.625, -13540062.0]
+    camera:
+      pos: [4168591.7, 1029132.4, -13552350.0]
+      rot: [0.982557, 0.0, 0.185962, -0.106663, 0.819152, 0.563572, -0.152331, -0.573576, 0.804864]
+    pan: {frames: 8, move_m: [0.0147, 0.0, 0.0028]}

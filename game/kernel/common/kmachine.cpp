@@ -1,5 +1,9 @@
 #include "kmachine.h"
 
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstdlib>
 #include <random>
 
 #include "common/global_profiler/GlobalProfiler.h"
@@ -18,12 +22,14 @@
 #include "game/kernel/common/kernel_types.h"
 #include "game/kernel/common/kprint.h"
 #include "game/kernel/common/kscheme.h"
+#include "game/kernel/common/sandover/bridge.h"
 #include "game/mips2c/mips2c_table.h"
 #include "game/runtime.h"
 #include "game/sce/libcdvd_ee.h"
 #include "game/sce/libpad.h"
 #include "game/sce/libscf.h"
 #include "game/sce/sif_ee.h"
+#include "game/sound/sndshim.h"
 
 /*!
  * Where does OVERLORD load its data from?
@@ -425,14 +431,6 @@ void vif_interrupt_callback(int bucket_id) {
 
 u32 offset_of_s7() {
   return s7.offset;
-}
-
-inline bool symbol_to_bool(const u32 symptr) {
-  return symptr != s7.offset;
-}
-
-inline u64 bool_to_symbol(const bool val) {
-  return val ? static_cast<u64>(s7.offset) + true_symbol_offset(g_game_version) : s7.offset;
 }
 
 u64 pc_filter_debug_string(u32 str_ptr, u32 dist_ptr) {
@@ -1140,6 +1138,7 @@ void init_common_pc_port_functions(
   // Returns the current refresh rate of the currently selected monitor's display mode.
   make_func_symbol_func("pc-get-active-display-refresh-rate",
                         (void*)pc_get_active_display_refresh_rate);
+  register_sandover_bridge(make_func_symbol_func, BridgeScope::AllGames);
   // Returns size of window. Called from game thread
   make_func_symbol_func("pc-get-window-size", (void*)pc_get_window_size);
   // Returns scale of window. This is for DPI stuff.
@@ -1203,6 +1202,9 @@ void init_common_pc_port_functions(
   make_func_symbol_func("pc-set-collision-wireframe", (void*)pc_set_collision_wireframe);
   make_func_symbol_func("pc-set-collision", (void*)pc_set_collision);
   make_func_symbol_func("pc-set-gfx-hack", (void*)pc_set_gfx_hack);
+  if (g_game_version == GameVersion::Jak1) {
+    register_sandover_bridge(make_func_symbol_func, BridgeScope::Jak1);
+  }
 
   // -- OTHER --
   // Return the current OS as a symbol. Actually returns what it was compiled for!

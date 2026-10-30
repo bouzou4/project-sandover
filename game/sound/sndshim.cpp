@@ -1,5 +1,6 @@
 #include "sndshim.h"
 
+#include <atomic>
 #include <cstdio>
 
 #include "sdshim.h"
@@ -21,7 +22,18 @@ void snd_StartSoundSystem() {
   }
 }
 
+namespace {
+std::atomic<void (*)()> g_before_stop{nullptr};
+}
+
+void snd_SetBeforeStop(void (*fn)()) {
+  g_before_stop = fn;
+}
+
 void snd_StopSoundSystem() {
+  if (auto fn = g_before_stop.load()) {
+    fn();
+  }
   if (player) {
     player.reset();
   }
@@ -258,6 +270,12 @@ s32 snd_GetVoiceStatus(s32 voice) {
   return 0;
 }
 
+void snd_SetDialogVoice(u32 entry) {
+  if (auto& v = voices[((entry >> 1) & 0x1f) % kNVoices]) {
+    v->SetRole(snd::VoiceRole::Dialog);
+  }
+}
+
 void snd_keyOnVoiceRaw(u32 core, u32 voice_id) {
   if (voices[0]) {
     voices[0]->KeyOn();
@@ -302,5 +320,64 @@ void snd_RegisterPluginHandler(snd::PluginHandler handler) {
 void snd_SetGlobalExcite(u8 value) {
   if (player) {
     player->SetGlobalExcite(value);
+  }
+}
+
+void snd_SetSpatialMode(s32 mode) {
+  auto m = static_cast<snd::SpatialMode>(mode);
+  snd::g_spatial_mode_request = m;
+  if (player) {
+    player->SetSpatialMode(m);
+  }
+}
+
+s32 snd_GetSpatialMode() {
+  if (player) {
+    return static_cast<s32>(player->GetSpatialMode());
+  }
+  return static_cast<s32>(snd::g_spatial_mode_request);
+}
+
+void snd_SpatialSetNextPosition(s32 x, s32 y, s32 z) {
+  if (player) {
+    player->SetNextSoundPosition({(float)x, (float)y, (float)z});
+  }
+}
+
+void snd_SpatialSetPosition(s32 sound_handle, s32 x, s32 y, s32 z) {
+  if (player) {
+    player->SetSoundPosition(sound_handle, {(float)x, (float)y, (float)z});
+  }
+}
+
+void snd_SpatialSetListener(s32 x, s32 y, s32 z, s32 yaw_deg, bool mirror) {
+  if (player) {
+    player->SetListener({(float)x, (float)y, (float)z}, (float)yaw_deg, mirror);
+  }
+}
+
+void snd_SetAudioOutput(s32 output, const char* device) {
+  if (player) {
+    player->SetAudioOutput(static_cast<snd::AudioOutput>(output), device ? device : "");
+  }
+}
+
+bool snd_GetAudioStatus(snd::AudioStatus* out) {
+  if (!player) {
+    return false;
+  }
+  *out = player->GetAudioStatus();
+  return true;
+}
+
+void snd_StartSpeakerTest() {
+  if (player) {
+    player->StartSpeakerTest();
+  }
+}
+
+void snd_SpatialFlush() {
+  if (player) {
+    player->FlushSpatial();
   }
 }

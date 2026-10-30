@@ -18,10 +18,13 @@ typedef void (*FreeFun)(void*);
 namespace snd {
 class SoundBank;
 using BankHandle = SoundBank*;
+struct AudioStatus;
 };  // namespace snd
 
 void snd_StartSoundSystem();
 void snd_StopSoundSystem();
+// Runs at the start of snd_StopSoundSystem, before the Player is reset (joins the audio worker).
+void snd_SetBeforeStop(void (*fn)());
 s32 snd_GetTick();
 void snd_RegisterIOPMemAllocator(AllocFun alloc, FreeFun free);
 int snd_LockVoiceAllocator(bool block);
@@ -90,3 +93,17 @@ s32 snd_GetSoundUserData(snd::BankHandle block_handle,
 void snd_SetSoundReg(s32 sound_handle, s32 which, u8 val);
 s8 snd_GetSoundGroup(s32 sound_handle);
 void snd_RegisterPluginHandler(snd::PluginHandler handler);
+
+// Spatial audio (OpenAL backend). All are no-ops while the mode is off.
+// The overlord's stream voice (an sceSd voice entry) carries dialog: centre on surround outputs.
+void snd_SetDialogVoice(u32 entry);
+void snd_SetSpatialMode(s32 mode);
+s32 snd_GetSpatialMode();
+void snd_SpatialSetNextPosition(s32 x, s32 y, s32 z);
+void snd_SpatialSetPosition(s32 sound_handle, s32 x, s32 y, s32 z);
+void snd_SpatialSetListener(s32 x, s32 y, s32 z, s32 yaw_deg, bool mirror);
+void snd_SpatialFlush();
+// Audio menu: output (snd::AudioOutput) on an OpenAL device name ("" = Windows default).
+void snd_SetAudioOutput(s32 output, const char* device);
+bool snd_GetAudioStatus(snd::AudioStatus* out);
+void snd_StartSpeakerTest();

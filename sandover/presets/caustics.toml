@@ -1,0 +1,42 @@
+# Sunken caustics: the original's coarse per-vertex caustic loop (palette slots 4-7) made a
+# fine moving caustic web in the same places, from the same caustic light. Levels: those whose mood
+# runs update-mood-caustics (sunken, sunkenb; generated table CausticMoods.inc). Rides on the
+# class shading (Materials on), so the boot state stays vanilla. Engine side: Caustics.h/.cpp,
+# pbr_bg_vert/frag.glsl (cau_*). Energy on the rips: `uv run sandover-caustics stats`.
+# Rig: the forms of `sandover-preset apply caustics <name>` as --goal.
+#
+# [presets.<name>]
+#   mode       0 off (the original loop), 1 on
+#   cell_scale noise cell as a multiple of the level's own (CausticMoods.inc: per level and kind,
+#              the cell at which the noise decorrelates as the original's phase pattern does)
+#   loop_hz    visible loop rate (Hz); the original loops every 32 frames (1.875 Hz at 60 fps),
+#              Jak 2's caustics (update-mood-under) every 2 s; `web` takes Jak 2's
+#   drift_mps  slow drift of the two noise layers (m/s), so the loop never repeats exactly
+#   amp        share of the caustic light the web gathers into its lines, over web_mean: the term
+#              is envelope x 1.25 x amp x (C - mean C), at least minus the envelope; 1 / web_mean
+#              gathers all of it (no caustic light between the lines). Faded out where the
+#              original barely animates (relative swing under 0.1, caustics.py MASK_STRENGTH)
+#   web        0: soft blotches (C = unit noise); > 0: bright lines where the noise crosses zero,
+#              line half-width in noise standard deviations
+#   web_mean   spatial mean of the web term for this `web` (`sandover-caustics noise` measures it)
+# label/caption: one line each for the compare view
+
+[meta]
+schema = 1
+phase = "caustics"
+
+[presets.web]
+label = "web"
+caption = "soft rippling caustic light: three-quarters of the bake's caustic light gathered into wide bands, a 2 s loop"
+mode = 1
+cell_scale = 0.25
+loop_hz = 0.5
+drift_mps = 0.067
+amp = 1.411
+web = 0.9
+web_mean = 0.5315
+
+[presets.off]
+label = "A today"
+caption = "the original per-vertex caustic loop"
+mode = 0

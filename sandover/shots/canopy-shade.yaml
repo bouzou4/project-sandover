@@ -1,0 +1,122 @@
+# Canopy shade revision 2, cameras v2. Model: see kb/findings/2026-09-30-canopy-shade.md
+# section 3. A = today's play look (shadow option 11 = 0), B = canopy shade (11 = 1, 12-14 at the
+# engine defaults), C = the original game (no forms), shot first.
+# Cameras picked offline from the canopy map, the background glb (ray cast at an assumed 64 deg
+# FOV: nothing within 1.9 m, canopy and sky in the top third) and decompiler_out/jak1/entities/
+# jungle-actors.json: camera, Jak and the line between them 15 m or more from every moving or
+# hazardous actor (logtrap, babak, hopper, snake, darkvine, lurker machines, launchers, springbox,
+# periscopes ...), 3 m from orbs and crates; on jng-leafyground / jng-path ground above the river.
+# - boundary: 2 m over ground in the open at (274, -129) m looking +x, pitched up 6 deg, into the
+#   canopy; Jak 6.5 m ahead where the cover starts; top third 34% sky, 49% canopy. About 9% of
+#   the frame (right edge, below the horizon) is open sea: compare away from it.
+# - dense-path: 2 m over ground under full cover at (332, -210) m, looking (-x, +z), Jak 9 m ahead;
+#   top third 69% canopy.
+# 10:00 is the strongest case (the bake has no canopy shade with that sun); noon redistributes.
+# Offline B/A of the ground in view (3-25 m, 30 deg cone; jungle fit vertices):
+#   boundary noon mean 0.95 (p5 0.72, p95 1.15), 10:00 mean 0.84 (p5 0.55);
+#   dense-path noon mean 1.00 (p5 0.88, p95 1.12), 10:00 mean 0.92 (p5 0.77).
+# Bin canopy-shade-2, SANDOVER_GK_PROJ_PATH at worktrees/canopy-shade-2-root, SANDOVER_DATA set (maps).
+set: canopy-shade-003
+looks:
+  A: &A  # today (canopy shade off)
+    - '(pc-set-ssao-preset 1)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(pc-set-shadow-option 11 0)'
+  B: &B  # canopy shade
+    - '(pc-set-ssao-preset 1)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+    - '(pc-set-shadow-option 11 1000000)'
+    - '(pc-set-shadow-option 12 500000)'
+    - '(pc-set-shadow-option 13 800000)'
+    - '(pc-set-shadow-option 14 30000)'
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 120
+  effects: on
+  wind: off
+  particles: on
+  jak: show
+shots:
+  - {name: boundary-noon-C-vanilla, continue: jungle-start, hour: 12, jak_pos: [1149630.3, 90259.7, -528513.1],
+     camera: {pos: [1123006.3, 98835.9, -528513.1], rot: [0.0, 0.0, -1.0, -0.104528, 0.994522, 0.0, 0.994522, 0.104528, 0.0]}}
+  - {name: boundary-1000-C-vanilla, continue: jungle-start, hour: 10, jak_pos: [1149630.3, 90259.7, -528513.1],
+     camera: {pos: [1123006.3, 98835.9, -528513.1], rot: [0.0, 0.0, -1.0, -0.104528, 0.994522, 0.0, 0.994522, 0.104528, 0.0]}}
+  - {name: dense-path-noon-C-vanilla, continue: jungle-start, hour: 12, jak_pos: [1334657.3, 120169.3, -832408.8],
+     camera: {pos: [1360724.1, 124266.3, -858475.6], rot: [0.707107, 0.0, 0.707107, 0.049325, 0.997564, -0.049325, -0.705384, 0.069756, 0.705384]}}
+  - {name: dense-path-1000-C-vanilla, continue: jungle-start, hour: 10, jak_pos: [1334657.3, 120169.3, -832408.8],
+     camera: {pos: [1360724.1, 124266.3, -858475.6], rot: [0.707107, 0.0, 0.707107, 0.049325, 0.997564, -0.049325, -0.705384, 0.069756, 0.705384]}}
+  - {name: boundary-noon-A-today, continue: jungle-start, hour: 12, jak_pos: [1149630.3, 90259.7, -528513.1],
+     camera: {pos: [1123006.3, 98835.9, -528513.1], rot: [0.0, 0.0, -1.0, -0.104528, 0.994522, 0.0, 0.994522, 0.104528, 0.0]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: boundary-1000-A-today, continue: jungle-start, hour: 10, jak_pos: [1149630.3, 90259.7, -528513.1],
+     camera: {pos: [1123006.3, 98835.9, -528513.1], rot: [0.0, 0.0, -1.0, -0.104528, 0.994522, 0.0, 0.994522, 0.104528, 0.0]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: dense-path-noon-A-today, continue: jungle-start, hour: 12, jak_pos: [1334657.3, 120169.3, -832408.8],
+     camera: {pos: [1360724.1, 124266.3, -858475.6], rot: [0.707107, 0.0, 0.707107, 0.049325, 0.997564, -0.049325, -0.705384, 0.069756, 0.705384]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: dense-path-1000-A-today, continue: jungle-start, hour: 10, jak_pos: [1334657.3, 120169.3, -832408.8],
+     camera: {pos: [1360724.1, 124266.3, -858475.6], rot: [0.707107, 0.0, 0.707107, 0.049325, 0.997564, -0.049325, -0.705384, 0.069756, 0.705384]},
+     goals_after_load: *A, wait_vista: true}
+  - {name: boundary-noon-B-canopy, continue: jungle-start, hour: 12, jak_pos: [1149630.3, 90259.7, -528513.1],
+     camera: {pos: [1123006.3, 98835.9, -528513.1], rot: [0.0, 0.0, -1.0, -0.104528, 0.994522, 0.0, 0.994522, 0.104528, 0.0]},
+     goals_after_load: *B, wait_vista: true}
+  - {name: boundary-1000-B-canopy, continue: jungle-start, hour: 10, jak_pos: [1149630.3, 90259.7, -528513.1],
+     camera: {pos: [1123006.3, 98835.9, -528513.1], rot: [0.0, 0.0, -1.0, -0.104528, 0.994522, 0.0, 0.994522, 0.104528, 0.0]},
+     goals_after_load: *B, wait_vista: true}
+  - {name: dense-path-noon-B-canopy, continue: jungle-start, hour: 12, jak_pos: [1334657.3, 120169.3, -832408.8],
+     camera: {pos: [1360724.1, 124266.3, -858475.6], rot: [0.707107, 0.0, 0.707107, 0.049325, 0.997564, -0.049325, -0.705384, 0.069756, 0.705384]},
+     goals_after_load: *B, wait_vista: true}
+  - {name: dense-path-1000-B-canopy, continue: jungle-start, hour: 10, jak_pos: [1334657.3, 120169.3, -832408.8],
+     camera: {pos: [1360724.1, 124266.3, -858475.6], rot: [0.707107, 0.0, 0.707107, 0.049325, 0.997564, -0.049325, -0.705384, 0.069756, 0.705384]},
+     goals_after_load: *B, wait_vista: true}

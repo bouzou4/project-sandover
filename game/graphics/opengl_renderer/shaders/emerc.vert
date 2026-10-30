@@ -1,4 +1,6 @@
 #version 410 core
+SSAO_NORMAL_VERT
+INSPECT_VERT
 
 // merc vertex definition
 layout (location = 0) in vec3 position_in;
@@ -12,6 +14,8 @@ layout (location = 5) in uvec3 mats;
 uniform vec4 hvdf_offset;
 uniform vec4 fog_constants;
 
+ATMO_FOG_MERC_VERT
+ATMO_COMBINE_VERT
 uniform mat4 perspective_matrix;
 
 uniform vec4 fade;
@@ -19,6 +23,7 @@ uniform vec4 fade;
 // output
 out vec3 vtx_color;
 out vec2 vtx_st;
+out vec3 emerc_cpos;  // camera space, as merc2 shadow_cpos
 
 out float fog;
 
@@ -33,7 +38,9 @@ layout (std140) uniform ub_bones {
 };
 
 
+MERC_CLIP_AXIS_VERT
 void main() {
+  insp_vid = uint(gl_VertexID);
 
 
   vec4 p = vec4(position_in, 1);
@@ -56,6 +63,13 @@ void main() {
 
   float Q = fog_constants.x / transformed[3];
   fog = 255 - clamp(-transformed.w + hvdf_offset.w, fog_constants.y, fog_constants.z);
+  haze_f = 0.;
+  if (atmo.x > 0.) {
+    float af = atmo_fog(vtx_pos.xyz / vtx_pos.w, fog_constants.y);
+    haze_f = haze.z * (1. - exp(-haze.x * max(length(vtx_pos.xyz / vtx_pos.w) * (1. / 4096.) - haze.y, 0.)));
+    float tw;
+    fog = atmo.x > 1.5 ? atmo_combine(fog, af, haze_f, tw) : af;
+  }
 
   // emerc
   vec2 st_mod = st_in;
@@ -121,8 +135,24 @@ void main() {
   transformed.xyz *= transformed.w;
   transformed.y *= SCISSOR_ADJUST * HEIGHT_SCALE;
   gl_Position = transformed;
+  ssao_cpos = gl_Position.xyw;
+  ssao_vnrm = vec4(0.0);
+  if (ssao_nrm == 2) {
+    mat4 xb = bones[mats[0]].X * weights_in[0];
+    if (weights_in[1] > 0) {
+      xb += bones[mats[1]].X * weights_in[1];
+    }
+    if (weights_in[2] > 0) {
+      xb += bones[mats[2]].X * weights_in[2];
+    }
+    mat4 pxb = perspective_matrix * xb;
+    ssao_vnrm = vec4(ssao_clip_normal(merc_clip_axis(pxb[0]), merc_clip_axis(pxb[1]),
+                                      merc_clip_axis(pxb[2]), normal_in),
+                     1.0);
+  }
 
 
   vtx_color = fade.xyz;
+  emerc_cpos = vtx_pos.xyz / vtx_pos.w;
   vtx_st = st_mod;
 }

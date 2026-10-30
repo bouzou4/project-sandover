@@ -1,0 +1,34 @@
+# The wet shoreline: the swamp's wet rule outside the swamp, driven by height above the sea.
+# In every level with a sea (kWaterBodies body 0: training, village1, beach, jungle, misty,
+# village2; the swamp keeps its own look), shaded porous classes are wet in a band above the
+# game's ocean height (water_ocean_height): fully wet up to a third of the band, dry at its top,
+# the top edge following world noise; steep faces get half the band; off below the sea. Porosity is the swamp table
+# (stone, wood, cloth fully; foliage, organic less; metal little). No puddles, no rain rings.
+# The engine defaults (gfx.h shore_wet*) are this preset, so play needs no forms; `off` turns it
+# off for an A/B. Rig: the forms of `sandover-preset apply shore <shore|off>`. Engine side:
+# Swamp.cpp (swamp_setup_background), pbr_bg_frag.glsl (sw_shore_band). Rides on the class
+# shading (PBR on), so the boot state stays vanilla.
+#
+# [presets.<name>.wet]
+#   band_m   band height above the sea on flat ground (m); steep faces get half
+#   dark     brightness of fully porous surfaces at the water line in linear light, 0..1
+#            (the engine converts it for the display-encoded colour; the hue is kept, chroma +30%)
+#   film     water-film sun glint strength (thins toward the top of the band; no sky reflection;
+#            shaded by the world sun map)
+#   cell_m   world-noise cell of the band's upper edge (m)
+# caption    one line for the screening grid: what visibly differs, never parameters
+
+[meta]
+schema = 1
+phase = "shore"
+round = 1
+
+[presets.shore]
+label = "Wet shore"
+caption = "sand, rock and pilings darker with a thin water sheen just above the sea, dry above"
+
+[presets.shore.wet]
+band_m = 1.0
+dark = 0.72
+film = 0.5
+cell_m = 2.0

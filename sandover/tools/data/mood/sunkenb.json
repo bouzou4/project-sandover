@@ -1,0 +1,419 @@
+{
+ "level": "sunkenb",
+ "source": "goal_src/jak1/engine/gfx/mood/mood-tables.gc",
+ "mode": "cycle",
+ "fog": [
+  {
+   "fog_color": [
+    16.512,
+    26.112,
+    54.912,
+    128.0
+   ],
+   "fog_dists": [
+    262144.0,
+    1351680.0,
+    255.0,
+    0.0
+   ]
+  },
+  {
+   "fog_color": [
+    4.096,
+    15.744,
+    54.912,
+    128.0
+   ],
+   "fog_dists": [
+    262144.0,
+    1351680.0,
+    255.0,
+    0.0
+   ]
+  },
+  {
+   "fog_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fog_dists": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "fog_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fog_dists": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "fog_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fog_dists": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "fog_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fog_dists": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "fog_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fog_dists": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "fog_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fog_dists": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ ],
+ "quick_slot": null,
+ "indirect_binding": false,
+ "indirect_note": null,
+ "tables": {
+  "palette_interp": "*misty-palette-interp-table*",
+  "fog_interp": "*misty-palette-interp-table*",
+  "fog": "*sunken-mood-fog-table*"
+ },
+ "palette_interp": [
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.04,
+   "morph_end": 0.08
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.08,
+   "morph_end": 0.12
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.12,
+   "morph_end": 0.16
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.16,
+   "morph_end": 0.2
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.2,
+   "morph_end": 0.23
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.23,
+   "morph_end": 0.25
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.25,
+   "morph_end": 0.75
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.75,
+   "morph_end": 0.8
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.8,
+   "morph_end": 0.85
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.85,
+   "morph_end": 0.9
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.9,
+   "morph_end": 0.95
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.95,
+   "morph_end": 0.99
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.99,
+   "morph_end": 0.96
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.96,
+   "morph_end": 0.92
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.92,
+   "morph_end": 0.88
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.88,
+   "morph_end": 0.84
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.84,
+   "morph_end": 0.8
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.8,
+   "morph_end": 0.75
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.75,
+   "morph_end": 0.25
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.25,
+   "morph_end": 0.18
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.18,
+   "morph_end": 0.12
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.12,
+   "morph_end": 0.06
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.06,
+   "morph_end": 0.0
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.0,
+   "morph_end": 0.04
+  }
+ ],
+ "fog_interp": [
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.04,
+   "morph_end": 0.08
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.08,
+   "morph_end": 0.12
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.12,
+   "morph_end": 0.16
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.16,
+   "morph_end": 0.2
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.2,
+   "morph_end": 0.23
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.23,
+   "morph_end": 0.25
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.25,
+   "morph_end": 0.75
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.75,
+   "morph_end": 0.8
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.8,
+   "morph_end": 0.85
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.85,
+   "morph_end": 0.9
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.9,
+   "morph_end": 0.95
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.95,
+   "morph_end": 0.99
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.99,
+   "morph_end": 0.96
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.96,
+   "morph_end": 0.92
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.92,
+   "morph_end": 0.88
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.88,
+   "morph_end": 0.84
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.84,
+   "morph_end": 0.8
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.8,
+   "morph_end": 0.75
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.75,
+   "morph_end": 0.25
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.25,
+   "morph_end": 0.18
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.18,
+   "morph_end": 0.12
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.12,
+   "morph_end": 0.06
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.06,
+   "morph_end": 0.0
+  },
+  {
+   "snapshot1": 1,
+   "snapshot2": 0,
+   "morph_start": 0.0,
+   "morph_end": 0.04
+  }
+ ]
+}

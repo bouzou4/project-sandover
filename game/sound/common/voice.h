@@ -10,6 +10,9 @@
 
 namespace snd {
 
+/// What a voice carries, for the surround outputs' routing (Effect: the authored stereo mix).
+enum class VoiceRole : u8 { Effect = 0, Music = 1, Dialog = 2, Ambient = 3 };
+
 class Voice {
  public:
   enum class AllocationType {
@@ -73,6 +76,12 @@ class Voice {
 
   void Stop() { mADSR.Stop(); }
 
+  // Sound handle that started this voice (0: none); the spatial backend routes by it.
+  void SetOwner(u32 owner) { mOwner = owner; }
+  u32 Owner() const { return mOwner; }
+  void SetRole(VoiceRole role) { mRole = role; }
+  VoiceRole Role() const { return mRole; }
+
  private:
   union ADPCMHeader {
     u16 bits;
@@ -84,6 +93,8 @@ class Voice {
   };
 
   AllocationType mAlloc;
+  u32 mOwner{0};
+  VoiceRole mRole{VoiceRole::Effect};
   bool mNoise{false};
   bool mENDX{false};
 

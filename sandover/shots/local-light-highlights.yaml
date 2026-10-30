@@ -1,0 +1,54 @@
+# Local-light highlights: every tile light, world light and actor light adds a GGX lobe from
+# the material shading's roughness and F0 (per texture: class, roughness map, metallic), carried
+# to the tile-light pass in the emissive mask's b and a. Porous classes in enclosed (one palette
+# slot) levels read damp. Arms per shot: C original game (no forms; the rig boots all off),
+# A today (play look, highlights off), B1 (strength 2, soft limit 1.5), B2 (strength 4, limit 3).
+# Each arm's forms are ONE after-load string (the play look first, then the highlight forms), so
+# the settings push cannot land after the A/B parameters. Vanilla first; actors frozen (default).
+# Cameras are copied from the sidecars of captured frames ($SANDOVER_DATA):
+# - maincave-mushrooms-jak: crystals-011/B/maincave-tallshroom-crate.png (cave
+#   floor under the glowing mushroom patch, Jak, chests with metal bands)
+# - village1-hut-lamps-night: shots/final-gate6-ab/A/village1-hut-lamps.png (22:29, hut lamps
+#   over a metal crate, barrel hoops, wood floor, stone hearth)
+# - sunken-precursor-pad: shots/final-gate6-ab/A/sunken.png (precursor door and dais round the
+#   glowing cyan pad)
+# - darkcave-unlit-control: darkcave-fix/fix-unlit/darkcave-0024.png (no crystal
+#   lit; B must equal A)
+set: local-light-highlights
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 120
+  effects: on
+  wind: on
+  particles: on
+  jak: show
+shots:
+  - {name: maincave-mushrooms-jak-vanilla, continue: maincave-start, hour: 12, settle_frames: 180, jak_pos: [4629258.5, 119448.3, -13061476.2], camera: {pos: [4643881.0, 132753.594, -13084154.0], rot: [0.7771, -0.0, 0.6293, -0.2337, 0.9285, 0.2886, -0.5843, -0.3714, 0.7216]}}
+  - {name: village1-hut-lamps-night-vanilla, continue: village1-hut, hour: 22.4819, settle_frames: 120, jak_pos: [-89212.516, 12279.427, -312984.656], camera: {pos: [-48743.242, 28409.5, -310308.969], rot: [-0.176494, 0.0, 0.984302, -0.116623, 0.992956, -0.020911, -0.977368, -0.118482, -0.175251]}}
+  - {name: sunken-precursor-pad-vanilla, continue: sunken-start, hour: 12, settle_frames: 120, camera: {pos: [2138871.5, -572296.375, -6751967.5], rot: [0.7575, 0.0, -0.6527, 0.0858, 0.9913, 0.0995, 0.647, -0.1314, 0.7509]}}
+  - {name: darkcave-unlit-control-vanilla, continue: darkcave-start, hour: 14.9664, settle_frames: 120, jak_pos: [3831361.5, 158281.875, -11795829.0], camera: {pos: [3873233.0, 177109.719, -11804118.0], rot: [0.196384, 0.0, 0.980527, -0.134885, 0.990493, 0.027015, -0.971205, -0.137564, 0.194517]}}
+  - {name: maincave-mushrooms-jak-A, continue: maincave-start, hour: 12, settle_frames: 180, jak_pos: [4629258.5, 119448.3, -13061476.2], camera: {pos: [4643881.0, 132753.594, -13084154.0], rot: [0.7771, -0.0, 0.6293, -0.2337, 0.9285, 0.2886, -0.5843, -0.3714, 0.7216]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-emissive-lights (function int int none)) (pc-set-emissive-lights 20 0)']}
+  - {name: village1-hut-lamps-night-A, continue: village1-hut, hour: 22.4819, settle_frames: 120, jak_pos: [-89212.516, 12279.427, -312984.656], camera: {pos: [-48743.242, 28409.5, -310308.969], rot: [-0.176494, 0.0, 0.984302, -0.116623, 0.992956, -0.020911, -0.977368, -0.118482, -0.175251]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-emissive-lights (function int int none)) (pc-set-emissive-lights 20 0)']}
+  - {name: sunken-precursor-pad-A, continue: sunken-start, hour: 12, settle_frames: 120, camera: {pos: [2138871.5, -572296.375, -6751967.5], rot: [0.7575, 0.0, -0.6527, 0.0858, 0.9913, 0.0995, 0.647, -0.1314, 0.7509]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-emissive-lights (function int int none)) (pc-set-emissive-lights 20 0)']}
+  - {name: darkcave-unlit-control-A, continue: darkcave-start, hour: 14.9664, settle_frames: 120, jak_pos: [3831361.5, 158281.875, -11795829.0], camera: {pos: [3873233.0, 177109.719, -11804118.0], rot: [0.196384, 0.0, 0.980527, -0.134885, 0.990493, 0.027015, -0.971205, -0.137564, 0.194517]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-emissive-lights (function int int none)) (pc-set-emissive-lights 20 0)']}
+  - {name: maincave-mushrooms-jak-B1, continue: maincave-start, hour: 12, settle_frames: 180, jak_pos: [4629258.5, 119448.3, -13061476.2], camera: {pos: [4643881.0, 132753.594, -13084154.0], rot: [0.7771, -0.0, 0.6293, -0.2337, 0.9285, 0.2886, -0.5843, -0.3714, 0.7216]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-emissive-lights (function int int none)) (pc-set-emissive-lights 21 2000000) (pc-set-emissive-lights 22 1500000) (pc-set-emissive-lights 23 500000) (pc-set-emissive-lights 20 1000000)']}
+  - {name: village1-hut-lamps-night-B1, continue: village1-hut, hour: 22.4819, settle_frames: 120, jak_pos: [-89212.516, 12279.427, -312984.656], camera: {pos: [-48743.242, 28409.5, -310308.969], rot: [-0.176494, 0.0, 0.984302, -0.116623, 0.992956, -0.020911, -0.977368, -0.118482, -0.175251]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-emissive-lights (function int int none)) (pc-set-emissive-lights 21 2000000) (pc-set-emissive-lights 22 1500000) (pc-set-emissive-lights 23 500000) (pc-set-emissive-lights 20 1000000)']}
+  - {name: sunken-precursor-pad-B1, continue: sunken-start, hour: 12, settle_frames: 120, camera: {pos: [2138871.5, -572296.375, -6751967.5], rot: [0.7575, 0.0, -0.6527, 0.0858, 0.9913, 0.0995, 0.647, -0.1314, 0.7509]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-emissive-lights (function int int none)) (pc-set-emissive-lights 21 2000000) (pc-set-emissive-lights 22 1500000) (pc-set-emissive-lights 23 500000) (pc-set-emissive-lights 20 1000000)']}
+  - {name: darkcave-unlit-control-B1, continue: darkcave-start, hour: 14.9664, settle_frames: 120, jak_pos: [3831361.5, 158281.875, -11795829.0], camera: {pos: [3873233.0, 177109.719, -11804118.0], rot: [0.196384, 0.0, 0.980527, -0.134885, 0.990493, 0.027015, -0.971205, -0.137564, 0.194517]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-emissive-lights (function int int none)) (pc-set-emissive-lights 21 2000000) (pc-set-emissive-lights 22 1500000) (pc-set-emissive-lights 23 500000) (pc-set-emissive-lights 20 1000000)']}
+  - {name: maincave-mushrooms-jak-B2, continue: maincave-start, hour: 12, settle_frames: 180, jak_pos: [4629258.5, 119448.3, -13061476.2], camera: {pos: [4643881.0, 132753.594, -13084154.0], rot: [0.7771, -0.0, 0.6293, -0.2337, 0.9285, 0.2886, -0.5843, -0.3714, 0.7216]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-emissive-lights (function int int none)) (pc-set-emissive-lights 21 4000000) (pc-set-emissive-lights 22 3000000) (pc-set-emissive-lights 23 500000) (pc-set-emissive-lights 20 1000000)']}
+  - {name: village1-hut-lamps-night-B2, continue: village1-hut, hour: 22.4819, settle_frames: 120, jak_pos: [-89212.516, 12279.427, -312984.656], camera: {pos: [-48743.242, 28409.5, -310308.969], rot: [-0.176494, 0.0, 0.984302, -0.116623, 0.992956, -0.020911, -0.977368, -0.118482, -0.175251]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-emissive-lights (function int int none)) (pc-set-emissive-lights 21 4000000) (pc-set-emissive-lights 22 3000000) (pc-set-emissive-lights 23 500000) (pc-set-emissive-lights 20 1000000)']}
+  - {name: sunken-precursor-pad-B2, continue: sunken-start, hour: 12, settle_frames: 120, camera: {pos: [2138871.5, -572296.375, -6751967.5], rot: [0.7575, 0.0, -0.6527, 0.0858, 0.9913, 0.0995, 0.647, -0.1314, 0.7509]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-emissive-lights (function int int none)) (pc-set-emissive-lights 21 4000000) (pc-set-emissive-lights 22 3000000) (pc-set-emissive-lights 23 500000) (pc-set-emissive-lights 20 1000000)']}
+  - {name: darkcave-unlit-control-B2, continue: darkcave-start, hour: 14.9664, settle_frames: 120, jak_pos: [3831361.5, 158281.875, -11795829.0], camera: {pos: [3873233.0, 177109.719, -11804118.0], rot: [0.196384, 0.0, 0.980527, -0.134885, 0.990493, 0.027015, -0.971205, -0.137564, 0.194517]},
+     goals_after_load: ['(sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (define-extern pc-set-emissive-lights (function int int none)) (pc-set-emissive-lights 21 4000000) (pc-set-emissive-lights 22 3000000) (pc-set-emissive-lights 23 500000) (pc-set-emissive-lights 20 1000000)']}

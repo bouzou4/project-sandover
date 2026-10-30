@@ -1,0 +1,15 @@
+# actor shadows: gameplay parity. Actors run 600 frames at AI-heavy spots, then the stage
+# hook prints every process-drawable's position (RIG:ACTOR lines); off and on must match.
+set: shadows-gameplay
+defaults:
+  resolution: [1280, 720]
+  msaa: 1
+  settle_frames: 600
+  camera: from_continue
+  effects: off
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - { name: beach-start-h12, continue: beach-start, hour: 12 }
+  - { name: jungle-start-h12, continue: jungle-start, hour: 12 }

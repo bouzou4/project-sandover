@@ -8,6 +8,10 @@ add_executable(goalc-test
         ${CMAKE_CURRENT_LIST_DIR}/test_goos.cpp
         ${CMAKE_CURRENT_LIST_DIR}/test_listener_deci2.cpp
         ${CMAKE_CURRENT_LIST_DIR}/test_kernel_jak1.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/test_level_heightfield.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/test_canopy_vol.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/test_unbake_path.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/test_palette_glow.cpp
         ${CMAKE_CURRENT_LIST_DIR}/all_jak1_symbols.cpp
         ${CMAKE_CURRENT_LIST_DIR}/test_type_system.cpp
         ${CMAKE_CURRENT_LIST_DIR}/test_emitter_x86.cpp
@@ -17,6 +21,11 @@ add_executable(goalc-test
         ${CMAKE_CURRENT_LIST_DIR}/test_emitter_arm64_memory.cpp
         ${CMAKE_CURRENT_LIST_DIR}/test_emitter_arm64_alu.cpp
         ${CMAKE_CURRENT_LIST_DIR}/test_sky_blend.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/test_vista_standins.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/test_light_tracker.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/test_audio_settings.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/test_lava_field.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/test_exr.cpp
         ${CMAKE_CURRENT_LIST_DIR}/test_goal_trampolines_arm64.cpp
         ${CMAKE_CURRENT_LIST_DIR}/test_common_util.cpp
         ${CMAKE_CURRENT_LIST_DIR}/test_pretty_print.cpp

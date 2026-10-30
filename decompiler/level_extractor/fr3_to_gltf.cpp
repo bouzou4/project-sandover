@@ -272,6 +272,40 @@ int make_tex_buffer_accessor(const std::vector<T>& vertices, tinygltf::Model& mo
 }
 
 /*!
+ * Set up a buffer for the time-of-day palette entry of each vertex, as floats.
+ * Exported as the custom attribute _COLOR_INDEX so tools can group vertices by palette entry.
+ */
+template <typename T>
+int make_color_index_accessor(const std::vector<T>& vertices, tinygltf::Model& model) {
+  int buffer_idx = (int)model.buffers.size();
+  auto& buffer = model.buffers.emplace_back();
+  buffer.data.resize(sizeof(float) * vertices.size());
+  u8* buffer_ptr = buffer.data.data();
+  for (const auto& vtx : vertices) {
+    float idx = (float)vtx.color_index;
+    memcpy(buffer_ptr, &idx, sizeof(float));
+    buffer_ptr += sizeof(float);
+  }
+
+  int buffer_view_idx = (int)model.bufferViews.size();
+  auto& buffer_view = model.bufferViews.emplace_back();
+  buffer_view.buffer = buffer_idx;
+  buffer_view.byteOffset = 0;
+  buffer_view.byteLength = buffer.data.size();
+  buffer_view.byteStride = 0;
+  buffer_view.target = TINYGLTF_TARGET_ARRAY_BUFFER;
+
+  int accessor_idx = (int)model.accessors.size();
+  auto& accessor = model.accessors.emplace_back();
+  accessor.bufferView = buffer_view_idx;
+  accessor.byteOffset = 0;
+  accessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
+  accessor.count = vertices.size();
+  accessor.type = TINYGLTF_TYPE_SCALAR;
+  return accessor_idx;
+}
+
+/*!
  * Set up a buffer of vertex colors for the given time of day index, for tfrag.
  * Uses the time of day texture to look up colors.
  */
@@ -732,7 +766,7 @@ std::string texture_name(const tfrag3::Level& level, s32 tree_tex_id) {
   return level.textures.at(tree_tex_id).debug_name;
 }
 
-constexpr int kMaxColor = 1;
+constexpr int kMaxColor = 8;
 /*!
  * Add the given tfrag data to a node under tfrag_root.
  */
@@ -761,6 +795,7 @@ void add_tfrag(const tfrag3::Level& level,
   for (int i = 0; i < kMaxColor; i++) {
     colors[i] = make_color_buffer_accessor(tfrag.unpacked.vertices, model, tfrag, i);
   }
+  const int color_index_accessor = make_color_index_accessor(tfrag.unpacked.vertices, model);
 
   std::vector<s32> tex_order;
   std::map<s32, std::vector<size_t>> draws_by_tex;
@@ -792,6 +827,7 @@ void add_tfrag(const tfrag3::Level& level,
       for (int i = 0; i < kMaxColor; i++) {
         prim.attributes[fmt::format("COLOR_{}", i)] = colors[i];
       }
+      prim.attributes["_COLOR_INDEX"] = color_index_accessor;
       prim.mode = TINYGLTF_MODE_TRIANGLES;
     }
   }
@@ -905,6 +941,7 @@ void add_tie(const tfrag3::Level& level,
   for (int i = 0; i < kMaxColor; i++) {
     colors[i] = make_color_buffer_accessor(tie.unpacked.vertices, model, tie, i);
   }
+  const int color_index_accessor = make_color_index_accessor(tie.unpacked.vertices, model);
 
   const auto envmap_by_run_start = tie_envmap_by_run_start(tie);
 
@@ -962,6 +999,7 @@ void add_tie(const tfrag3::Level& level,
     for (int i = 0; i < kMaxColor; i++) {
       prim.attributes[fmt::format("COLOR_{}", i)] = colors[i];
     }
+    prim.attributes["_COLOR_INDEX"] = color_index_accessor;
     prim.mode = TINYGLTF_MODE_TRIANGLES;
   }
 
@@ -1002,6 +1040,7 @@ void add_tie(const tfrag3::Level& level,
         for (int i = 0; i < kMaxColor; i++) {
           prim.attributes[fmt::format("COLOR_{}", i)] = colors[i];
         }
+        prim.attributes["_COLOR_INDEX"] = color_index_accessor;
         prim.mode = TINYGLTF_MODE_TRIANGLES;
       }
     }
@@ -1033,6 +1072,7 @@ void add_shrub(const tfrag3::Level& level,
   for (int i = 0; i < kMaxColor; i++) {
     colors[i] = make_color_buffer_accessor(shrub.unpacked.vertices, model, shrub, i);
   }
+  const int color_index_accessor = make_color_index_accessor(shrub.unpacked.vertices, model);
 
   std::map<u16, std::vector<size_t>> draws_by_proto;
   for (size_t draw_idx = 0; draw_idx < shrub.static_draws.size(); draw_idx++) {
@@ -1060,6 +1100,7 @@ void add_shrub(const tfrag3::Level& level,
       for (int i = 0; i < kMaxColor; i++) {
         prim.attributes[fmt::format("COLOR_{}", i)] = colors[i];
       }
+      prim.attributes["_COLOR_INDEX"] = color_index_accessor;
       prim.mode = TINYGLTF_MODE_TRIANGLES;
     }
   }

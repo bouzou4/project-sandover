@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.0.0",
+  "sourceName": "Sandover",
+  "lastUpdated": "2026-10-30T00:00:00Z",
+  "mods": {
+    "sandover": {
+      "displayName": "Sandover (beta)",
+      "description": "A lighting and materials remaster of Jak and Daxter: The Precursor Legacy on OpenGOAL: shadows from the sun, moon and local lights, ambient occlusion, light from glowing surfaces, PBR materials, reworked water, neighbouring levels drawn in the distance, HDR10 or scRGB output, FSR 3.1, FSR 4 and DLSS upscaling, VR on SteamVR, and surround and spatial audio. Each enhancement can be turned off in Options > Sandover. Lighting data is built for the NTSC-U 1.0 disc; other releases run with stock lighting where their level geometry differs. Public beta.",
+      "authors": [
+        "bouzou4"
+      ],
+      "tags": [
+        "graphics",
+        "remaster"
+      ],
+      "supportedGames": [
+        "jak1"
+      ],
+      "websiteUrl": "https://github.com/bouzou4/project-sandover",
+      "versions": [
+        {
+          "version": "0.9.0",
+          "publishedDate": "2026-10-30T00:00:00Z",
+          "supportedGames": [
+            "jak1"
+          ],
+          "assets": {
+            "windows": "https://github.com/bouzou4/project-sandover/releases/download/v0.9.0/sandover-v0.9.0-windows.zip",
+            "linux": null,
+            "macos": null
+          }
+        }
+      ]
+    }
+  },
+  "texturePacks": {}
+}

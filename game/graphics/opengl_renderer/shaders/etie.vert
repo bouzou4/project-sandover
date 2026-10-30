@@ -1,4 +1,6 @@
 #version 410 core
+SSAO_NORMAL_VERT
+INSPECT_VERT
 
 layout (location = 0) in vec3 position_in;
 layout (location = 1) in vec3 tex_coord_in;
@@ -19,13 +21,48 @@ out vec4 fragment_color;
 out vec3 tex_coord;
 out float fogginess;
 
+// actor shadows: receiver position, global sun share, emissive gate
+uniform float shadow_share_global;
+WORLD_SHADOW_VERT
+uniform usamplerBuffer ws_selflit_vtx;  // per vertex 1 under a self-lit base texture (Tie3)
+out vec3 shadow_pos;
+out float shadow_share;
+out float shadow_receive;  // 1 - E, as tfrag3
+uniform int em_on;
+uniform float em_w[10];
+EM_VALUE_VERT
+uniform usamplerBuffer tex_T11;
+
 // etie stuff
 uniform vec4 persp0;
 uniform vec4 persp1;
 uniform mat4 cam_no_persp;
+uniform vec4 cam_trans;
 
+ATMO_UNIFORMS_VERT
+// additive pass: fades to black with the fog instead of mixing toward the fog colour
+out float atmo_fade;
+
+ATMO_FOG_VERT
+ATMO_COMBINE_VERT
 void main() {
+  insp_vid = uint(gl_VertexID);
   fogginess = 0;
+  atmo_fade = 0.;
+  haze_f = 0.;
+  if (atmo.x > 0.) {
+    vec3 d = (position_in - cam_trans.xyz) * (1. / 4096.);
+    atmo_fade = atmo_fog(length(d), 0.5 * (position_in.y + cam_trans.y) * (1. / 4096.));
+    haze_f = haze.z * (1. - exp(-haze.x * max(length(d) - haze.y, 0.)));
+    if (atmo.x > 1.5) {
+      // the base pass's fog (etie_base.vert), so the envmap fades with it
+      float fog1 = camera[3].w + camera[0].w * position_in.x + camera[1].w * position_in.y +
+                   camera[2].w * position_in.z;
+      float tw;
+      atmo_fade = atmo_combine(255. - clamp(fog1 + hvdf_offset.w, fog_min, fog_max), atmo_fade,
+                               haze_f, tw);
+    }
+  }
 
   // rotate the normal
   vec3 nrm_vf23 = cam_no_persp[0].xyz * normal.x
@@ -154,7 +191,17 @@ void main() {
   // scissoring area adjust
   transformed.y *= SCISSOR_ADJUST * HEIGHT_SCALE;
   gl_Position = transformed;
+  ssao_cpos = gl_Position.xyw;
+  ssao_vnrm = ssao_etie_vnrm(cam_no_persp, persp0, persp1, SCISSOR_ADJUST * HEIGHT_SCALE,
+                             ssao_nrm == 2 ? texelFetch(tex_T11, gl_VertexID) : uvec4(0u));
 
 
   fragment_color = proto_tint * envmap_tod_tint;
+  shadow_pos = position_in;
+  shadow_share = shadow_share_global;
+  shadow_share1 = shadow_share;
+  shadow_receive = em_on == 1 ? 1.0 - em_value(texelFetch(tex_T11, gl_VertexID).w) : 1.0;
+  // the second pass draws by envmap texture: the self-lit flag comes per vertex
+  bool selflit = ws_selflit == 2 && texelFetch(ws_selflit_vtx, gl_VertexID).r != 0u;
+  shadow_receive = (ws_on & 1) != 0 && selflit ? 0.0 : shadow_receive;
 }

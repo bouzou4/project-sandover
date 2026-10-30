@@ -1,0 +1,23 @@
+# Mountain Pass (level ogre) red crystals (ogr-cave-crystal-01, tie): crystal plus the ground it lights.
+# Cameras planned offline with the rig projection (80 deg horizontal, glowcheck.zbuffer on
+# ogre-background.glb), 10-13 m from a crystal cluster, looking at the ground patch below it.
+# Continue ogre-end (the pass's end, in the same level); Jak hidden, particles off.
+set: mountain-pass-crystals
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 90
+  effects: on
+  wind: off
+  particles: off
+  jak: hide
+shots:
+  # ogre:static:141 (918, 39, -3446 m), near the pass's end
+  - {name: pass-end-crystals, continue: ogre-end, hour: 12, camera: {pos: [3809402.9, 166764.5, -14088941.6], rot: [-0.4843, 0.0, 0.8749, -0.177, 0.9793, -0.098, -0.8568, -0.2023, -0.4743]}}
+  # ogre:static:86 (432, 41, -3262 m)
+  - {name: pass-mid-crystal, continue: ogre-end, hour: 12, camera: {pos: [1819815.9, 155902.0, -13302689.8], rot: [-0.7656, 0.0, 0.6433, 0.0601, 0.9956, 0.0715, -0.6405, 0.0934, -0.7623]}}
+  # ogre:static:126 (551, 46, -3242 m)
+  - {name: pass-ledge-crystal, continue: ogre-end, hour: 12, camera: {pos: [2186412.0, 175783.9, -13291806.7], rot: [0.1273, 0.0, -0.9919, -0.1119, 0.9936, -0.0144, 0.9855, 0.1128, 0.1265]}}
+  # night (23:00): the crystals' class change and the 23 ogr-coal rows in the Klaww arena
+  - {name: pass-mid-crystal-night, continue: ogre-end, hour: 23, camera: {pos: [1819815.9, 155902.0, -13302689.8], rot: [-0.7656, 0.0, 0.6433, 0.0601, 0.9956, 0.0715, -0.6405, 0.0934, -0.7623]}}
+  - {name: klaww-arena-night, continue: ogre-start, hour: 23, camera: from_continue}

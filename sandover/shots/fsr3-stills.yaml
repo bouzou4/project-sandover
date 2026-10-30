@@ -1,0 +1,21 @@
+# FSR 3 stills: the same cameras under each AA (the AA form per run).
+set: fsr3-stills
+defaults:
+  resolution: [3840, 2160]
+  msaa: 2
+  settle_frames: 120
+  effects: on
+  wind: on
+  particles: on
+  jak: show
+  wait_vista: true
+  wait_log_timeout: 90
+shots:
+  - {name: sky-sea-high, continue: village1-hut, hour: 12, camera: {pos: [-491520.0, 1843200.0, 409600.0], rot: [-0.978371, 0.0, -0.206856, 0.041902, 0.979268, -0.198186, 0.202567, -0.202567, -0.958088]}}
+  - {name: ocean-shore, continue: beach-start, hour: 15, camera: {pos: [-716800.0, 11468.8, -184320.0], rot: [-0.707107, 0.0, -0.707107, 0.019992, 0.9996, -0.019992, 0.706824, -0.028273, -0.706824]}}
+  - {name: inland-river, continue: jungle-start, hour: 12, camera: {pos: [1088307.2, 95027.2, -770048.0], rot: [0.980581, 0.0, -0.196116, 0.046694, 0.971242, 0.233472, 0.190476, -0.238095, 0.952381]}}
+  - {name: fountain-particles, continue: village1-hut, hour: 12, camera: {pos: [-437452.8, 53248.0, 314163.2], rot: [-0.998642, 0.0, 0.052103, -0.008916, 0.985251, -0.170883, -0.051335, -0.171115, -0.983913]}}
+  - {name: foliage-jak, continue: jungle-start, hour: 12, jak_pos: [1456966.9, 454246.4, -972185.6], camera: {pos: [1471631.1, 457932.8, -987746.5], rot: [0.7278, 0.0, 0.6858, -0.2454, 0.9338, 0.2604, -0.6404, -0.3578, 0.6796]}}
+  - {name: village2-crowd-night, continue: village2-start, hour: 3.1503, jak_pos: [1480276.125, 93529.055, -6235200.5], camera: {pos: [1444407.25, 112838.617, -6208895.0], rot: [-0.592276, 0.0, -0.805735, 0.105434, 0.991402, -0.077502, 0.798807, -0.130854, -0.587183]}}
+  - {name: village1-lamps-night, continue: village1-hut, hour: 22.4819, jak_pos: [-89212.516, 12279.427, -312984.656], camera: {pos: [-48743.242, 28409.5, -310308.969], rot: [-0.176494, 0.0, 0.984302, -0.116623, 0.992956, -0.020911, -0.977368, -0.118482, -0.175251]}}
+  - {name: vista-temple-top, continue: jungle-start, hour: 18, camera: {pos: [1483980.8, 638976.0, -987545.6], rot: [0.802639, 0.0, 0.596466, -0.052259, 0.996154, 0.070323, -0.594172, -0.087615, 0.799552]}}

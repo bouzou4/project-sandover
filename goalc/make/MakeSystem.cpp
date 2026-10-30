@@ -1,5 +1,7 @@
 #include "MakeSystem.h"
 
+#include <cstdlib>
+
 #include "common/goos/ParseHelpers.h"
 #include "common/log/log.h"
 #include "common/util/FileUtil.h"
@@ -504,6 +506,10 @@ bool MakeSystem::make(const std::string& target_in, bool force, bool verbose, bo
     }
 
     bool success = false;
+    // OPENGOAL_MAKE_NO_WRITE: compile for type info only (CompilerTool), write no outputs
+    if (std::getenv("OPENGOAL_MAKE_NO_WRITE") && tool->name() != "goalc") {
+      continue;
+    }
     try {
       success = tool->run({rule->input, rule->deps, rule->outputs, rule->arg}, m_path_map);
     } catch (std::exception& e) {

@@ -1,0 +1,35 @@
+# Vanilla eco reference (kb/facts/eco.md): one framing per eco type, noon and night, particles on.
+# Each camera is 6-10 m from the census emitter (data/lights/<level>.json), aimed 0.8 m below it so
+# the emitter sits in the centre third with the ground it would light in frame; offline check on the
+# level mesh: clear line to the emitter, 1.5 m clearance, visible ground within 5 m. Rot rows are
+# inv-camera-rot, as orbs-no-light. Beach green vents sit under ecoventrocks on a new game, so
+# green is rolling's open vent. maincave has no hour cycle: its noon and night frames match.
+# Emitters: jungle:ventblue-2, rolling:ecovent-242, maincave:ecovent-252, snow:ecovent-201,
+# village1:eco-10, training:fuel-cell-55, maincave:dark-crystal-3 (idle), maincave:dark-eco-pool-6.
+set: eco-reference
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 90
+  camera: from_continue
+  effects: on
+  wind: off
+  particles: on
+  jak: hide
+shots:
+  - {name: blue-vent-noon, continue: jungle-start, hour: 12, camera: {pos: [1840967.5, 89011.3, -1186295.5], rot: [-0.5, 0.0, -0.866, 0.5609, 0.7619, -0.3239, 0.6598, -0.6477, -0.3809]}}
+  - {name: blue-vent-night, continue: jungle-start, hour: 22, camera: {pos: [1840967.5, 89011.3, -1186295.5], rot: [-0.5, 0.0, -0.866, 0.5609, 0.7619, -0.3239, 0.6598, -0.6477, -0.3809]}}
+  - {name: green-vent-noon, continue: rolling-start, hour: 12, camera: {pos: [-1537773.2, 114617.2, -6664280.6], rot: [-0.9848, 0.0, -0.1736, 0.1155, 0.7465, -0.6553, 0.1296, -0.6654, -0.7352]}}
+  - {name: green-vent-night, continue: rolling-start, hour: 22, camera: {pos: [-1537773.2, 114617.2, -6664280.6], rot: [-0.9848, 0.0, -0.1736, 0.1155, 0.7465, -0.6553, 0.1296, -0.6654, -0.7352]}}
+  - {name: yellow-vent-noon, continue: maincave-start, hour: 12, camera: {pos: [4528044.6, 169275.7, -12977985.7], rot: [0.9848, 0.0, -0.1736, 0.1114, 0.7671, 0.6318, 0.1332, -0.6416, 0.7554]}}
+  - {name: yellow-vent-night, continue: maincave-start, hour: 22, camera: {pos: [4528044.6, 169275.7, -12977985.7], rot: [0.9848, 0.0, -0.1736, 0.1114, 0.7671, 0.6318, 0.1332, -0.6416, 0.7554]}}
+  - {name: red-vent-noon, continue: snow-pass-to-fort, hour: 12, camera: {pos: [3860776.7, 1068447.7, -13582088.6], rot: [-0.866, 0.0, -0.5, 0.3277, 0.7553, -0.5676, 0.3776, -0.6554, -0.6541]}}
+  - {name: red-vent-night, continue: snow-pass-to-fort, hour: 22, camera: {pos: [3860776.7, 1068447.7, -13582088.6], rot: [-0.866, 0.0, -0.5, 0.3277, 0.7553, -0.5676, 0.3776, -0.6554, -0.6541]}}
+  - {name: blue-cluster-noon, continue: village1-hut, hour: 12, camera: {pos: [63049.0, 98104.5, 37021.3], rot: [0.342, -0.0, 0.9397, -0.6087, 0.7619, 0.2215, -0.7159, -0.6477, 0.2606]}}
+  - {name: blue-cluster-night, continue: village1-hut, hour: 22, camera: {pos: [63049.0, 98104.5, 37021.3], rot: [0.342, -0.0, 0.9397, -0.6087, 0.7619, 0.2215, -0.7159, -0.6477, 0.2606]}}
+  - {name: power-cell-noon, continue: training-start, hour: 12, camera: {pos: [-4920420.8, 83784.3, 4082625.6], rot: [-0.5, 0.0, 0.866, -0.3686, 0.9049, -0.2128, -0.7837, -0.4256, -0.4524]}}
+  - {name: power-cell-night, continue: training-start, hour: 22, camera: {pos: [-4920420.8, 83784.3, 4082625.6], rot: [-0.5, 0.0, 0.866, -0.3686, 0.9049, -0.2128, -0.7837, -0.4256, -0.4524]}}
+  - {name: dark-crystal-noon, continue: maincave-to-robocave, hour: 12, camera: {pos: [4734732.8, 58225.9, -12231934.0], rot: [0.0, -0.0, 1.0, -0.5515, 0.8342, 0.0, -0.8342, -0.5515, 0.0]}}
+  - {name: dark-crystal-night, continue: maincave-to-robocave, hour: 22, camera: {pos: [4734732.8, 58225.9, -12231934.0], rot: [0.0, -0.0, 1.0, -0.5515, 0.8342, 0.0, -0.8342, -0.5515, 0.0]}}
+  - {name: dark-pool-noon, continue: maincave-to-robocave, hour: 12, camera: {pos: [5100794.7, 51755.9, -11963226.7], rot: [-0.9397, 0.0, 0.342, -0.2276, 0.7465, -0.6253, -0.2553, -0.6654, -0.7015]}}
+  - {name: dark-pool-night, continue: maincave-to-robocave, hour: 22, camera: {pos: [5100794.7, 51755.9, -11963226.7], rot: [-0.9397, 0.0, 0.342, -0.2276, 0.7465, -0.6253, -0.2553, -0.6654, -0.7015]}}

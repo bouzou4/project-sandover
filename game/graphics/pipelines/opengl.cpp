@@ -5,7 +5,12 @@
 
 #include "opengl.h"
 
+#include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <condition_variable>
+#include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -19,12 +24,20 @@
 #include "common/util/Timer.h"
 #include "common/util/compress.h"
 
+#include "game/graphics/bug_report.h"
 #include "game/graphics/display.h"
 #include "game/graphics/gfx.h"
+#include "game/graphics/hdr/HdrPresent.h"
+#include "game/graphics/opengl_renderer/D3d12Bridge.h"
+#include "game/graphics/opengl_renderer/MotionBlur.h"
+#include "game/graphics/opengl_renderer/MotionVectors.h"
+#include "game/graphics/opengl_renderer/Neighbours.h"
 #include "game/graphics/opengl_renderer/OpenGLRenderer.h"
+#include "game/graphics/opengl_renderer/PerfTimers.h"
 #include "game/graphics/opengl_renderer/debug_gui.h"
 #include "game/graphics/screenshot.h"
 #include "game/graphics/texture/TexturePool.h"
+#include "game/graphics/xr/OpenXr.h"
 #include "game/runtime.h"
 #include "game/sce/libscf.h"
 #include "game/system/hid/input_manager.h"
@@ -64,6 +77,10 @@ struct GraphicsData {
   u64 frame_idx_of_input_data = 0;
   bool has_data_to_render = false;
   FixedChunkDmaCopier dma_copier;
+  // XR: the copier holds the last game frame's chain, drawn again every display frame
+  bool xr_chain_valid = false;
+  // the head view the game drew the pending / the held chain from
+  Gfx::XrCullView xr_view_pending, xr_view_chain;
 
   // texture pool
   std::shared_ptr<TexturePool> texture_pool;
@@ -77,6 +94,11 @@ struct GraphicsData {
 
   FrameLimiter frame_limiter;
   Timer engine_timer;
+  // present-to-present intervals, logged every ~5 s
+  Timer present_timer;
+  double present_sum = 0, present_min = 1e9, present_max = 0;
+  int present_count = 0;
+  bool present_started = false;
   double last_engine_time = 1. / 60.;
   float pmode_alp = 1.f;
 
@@ -91,7 +113,9 @@ struct GraphicsData {
             fr3_level_count[version])),
         ogl_renderer(texture_pool, loader, version),
         debug_gui(),
-        version(version) {}
+        version(version) {
+    loader->set_load_unbake(version == GameVersion::Jak1);
+  }
 };
 
 std::unique_ptr<GraphicsData> g_gfx_data;
@@ -332,6 +356,37 @@ GLDisplay::GLDisplay(SDL_Window* window, SDL_GLContext gl_context, bool is_main)
       CommandBinding::Source::KEYBOARD,
       CommandBinding(SDLK_F2, [&]() { m_take_screenshot_next_frame = true; }));
 
+  if (g_game_version == GameVersion::Jak1) {
+    // XR recentre; the default game bindings use no F-keys
+    m_input_manager->register_command(
+        CommandBinding::Source::KEYBOARD, CommandBinding(SDLK_F6, [](const SDL_Event& event) {
+          if (event.type == SDL_EVENT_KEY_DOWN && event.key.repeat == 0) {
+            Gfx::g_global_settings.xr_recentre_requests++;
+          }
+        }));
+  }
+
+  if (g_game_version == GameVersion::Jak1) {
+    m_input_manager->register_command(
+        CommandBinding::Source::KEYBOARD, CommandBinding(SDLK_F7, [](const SDL_Event& event) {
+          if (event.type == SDL_EVENT_KEY_DOWN && event.key.repeat == 0) {
+            bug_report::request(bug_report::KEY);
+          }
+        }));
+  }
+
+  if (g_game_version == GameVersion::Jak1 && snap::enabled()) {
+    for (auto [key, ev] : {std::pair{SDLK_F9, snap::SHOT}, std::pair{SDLK_F10, snap::NEXT},
+                           std::pair{SDLK_F8, snap::PREV}}) {
+      m_input_manager->register_command(
+          CommandBinding::Source::KEYBOARD, CommandBinding(key, [ev](const SDL_Event& event) {
+            if (event.type == SDL_EVENT_KEY_DOWN && event.key.repeat == 0) {
+              snap::on_key(ev);
+            }
+          }));
+    }
+  }
+
   const auto& bind = Gfx::g_debug_settings.toggle_fullscreen_key;
 
   m_input_manager->register_command(
@@ -416,7 +471,7 @@ void GLDisplay::init_splash() {
 void GLDisplay::draw_splash(int fb_w, int fb_h) {
   if (!m_splash_program || !m_splash_texture)
     return;
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glBindFramebuffer(GL_FRAMEBUFFER, Gfx::window_fbo());
   glClearColor(0.f, 0.f, 0.f, 1.f);
   glClear(GL_COLOR_BUFFER_BIT);
   glViewport(0, 0, fb_w, fb_h);
@@ -448,6 +503,13 @@ GLDisplay::~GLDisplay() {
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   ImGui::DestroyContext();
+  xr::shutdown();
+  hdr::shutdown();
+  // the renderer and the D3D12 bridge go while the GL context is current
+  if (m_main) {
+    gl_exit();
+    D3d12Bridge::get().shutdown();
+  }
   // Cleanup SDL
   SDL_GL_DestroyContext(m_gl_context);
   SDL_DestroyWindow(m_window);
@@ -460,10 +522,144 @@ GLDisplay::~GLDisplay() {
   }
   // now quit SDL
   SDL_Quit();
-  if (m_main) {
-    gl_exit();
-  }
 }
+
+namespace {
+// the game's view covers the head turn possible while its pose ages: a brisk turn rate times the
+// age (pose located -> last display of the chain drawn from it), within these bounds
+constexpr float kXrTurnDegPerS = 300.f;
+constexpr float kXrMarginMinDeg = 10.f, kXrMarginMaxDeg = 40.f;
+constexpr float kXrMaxHalfAngle = 1.396f;  // 80 degrees
+constexpr float kXrPoseAgeMaxMs = 200.f;   // longer: a stall (load, screenshot), skipped
+constexpr double kXrEmulatedPeriodS = 1. / 90.;  // no runtime: the PSVR2's rate
+// the margin is held: it sets the game's projection, which must not move between frames. It
+// rises at once to a larger want; it falls only after 2 s at 6 deg (20 ms) too wide, 5 deg a step
+constexpr float kXrMarginStartDeg = 25.f;
+constexpr float kXrMarginUpDeg = 1.5f;
+constexpr double kXrMarginUpWaitS = 0.5;
+constexpr float kXrMarginBandDeg = 6.f;
+constexpr double kXrMarginSustainS = 2.;
+constexpr float kXrMarginStepDeg = 5.f;
+constexpr double kXrMarginCooldownS = 5.;  // down steps of 5 deg: at most 1 deg/s
+constexpr double kXrMarginMaxDtS = 0.1;    // a stall counts as one short frame
+float g_xr_pose_age_ms = 50.f;             // running mean of each chain's oldest display
+float g_xr_margin_deg = kXrMarginStartDeg;
+double g_xr_margin_up_s = 0., g_xr_margin_down_s = 0.;  // time the want has been above / below
+double g_xr_margin_last_s = -1., g_xr_margin_down_at = -1e9;
+bool g_xr_margin_logged = false;
+double g_xr_age_stamp = -1.;               // the chain being aged and its latest display's age
+float g_xr_age_last_ms = -1.f;
+// pose age split, summed over chains for the 5 s log: sample -> game read -> chain sent -> taken
+// by the render thread -> its last display began; then the display period
+struct XrAgeSplit {
+  double read = 0., send = 0., take = 0., shown = 0., age = 0.;
+  int n = 0;
+  double last_log_s = -1.;
+} g_xr_age_split;
+double g_xr_age_taken_s = 0., g_xr_age_last_begin_s = 0., g_xr_age_period_s = 0.;
+Gfx::XrCullView g_xr_age_view;
+
+double steady_s() {
+  return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
+void note_xr_pose_age(const Gfx::XrCullView& chain_view, double period_s) {
+  if (!chain_view.valid) {
+    return;
+  }
+  const double now = steady_s();
+  if (chain_view.stamp_s != g_xr_age_stamp) {
+    // a new chain: the previous one's last display was its worst case
+    if (g_xr_age_last_ms >= 0.f && g_xr_age_last_ms <= kXrPoseAgeMaxMs) {
+      g_xr_pose_age_ms += 0.05f * (g_xr_age_last_ms - g_xr_pose_age_ms);
+      const auto& v = g_xr_age_view;
+      auto& a = g_xr_age_split;
+      if (v.handed_s > 0. && v.sent_s > 0.) {
+        a.read += v.handed_s - v.stamp_s;
+        a.send += v.sent_s - v.handed_s;
+        a.take += g_xr_age_taken_s - v.sent_s;
+        a.shown += g_xr_age_last_begin_s - g_xr_age_taken_s;
+        a.age += g_xr_age_last_ms;
+        a.n++;
+      }
+      if (a.last_log_s < 0.) {
+        a.last_log_s = now;
+      } else if (now - a.last_log_s >= 5. && a.n > 0) {
+        const double k = 1000. / a.n;
+        lg::info(
+            "[xr] pose age {:.1f} ms over {} chains: sample -> game read {:.1f}, -> chain sent "
+            "{:.1f}, -> taken {:.1f}, -> last display {:.1f}, + period {:.1f}",
+            a.age / a.n, a.n, a.read * k, a.send * k, a.take * k, a.shown * k,
+            g_xr_age_period_s * 1000.);
+        a = XrAgeSplit{};
+        a.last_log_s = now;
+      }
+    }
+    g_xr_age_stamp = chain_view.stamp_s;
+    g_xr_age_view = chain_view;
+    g_xr_age_taken_s = now;
+  }
+  if (period_s <= 0.) {
+    period_s = kXrEmulatedPeriodS;
+  }
+  g_xr_age_last_begin_s = now;
+  g_xr_age_period_s = period_s;
+  g_xr_age_last_ms = (float)((now - chain_view.stamp_s + period_s) * 1000.);
+}
+
+float held_xr_margin_deg(double now) {
+  // SANDOVER_XR_MARGIN_DEG=N (dev): a fixed margin, for A/B
+  static const char* fixed = std::getenv("SANDOVER_XR_MARGIN_DEG");
+  if (fixed) {
+    if (!g_xr_margin_logged) {
+      g_xr_margin_logged = true;
+      lg::info("[xr] view margin {:.1f} deg, fixed (SANDOVER_XR_MARGIN_DEG)", std::atof(fixed));
+    }
+    return (float)std::atof(fixed);
+  }
+  const double dt =
+      g_xr_margin_last_s < 0. ? 0. : std::clamp(now - g_xr_margin_last_s, 0., kXrMarginMaxDtS);
+  g_xr_margin_last_s = now;
+  const float want =
+      std::clamp(kXrTurnDegPerS * g_xr_pose_age_ms * 0.001f, kXrMarginMinDeg, kXrMarginMaxDeg);
+  const float off = want - g_xr_margin_deg;
+  g_xr_margin_up_s = off > kXrMarginUpDeg ? g_xr_margin_up_s + dt : 0.;
+  g_xr_margin_down_s = off < -kXrMarginBandDeg ? g_xr_margin_down_s + dt : 0.;
+  if (g_xr_margin_up_s >= kXrMarginUpWaitS) {
+    g_xr_margin_deg = std::ceil(want);
+    g_xr_margin_up_s = 0.;
+    g_xr_margin_logged = false;
+  } else if (g_xr_margin_down_s >= kXrMarginSustainS &&
+             now - g_xr_margin_down_at >= kXrMarginCooldownS) {
+    g_xr_margin_deg += std::max(std::round(off), -kXrMarginStepDeg);
+    g_xr_margin_down_at = now;
+    g_xr_margin_down_s = 0.;
+    g_xr_margin_logged = false;
+  }
+  if (!g_xr_margin_logged) {
+    g_xr_margin_logged = true;
+    lg::info("[xr] view margin {:.1f} deg, held (pose age {:.1f} ms)", g_xr_margin_deg,
+             g_xr_pose_age_ms);
+  }
+  return g_xr_margin_deg;
+}
+
+void publish_xr_cull_view(const xr::FrameTargets& t, float world_scale) {
+  Gfx::XrCullView v;
+  v.valid = true;
+  v.stamp_s = steady_s();
+  const float units_per_m = 4096.f / std::max(world_scale, 0.001f);
+  std::memcpy(v.rot, t.eye[0].rot, sizeof(v.rot));
+  for (int k = 0; k < 3; k++) {
+    v.t[k] = 0.5f * (t.eye[0].pos_m[k] + t.eye[1].pos_m[k]) * units_per_m;
+  }
+  const float margin = held_xr_margin_deg(v.stamp_s) * 0.01745329252f;
+  v.tan_x = std::tan(std::min(std::atan(t.render_tan_x) + margin, kXrMaxHalfAngle));
+  v.tan_y = std::tan(std::min(std::atan(t.render_tan_y) + margin, kXrMaxHalfAngle));
+  Gfx::set_xr_cull_view(v);
+}
+}  // namespace
 
 void render_game_frame(int game_width,
                        int game_height,
@@ -474,19 +670,53 @@ void render_game_frame(int game_width,
                        int msaa_samples,
                        int brightness_contrast_color,
                        int brightness_contrast_alpha,
-                       bool take_screenshot) {
+                       bool take_screenshot,
+                       bool xr_frame,
+                       xr::FrameTargets* xr_targets) {
   // wait for a copied chain.
   bool got_chain = false;
-  {
+  bool xr_fresh = false;
+  if (xr_frame) {
+    // XR display frame: take a new chain if the game sent one, never wait for it. The copy
+    // frees the game's buffer at once; the last copy is drawn again until the next arrives.
+    std::unique_lock<std::mutex> lock(g_gfx_data->dma_mutex);
+    // SANDOVER_XR_REDRAWS=N (dev): redraw each chain N more times before taking the next
+    static const int redraws = std::getenv("SANDOVER_XR_REDRAWS")
+                                   ? std::atoi(std::getenv("SANDOVER_XR_REDRAWS"))
+                                   : 0;
+    static int redraws_left = 0;
+    const bool hold = redraws > 0 && redraws_left-- > 0;
+    if (g_gfx_data->has_data_to_render && !hold) {
+      redraws_left = redraws;
+      auto p = scoped_prof("xr-copy-dma");
+      Timer copy_timer;
+      g_gfx_data->dma_copier.run(g_gfx_data->dma_copier.get_last_input_data(),
+                                 g_gfx_data->dma_copier.get_last_input_offset());
+      perf::cpu_copy_dma(copy_timer.getMs());
+      g_gfx_data->frame_idx_of_input_data = g_gfx_data->frame_idx;
+      g_gfx_data->xr_chain_valid = true;
+      g_gfx_data->xr_view_chain = g_gfx_data->xr_view_pending;
+      g_gfx_data->engine_timer.start();
+      g_gfx_data->has_data_to_render = false;
+      g_gfx_data->sync_cv.notify_all();
+      xr_fresh = true;
+    }
+    got_chain = xr_targets && g_gfx_data->xr_chain_valid;
+  } else {
+    g_gfx_data->xr_chain_valid = false;
     auto p = scoped_prof("wait-for-dma");
+    Timer wait_timer;
     std::unique_lock<std::mutex> lock(g_gfx_data->dma_mutex);
     // there's a timeout here, so imgui can still be responsive even if we don't render anything
     got_chain = g_gfx_data->dma_cv.wait_for(lock, std::chrono::milliseconds(40),
                                             [=] { return g_gfx_data->has_data_to_render; });
+    perf::cpu_wait_dma(wait_timer.getMs());
   }
   // render that chain.
   if (got_chain) {
-    g_gfx_data->frame_idx_of_input_data = g_gfx_data->frame_idx;
+    if (!xr_frame) {
+      g_gfx_data->frame_idx_of_input_data = g_gfx_data->frame_idx;
+    }
     RenderOptions options;
     options.game_res_w = game_width;
     options.game_res_h = game_height;
@@ -506,6 +736,34 @@ void render_game_frame(int game_width,
     options.quick_screenshot = false;
     options.internal_res_screenshot = false;
     options.gpu_sync = g_gfx_data->debug_gui.should_gl_finish();
+    // the eye frame: the runtime's recommended size times the render scale (VR settings profile)
+    auto set_xr_eye_size = [&]() {
+      const float rs = Gfx::g_global_settings.render_scale;
+      options.game_res_w = xr_targets->render_w;
+      options.game_res_h = xr_targets->render_h;
+      if (rs < 0.999f) {
+        options.display_w = xr_targets->render_w;
+        options.display_h = xr_targets->render_h;
+        options.game_res_w = std::max(64, (int)std::lround(xr_targets->render_w * rs));
+        options.game_res_h = std::max(64, (int)std::lround(xr_targets->render_h * rs));
+      }
+    };
+    if (xr_targets) {
+      // eyes render at the runtime's recommended size (tracked: one frame that covers both
+      // eye frustums); the window gets the side-by-side mirror
+      options.xr = xr_targets;
+      const auto& hv = g_gfx_data->xr_view_chain;
+      note_xr_pose_age(hv, xr_targets->display_period_s);
+      xr_targets->chain_head = hv.valid;
+      std::memcpy(xr_targets->head_rot, hv.rot, sizeof(hv.rot));
+      std::memcpy(xr_targets->head_t, hv.t, sizeof(hv.t));
+      xr_targets->view_tan_x = hv.valid ? hv.tan_x : 0.f;
+      xr_targets->view_tan_y = hv.valid ? hv.tan_y : 0.f;
+      xr_targets->game_tan_x = hv.valid ? hv.game_tan_x : 0.f;
+      xr_targets->game_tan_y = hv.valid ? hv.game_tan_y : 0.f;
+      options.xr_repeat = !xr_fresh;
+      set_xr_eye_size();
+    }
 
     if (take_screenshot) {
       options.save_screenshot = true;
@@ -528,17 +786,97 @@ void render_game_frame(int game_width,
           file_util::make_screenshot_filepath(g_game_version, get_screen_shot_name());
     }
 
+    if (xr_targets) {
+      // a screenshot keeps the session's eye size (scaled): no target re-creation
+      set_xr_eye_size();
+      options.msaa_samples = msaa_samples;
+    }
+
+    g_burst_frame = -1;
+    if (!options.save_screenshot && g_screenshot_burst.load() > 0) {
+      static int burst_idx = 0;
+      static std::string burst_base;
+      if (burst_idx == 0) {
+        burst_base = get_screen_shot_name();
+      }
+      options.save_screenshot = true;
+      options.internal_res_screenshot = true;
+      options.game_res_w = g_screen_shot_settings->width;
+      options.game_res_h = g_screen_shot_settings->height;
+      options.window_framebuffer_width = options.game_res_w;
+      options.window_framebuffer_height = options.game_res_h;
+      options.draw_region_width = options.game_res_w;
+      options.draw_region_height = options.game_res_h;
+      options.msaa_samples = g_screen_shot_settings->msaa;
+      options.screenshot_path = file_util::make_screenshot_filepath(
+          g_game_version, fmt::format("{}-f{:02d}", burst_base, burst_idx));
+      g_burst_frame = burst_idx++;
+      if (g_screenshot_burst.fetch_sub(1) <= 1) {
+        burst_idx = 0;
+      }
+    }
+
+    if (auto snap_path = snap::take_pending_path(); !snap_path.empty()) {
+      if (options.save_screenshot) {
+        lg::warn("snapshot {} skipped: another screenshot this frame", snap_path);
+      } else {
+        options.save_screenshot = true;
+        options.screenshot_path = snap_path;
+      }
+    }
+
+    if (!options.save_screenshot) {
+      if (auto bug_path = bug_report::take_pending_path(); !bug_path.empty()) {
+        options.save_screenshot = true;
+        options.screenshot_path = bug_path;
+      }
+    }
+
     options.draw_small_profiler_window =
         g_gfx_data->debug_gui.master_enable && g_gfx_data->debug_gui.small_profiler;
     options.pmode_alp_register = g_gfx_data->pmode_alp;
 
+    // same test as OpenGLRenderer::render's stereo_active: FSR 3.1 and FSR 4 run per eye there
+    const bool stereo = g_game_version == GameVersion::Jak1 &&
+                        (Gfx::g_global_settings.stereo_enable || options.xr);
+    auto& renderer = g_gfx_data->ogl_renderer;
+    options.scene_hdr = renderer.scene_hdr();
+    // decided once: GOAL's pc-set-aa may change the mode while this frame renders
+    options.dlss = g_game_version == GameVersion::Jak1 && !stereo && Gfx::dlss_on();
+    options.fsr4 = g_game_version == GameVersion::Jak1 && Gfx::fsr4_on();
+    // stereo: DLSS does not run per eye; FSR 3.1 takes its place there
+    const bool fsr3 = Gfx::fsr3_on() || (stereo && Gfx::dlss_on());
+    options.temporal_aa =
+        g_game_version == GameVersion::Jak1 && (options.dlss || options.fsr4 || fsr3);
+    if (options.temporal_aa && !options.dlss && !options.fsr4 &&
+        !renderer.temporal_aa_ready(options.scene_hdr)) {
+      // the programs did not build: vanilla rendering (pc-temporal-aa-state reports 0)
+      Gfx::g_fsr3_supported = false;
+      options.temporal_aa = false;
+    }
+    if (options.temporal_aa) {
+      options.msaa_samples = 1;
+      // render scale: the scene at a fraction of the size FSR 3 reconstructs (XR: set_xr_eye_size)
+      const float rs = Gfx::g_global_settings.render_scale;
+      if (rs < 0.999f && !options.xr) {
+        options.display_w = options.game_res_w;
+        options.display_h = options.game_res_h;
+        options.game_res_w = std::max(64, (int)std::lround(options.game_res_w * rs));
+        options.game_res_h = std::max(64, (int)std::lround(options.game_res_h * rs));
+      }
+    }
     GLint msaa_max;
     glGetIntegerv(GL_MAX_SAMPLES, &msaa_max);
     if (options.msaa_samples > msaa_max) {
       options.msaa_samples = msaa_max;
     }
 
-    if constexpr (run_dma_copy) {
+    Timer render_timer;
+    if (xr_frame) {
+      auto p = scoped_prof("ogl-render");
+      auto& chain = g_gfx_data->dma_copier.get_last_result();
+      g_gfx_data->ogl_renderer.render(DmaFollower(chain.data.data(), chain.start_offset), options);
+    } else if constexpr (run_dma_copy) {
       auto& chain = g_gfx_data->dma_copier.get_last_result();
       g_gfx_data->ogl_renderer.render(DmaFollower(chain.data.data(), chain.start_offset), options);
     } else {
@@ -547,10 +885,11 @@ void render_game_frame(int game_width,
                                                   g_gfx_data->dma_copier.get_last_input_offset()),
                                       options);
     }
+    perf::cpu_render(render_timer.getMs());
   }
 
-  // before vsync, mark the chain as rendered.
-  {
+  // before vsync, mark the chain as rendered (an XR frame released it when it copied it).
+  if (!xr_frame) {
     // should be fine to remove this mutex if the game actually waits for vsync to call
     // send_chain again. but let's be safe for now.
     std::unique_lock<std::mutex> lock(g_gfx_data->dma_mutex);
@@ -582,6 +921,60 @@ void GLDisplay::process_sdl_events() {
     }
   }
 }
+
+/*!
+ * 60 Hz game clock for XR display frames: true when a game vsync is due. Starts over when the
+ * display falls more than a few ticks behind.
+ */
+bool GLDisplay::xr_game_tick() {
+  using namespace std::chrono;
+  constexpr auto period =
+      duration_cast<steady_clock::duration>(duration<double>(1. / Gfx::kXrGameHz));
+  const auto now = steady_clock::now();
+  if (!m_xr_tick_started || now - m_xr_next_tick > 3 * period) {
+    m_xr_tick_started = true;
+    m_xr_next_tick = now;
+  }
+  if (now < m_xr_next_tick) {
+    return false;
+  }
+  m_xr_next_tick += period;
+  return true;
+}
+
+namespace {
+int swap_interval() {
+  int i = -9;
+  SDL_GL_GetSwapInterval(&i);
+  return i;
+}
+
+void log_present_interval(const char* path) {
+  auto& g = *g_gfx_data;
+  const double dt = g.present_timer.getSeconds();
+  g.present_timer.start();
+  if (!g.present_started) {
+    g.present_started = true;  // the first window starts at the first present, not at boot
+    return;
+  }
+  g.present_sum += dt;
+  g.present_min = std::min(g.present_min, dt);
+  g.present_max = std::max(g.present_max, dt);
+  if (++g.present_count >= 30 && g.present_sum >= 5.0) {
+    const double avg = g.present_sum / g.present_count;
+    lg::info(
+        "present: {} frames in {:.1f} s, avg {:.2f} ms ({:.1f} fps), min {:.2f} max {:.2f} ms, "
+        "swap interval {}, {}",
+        g.present_count, g.present_sum, avg * 1e3, 1.0 / avg, g.present_min * 1e3,
+        g.present_max * 1e3, swap_interval(),
+        std::strcmp(path, "hdr dxgi") ? std::string(path)
+                                      : fmt::format("{} ({})", path, hdr::present_tag()));
+    g.present_sum = g.present_max = 0;
+    g.present_min = 1e9;
+    g.present_count = 0;
+  }
+}
+}  // namespace
 
 /*!
  * Main function called to render graphics frames. This is called in a loop.
@@ -631,8 +1024,13 @@ void GLDisplay::render() {
   // framebuffer size
   int fbuf_w, fbuf_h;
   SDL_GetWindowSizeInPixels(m_window, &fbuf_w, &fbuf_h);
+  // an XR session: the window is a mirror; headsets take sRGB eyes, so no HDR present (its
+  // interop lock stalls the render thread every display frame)
+  hdr::update(m_window, g_game_version == GameVersion::Jak1 && !Gfx::g_xr_session_running, fbuf_w,
+              fbuf_h);
 
   // render game!
+  bool xr_frame = false;  // xrWaitFrame paced this display frame
   g_gfx_data->debug_gui.master_enable = is_imgui_visible();
   if (g_gfx_data->debug_gui.should_advance_frame()) {
     auto p = scoped_prof("game-render");
@@ -652,9 +1050,55 @@ void GLDisplay::render() {
     if (SplashScreen && DiskBoot && !m_splash_program) {
       init_splash();
     }
-    if (SplashScreen && Gfx::g_splash.ready.load() &&
-        SplashTimer.getSeconds() < SPLASH_SCREEN_TIME) {
+    const bool splash =
+        SplashScreen && Gfx::g_splash.ready.load() && SplashTimer.getSeconds() < SPLASH_SCREEN_TIME;
+    if (splash) {
       draw_splash(fbuf_w, fbuf_h);
+    }
+    hdr::allow_direct(splash);
+
+    xr::FrameTargets* xr_targets = nullptr;
+    if (g_game_version == GameVersion::Jak1) {
+      auto& gs = Gfx::g_global_settings;
+      xr::update(gs.xr_enable);
+      if (gs.xr_recentre_requests != m_xr_recentre_seen) {
+        m_xr_recentre_seen = gs.xr_recentre_requests;
+        xr::request_recentre();
+      }
+      float fake_pose[6];
+      std::memcpy(fake_pose, gs.xr_fake_pose, sizeof(fake_pose));
+      const float amp = std::abs(fake_pose[0]);
+      if (gs.xr_fake_sweep_dps > 0.f && amp > 0.f) {
+        // triangle wave over -amp..amp, at the sweep rate
+        const double period = 4. * amp / gs.xr_fake_sweep_dps;
+        // per-frame sweep (dev): a fixed step per display frame (1/90 s), from -amp when set
+        static double sweep_t = 0.;
+        static int sweep_serial = -1;
+        if (gs.xr_fake_sweep_frames != sweep_serial) {
+          sweep_serial = gs.xr_fake_sweep_frames;
+          sweep_t = 0.;
+        }
+        sweep_t = sweep_serial > 0 ? sweep_t + 1. / 90. : steady_s();
+        const double ph = std::fmod(sweep_t, period) / period;
+        fake_pose[0] = (float)(amp * (ph < 0.5 ? 4. * ph - 1. : 3. - 4. * ph));
+      }
+      xr::set_fake(gs.xr_fake, fake_pose, gs.xr_fake_sweep_dps > 0.f && amp > 0.f);
+      xr_targets = xr::begin_frame(gs.xr_pos_scale);
+      xr_frame = xr::frame_in_flight();
+      Gfx::g_xr_session_running = xr::state() == xr::State::RUNNING;
+      if (xr_targets) {
+        Gfx::g_xr_eye_w = xr_targets->render_w;
+        Gfx::g_xr_eye_h = xr_targets->render_h;
+        publish_xr_cull_view(*xr_targets, gs.stereo_world_scale);
+      } else {
+        // not drawn (dashboard, not visible): the game goes back to its own camera
+        Gfx::set_xr_cull_view({});
+      }
+      if (!xr_targets && !Gfx::g_xr_session_running) {
+        // a later session may get another size: no stale per-eye text
+        Gfx::g_xr_eye_w = 0;
+        Gfx::g_xr_eye_h = 0;
+      }
     }
 
     render_game_frame(
@@ -662,7 +1106,9 @@ void GLDisplay::render() {
         Gfx::g_global_settings.lbox_h, Gfx::g_global_settings.msaa_samples,
         Gfx::g_global_settings.brightness_contrast_color,
         Gfx::g_global_settings.brightness_contrast_alpha,
-        m_take_screenshot_next_frame && g_gfx_data->debug_gui.screenshot_hotkey_enabled);
+        m_take_screenshot_next_frame && g_gfx_data->debug_gui.screenshot_hotkey_enabled, xr_frame,
+        xr_targets);
+    xr::end_frame();
     // If we took a screenshot, stop taking them now!
     if (m_take_screenshot_next_frame) {
       m_take_screenshot_next_frame = false;
@@ -676,23 +1122,53 @@ void GLDisplay::render() {
   }
   {
     auto p = scoped_prof("imgui-render");
+    perf::Scope ps(perf::Group::IMGUI);
     ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    if (Gfx::g_hdr_present.active) {
+      glBindFramebuffer(GL_FRAMEBUFFER, Gfx::window_fbo());
+    }
+    ImDrawData* draw_data = ImGui::GetDrawData();
+    hdr::note_overlay(draw_data && draw_data->TotalVtxCount > 0);
+    ImGui_ImplOpenGL3_RenderDrawData(draw_data);
   }
 
   // actual vsync
   g_gfx_data->debug_gui.finish_frame();
-  if (Gfx::g_global_settings.framelimiter) {
+  // xrWaitFrame paces the loop while a session runs: no limiter, no window vsync
+  const bool xr_paced = xr_frame;
+  if (!xr_paced) {
+    m_xr_tick_started = false;
+  }
+  if (xr_paced != m_xr_paced) {
+    m_xr_paced = xr_paced;
+    Gfx::g_xr_game_hz = xr_paced ? Gfx::kXrGameHz : 0;
+    SDL_GL_SetSwapInterval(xr_paced ? 0 : Gfx::g_global_settings.vsync);
+  }
+  if (Gfx::g_global_settings.framelimiter && !xr_paced) {
     auto p = scoped_prof("frame-limiter");
     g_gfx_data->frame_limiter.run(
         Gfx::g_global_settings.target_fps, Gfx::g_global_settings.experimental_accurate_lag,
         Gfx::g_global_settings.sleep_in_frame_limiter, g_gfx_data->last_engine_time);
   }
 
+  bool hdr_presented = false;
   {
     auto p = scoped_prof("swap-buffers");
-    SDL_GL_SwapWindow(m_window);
+    perf::Scope ps(perf::Group::PRESENT);
+    const bool timing = perf::on();
+    const auto t0 = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    hdr_presented = hdr::present(xr_paced ? 0 : Gfx::g_global_settings.vsync);
+    if (!hdr_presented) {
+      perf::Scope swap(perf::Group::PRESENT_SWAP);
+      SDL_GL_SwapWindow(m_window);
+    }
+    if (timing) {
+      perf::cpu_present(
+          std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+    }
   }
+  log_present_interval(xr_paced ? "xr" : hdr_presented ? "hdr dxgi" : "gl swap");
+  perf::frame_end(xr_paced ? "xr" : hdr_presented ? "hdr-dxgi" : "gl-swap");
 
   // actually wait for vsync
   if (g_gfx_data->debug_gui.should_gl_finish()) {
@@ -704,7 +1180,10 @@ void GLDisplay::render() {
     Gfx::g_global_settings.old_vsync = Gfx::g_global_settings.vsync;
     // NOTE - -1 can be used for adaptive vsync, maybe useful for Jak 2+?
     // https://wiki.libsdl.org/SDL3/SDL_GL_SetSwapInterval
-    SDL_GL_SetSwapInterval(Gfx::g_global_settings.vsync);
+    // xrWaitFrame paces an XR session: the window keeps interval 0 until it ends
+    if (!xr_paced) {
+      SDL_GL_SetSwapInterval(Gfx::g_global_settings.vsync);
+    }
   }
 
   // Start timing for the next frame.
@@ -717,7 +1196,10 @@ void GLDisplay::render() {
   {
     prof().instant_event("engine-notify");
     std::unique_lock<std::mutex> lock(g_gfx_data->sync_mutex);
-    g_gfx_data->frame_idx++;
+    // XR: the display runs at the headset's rate, the game keeps its 60 Hz vsync
+    if (!xr_paced || xr_game_tick()) {
+      g_gfx_data->frame_idx++;
+    }
     g_gfx_data->sync_cv.notify_all();
   }
 
@@ -755,12 +1237,18 @@ u32 gl_vsync() {
   g_gfx_data->sync_cv.wait(lock, [=] {
     return (MasterExit != RuntimeExitStatus::RUNNING) || g_gfx_data->frame_idx > init_frame;
   });
+  if (Gfx::g_global_settings.perf_timing_window != 0) {
+    perf::ee_frame_start();
+  }
   return g_gfx_data->frame_idx & 1;
 }
 
 u32 gl_sync_path() {
   if (!g_gfx_data) {
     return 0;
+  }
+  if (Gfx::g_global_settings.perf_timing_window != 0) {
+    perf::ee_frame_work_done();
   }
   std::unique_lock<std::mutex> lock(g_gfx_data->sync_mutex);
   g_gfx_data->last_engine_time = g_gfx_data->engine_timer.getSeconds();
@@ -799,6 +1287,10 @@ void gl_send_chain(const void* data, u32 offset) {
     // may be easy.
 
     g_gfx_data->dma_copier.set_input_data(data, offset, run_dma_copy);
+    motion_vectors::latch_cut_for_chain();
+    g_gfx_data->xr_view_pending = Gfx::take_xr_cull_handed();
+    g_gfx_data->xr_view_pending.sent_s = steady_s();
+    motion_blur::latch_for_chain();
 
     g_gfx_data->has_data_to_render = true;
     g_gfx_data->dma_cv.notify_all();
@@ -831,6 +1323,48 @@ void gl_texture_relocate(u32 destination, u32 source, u32 format) {
 }
 
 void gl_set_levels(const std::vector<std::string>& levels) {
+  const auto& gs = Gfx::g_global_settings;
+  static bool neighbours_were_on = false;
+  const bool jak1_neighbours =
+      g_gfx_data->version == GameVersion::Jak1 && gs.vista_enable && gs.vista_neighbours;
+  if (jak1_neighbours && neighbours::is_outdoor(neighbours::viewer())) {
+    // neighbour fidelity: the game's levels first, then every adjacent level, loader-only
+    std::vector<std::string> game_levels;
+    for (const auto& l : levels) {
+      if (!l.empty() && l != "none") {
+        game_levels.push_back(l);
+      }
+    }
+    auto adj = neighbours::adjacent_to(game_levels);
+    if (gs.vista_standin_neighbours) {
+      auto seen = neighbours::standin_levels(game_levels, adj);
+      adj.insert(adj.end(), seen.begin(), seen.end());
+    }
+    auto want = levels;
+    want.insert(want.end(), adj.begin(), adj.end());
+    neighbours::set_resident(game_levels, adj);
+    g_gfx_data->loader->set_max_levels(
+        std::max(g_gfx_data->loader->default_max_levels(), (int)(game_levels.size() + adj.size()) + 1));
+    g_gfx_data->loader->set_want_levels(want);
+    neighbours_were_on = true;
+    return;
+  }
+  if (neighbours_were_on) {
+    neighbours::set_resident({}, {});
+    g_gfx_data->loader->set_max_levels(g_gfx_data->loader->default_max_levels());
+    neighbours_were_on = false;
+  }
+  if (!jak1_neighbours && g_gfx_data->version == GameVersion::Jak1 && gs.vista_enable &&
+      gs.vista_level[0]) {
+    // keep the vista level resident in the loader's spare slot; GOAL never sees it
+    auto with_vista = levels;
+    std::string vista = gs.vista_level;
+    if (std::find(with_vista.begin(), with_vista.end(), vista) == with_vista.end()) {
+      with_vista.push_back(vista);
+    }
+    g_gfx_data->loader->set_want_levels(with_vista);
+    return;
+  }
   g_gfx_data->loader->set_want_levels(levels);
 }
 

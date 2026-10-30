@@ -1,0 +1,70 @@
+# Swamp fixes (fix/swamp-rain-cover-bubbles): rain needs open sky (no rain rings, puddles or soaked
+# ground under a roof, cave or overhang; soft edge at cave mouths) and the mud bubbles take the
+# swamp mist and the fog floor. Arms: C original game (the `-vanilla` shots: no forms, the rig
+# boots all off), A master and B the fix: the `-play` shots, captured once with master's bin (A)
+# and once with bin fix-swamp-rain-cover-bubbles (B); the look is the same play look in both.
+# Vanilla first; one instance. Clocks pinned (rig clock, water clock 120 s, which the rain rings
+# use); actors live and particles on so the rain and the bubbles run.
+# - cave3-mouth: the swamp-cave3 continue camera (the game's own), inside the hollow tree looking
+#   along the plank walk to the opening; no captured frame exists, so it comes with an offline
+#   render of the swamp geometry from that camera with the cover rule painted
+#   (not committed, render-cave3-cover.png: 93% covered, the planks at the mouth open, 10% in the edge).
+# - mud-bubbles: new, 3 m over the mud channel at (326.8, 3, -2150.1) m looking north-east along
+#   it at group-swamp-bubbles-03 (35 m) and -02 (80 m), both unoccluded in the offline render
+#   (render-mud-bubbles.png; nearest surface 5 m).
+# - play-0017-open: the frame runs/20260926-1011-play/0017 (open swamp, Jak placed), the
+#   control: open-sky rain rings and puddles must stay as master draws them.
+# - dock1-trees: the swamp-dock1 camera of the kept wet-pbr-001 round, the
+#   documented change: the planks under the giant trees' high branches count as covered (anything
+#   solid overhead does, by design), so they lose their puddles and rings there.
+set: swamp-rain-cover-bubbles
+looks:
+  play: &play  # the play look (minus HDR output), as shore-wet.yaml
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+    - '(pc-set-ssao-preset 1)'
+    - '(pc-set-bloom 0 1000000)'
+    - '(pc-set-bloom 4 1000000)'
+    - '(pc-set-ssao-param 15 1000000)'
+    - '(pc-set-emissive-lights 0 1000000)'
+    - '(pc-set-shadows 1 1.0)'
+    - '(pc-set-shadow-option 5 300000)'
+    - '(pc-set-fur 0 1000000)'
+    - '(pc-set-water 0 1000000)'
+    - '(pc-set-water 90 120000000)'
+    - '(pc-set-pbr-param 0 1)'
+    - '(pc-set-vista-fog "unified" 150 150 800)'
+    - '(define-extern pc-set-vista-neighbour-fog (function string int int int none))'
+    - '(pc-set-vista-neighbour-fog "clear" -1 -1 -1)'
+    - '(define-extern pc-set-vista-haze (function int int int int none))'
+    - '(define-extern pc-set-vista-neighbour-haze (function string int none))'
+    - '(pc-set-vista-haze 850 200 #x8d8f80 700)'
+    - '(pc-set-vista-neighbour-fog "misty" 16000 #x7a7771 -1)'
+    - '(pc-set-vista-neighbour-haze "misty" 0)'
+    - '(pc-set-vista-neighbour-fog "rolling" 10000 #x6a6978 -1)'
+    - '(pc-set-vista-neighbour-fog "village2" 16000 #x656581 -1)'
+    - '(pc-set-vista-neighbour-fog "training" 7000 #x767371 -1)'
+    - '(pc-set-vista-neighbour-haze "training" 0)'
+    - '(pc-set-vista-option 5 (the int (&-> *time-of-day-context* time)))'
+    - '(pc-set-vista-option 12 1)'
+    - '(pc-set-vista "neighbours")'
+    - '(pc-set-hdr-target #t)'
+    - '(pc-set-tonemap 0 2000000)'
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 120
+  hour: 14.819
+  effects: on
+  wind: on
+  particles: on
+  actors: live
+  jak: hide
+shots:
+  - {name: cave3-mouth-vanilla, continue: swamp-cave3, camera: {pos: [2053120.4, 22242.5, -7927784.5], rot: [0.114500, 0.000000, 0.993400, -0.141200, 0.989800, 0.016200, -0.983300, -0.142200, 0.113400]}}
+  - {name: mud-bubbles-vanilla, continue: swamp-start, camera: {pos: [1338572.8, 12288.0, -8806850.6], rot: [0.866019, 0.000000, -0.500011, 0.038459, 0.997038, 0.066611, 0.498530, -0.076916, 0.863454]}}
+  - {name: play-0017-open-vanilla, continue: swamp-start, jak: show, jak_pos: [1696286.875, -2047.967, -7691331.500], camera: {pos: [1676599.5, 19045.9, -7644066.0], rot: [-0.924486, -0.000000, -0.381216, 0.046114, 0.992657, -0.111832, 0.378417, -0.120966, -0.917697]}}
+  - {name: dock1-trees-vanilla, continue: swamp-dock1, camera: {pos: [1314475.6, 26164.8, -8234152.5], rot: [0.315400, 0.000000, -0.948900, 0.113400, 0.992800, 0.037600, 0.942100, -0.119500, 0.313100]}}
+  - {name: cave3-mouth-play, continue: swamp-cave3, camera: {pos: [2053120.4, 22242.5, -7927784.5], rot: [0.114500, 0.000000, 0.993400, -0.141200, 0.989800, 0.016200, -0.983300, -0.142200, 0.113400]}, goals_after_load: *play}
+  - {name: mud-bubbles-play, continue: swamp-start, camera: {pos: [1338572.8, 12288.0, -8806850.6], rot: [0.866019, 0.000000, -0.500011, 0.038459, 0.997038, 0.066611, 0.498530, -0.076916, 0.863454]}, goals_after_load: *play}
+  - {name: play-0017-open-play, continue: swamp-start, jak: show, jak_pos: [1696286.875, -2047.967, -7691331.500], camera: {pos: [1676599.5, 19045.9, -7644066.0], rot: [-0.924486, -0.000000, -0.381216, 0.046114, 0.992657, -0.111832, 0.378417, -0.120966, -0.917697]}, goals_after_load: *play}
+  - {name: dock1-trees-play, continue: swamp-dock1, camera: {pos: [1314475.6, 26164.8, -8234152.5], rot: [0.315400, 0.000000, -0.948900, 0.113400, 0.992800, 0.037600, 0.942100, -0.119500, 0.313100]}, goals_after_load: *play}

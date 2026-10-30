@@ -1,0 +1,24 @@
+# Water shimmer at distance and foam popping: the three antitile-001 cameras as static
+# 8-frame bursts (`pan` with no turn or move), so only the water animates between frames.
+# Temple top and open sea as in water.yaml, hut roof as in neighbours.yaml. Capture once with
+# --preset water=bold and once with bold's [aa] keys left out (the before state, no longer a
+# preset), same build.
+set: water-shimmer
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 300
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - {name: temple-top-dusk, continue: jungle-start, hour: 18,
+     camera: {pos: [1483980.8, 638976.0, -987545.6], rot: [0.802639, 0.0, 0.596466, -0.052259, 0.996154, 0.070323, -0.594172, -0.087615, 0.799552]},
+     pan: {frames: 8}}
+  - {name: hut-roof-dusk, continue: village1-hut, hour: 18, settle_frames: 600, effects: off, jak: hide,
+     camera: {pos: [-614400.0, 450560.0, 614400.0], rot: [-0.992877, 0.0, -0.119145, 0.001352, 0.999936, -0.011266, 0.119138, -0.011346, -0.992813]},
+     pan: {frames: 8}}
+  - {name: open-sea-seam-dusk, continue: misty-start, hour: 18,
+     camera: {pos: [600000.0, 49152.0, 2000000.0], rot: [-0.848559, 0.0, 0.529101, -0.018476, 0.99939, -0.029631, -0.528779, -0.034919, -0.848041]},
+     pan: {frames: 8}}

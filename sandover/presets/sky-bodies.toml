@@ -1,0 +1,38 @@
+# Sky bodies: Jak 3 style sun and moon on the sun switch (sun?), replacing the sun disc
+# (sandover/kb/howto/lighting.md, "Sky bodies"). The engine defaults (gfx.h sky_*) are `jak3`;
+# `disc` is the disc without moon or stars.
+# Rig: the forms of `sandover-preset apply sky-bodies <jak3|disc|off>`.
+#
+# [presets.<name>]
+#   style     0 the disc (sun-disc preset), 1 sky bodies (pc-set-sun-option 20)
+#   burst     starburst strength, 1 = Jak 3's (21)
+#   wash      wide sun and moon wash strength, 1 = Jak 3's (22)
+#   glow, glow_sdr    sun glow in paper whites around the hot core, HDR and SDR (23, 28)
+#   moon, moon_sdr    moon disc in paper whites, HDR and SDR (24, 25)
+#   stars     star brightness, 0 = none (26)
+#   moon_deg  moon angular diameter, degrees (27)
+# label/caption: one line each for the compare view
+
+[meta]
+schema = 1
+phase = "sky-bodies"
+round = 1
+chosen = "jak3"  # the chosen direction (Jak 3's sun and moon)
+
+[presets.jak3]
+label = "Jak 3 sun and moon"
+caption = "Soft sun glow with a white-hot core, starburst and orange wash; grey moon with a blue halo; stars at night"
+style = 1
+burst = 1.0
+wash = 1.0
+glow = 3.0
+glow_sdr = 1.0
+moon = 2.0
+moon_sdr = 0.85
+stars = 1.0
+moon_deg = 2.9
+
+[presets.disc]
+label = "Sun disc"
+caption = "The chosen 2.2 degree disc; no moon, no stars"
+style = 0

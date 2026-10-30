@@ -20,17 +20,28 @@ class Loader {
   ~Loader();
   void update(TexturePool& tex_pool);
   void update_blocking(TexturePool& tex_pool);
+  /// Levels that finished initializing so far (render thread).
+  int levels_loaded() const { return m_levels_loaded; }
   const LevelData* get_tfrag3_level(const std::string& level_name);
+  /// Name a loaded level is registered under, empty if not loaded (inspect tool).
+  std::string name_of(const LevelData* level);
   std::optional<MercRef> get_merc_model(const char* model_name);
   const tfrag3::Level& load_common(TexturePool& tex_pool, const std::string& name);
   void set_want_levels(const std::vector<std::string>& levels);
   void set_active_levels(const std::vector<std::string>& levels);
+  /// Number of loaded levels at which the loader starts evicting idle ones.
+  void set_max_levels(int n) { m_max_levels = n; }
+  int default_max_levels() const { return m_default_max_levels; }
   std::vector<LevelData*> get_in_use_levels();
   void draw_debug_window();
   void debug_print_loaded_levels();
   void request_reload_all() { m_want_reload = true; }
   void request_reload_level(const std::string& name) { m_single_level_to_reload = name; }
   void request_reload_common() { m_want_reload_common = true; }
+  /// Read `<level>.unbake` next to the fr3 at load (Jak 1 moving sun).
+  void set_load_unbake(bool load) { m_load_unbake = load; }
+  /// Material classes for the common level's textures (Jak 1, see Materials.h).
+  void classify_common();
 
  private:
   void loader_thread();
@@ -70,7 +81,10 @@ class Loader {
   std::vector<std::unique_ptr<LoaderStage>> m_loader_stages;
   std::vector<GLuint> m_garbage_textures;
   std::vector<GLuint> m_garbage_buffers;
+  int m_levels_loaded = 0;
 
   fs::path m_base_path;
-  int m_max_levels = 0;
+  std::atomic<bool> m_load_unbake{false};
+  std::atomic<int> m_max_levels = 0;
+  int m_default_max_levels = 0;
 };

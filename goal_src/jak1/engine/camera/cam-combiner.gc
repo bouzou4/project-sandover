@@ -18,6 +18,8 @@
             (set! (-> self tracking point-of-interest-blend target) 1.0))
            (else (set! (-> self tracking use-point-of-interest) #f) (set! (-> self tracking point-of-interest-blend target) 0.0))))
         (('set-interpolation)
+         ;; no frames to blend over: the camera cuts
+         (if (zero? (-> block param 0)) (pc-set-motion-vectors 4 1))
          (set! (-> self interp-val) 0.0)
          (set! (-> self interp-step) (/ 5.0 (the float (-> block param 0)))))
         (('teleport)

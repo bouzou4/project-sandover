@@ -1,0 +1,40 @@
+# Vista landmark actors: the neighbours captures with particles on, so the beach waterfall
+# (group-beach-waterfall) and the windmills (windmill-one) of an undisplayed beach can be compared.
+# hut-roof: 110 m above the village1 hut toward the beach cliffs. hut: the continue camera.
+# beach-v1: beach shore toward village1. Mode set per run with --goal forms; see kb/howto/vista.md.
+schema: 1
+set: landmarks
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 600
+  effects: 'off'
+  wind: 'off'
+  particles: 'on'
+  jak: hide
+shots:
+- name: hut-roof-noon
+  continue: village1-hut
+  hour: 12
+  camera:
+    pos: [-614400.0, 450560.0, 614400.0]
+    rot: [-0.992877, 0.0, -0.119145, 0.001352, 0.999936, -0.011266, 0.119138, -0.011346, -0.992813]
+- name: hut-roof-dusk
+  continue: village1-hut
+  hour: 18
+  camera:
+    pos: [-614400.0, 450560.0, 614400.0]
+    rot: [-0.992877, 0.0, -0.119145, 0.001352, 0.999936, -0.011266, 0.119138, -0.011346, -0.992813]
+- {name: hut-noon, continue: village1-hut, hour: 12, camera: from_continue}
+- name: beach-v1-noon
+  continue: beach-start
+  hour: 12
+  camera:
+    pos: [-450560.0, 163840.0, -245760.0]
+    rot: [0.983229, -0.0, 0.182373, -0.007225, 0.999215, 0.038951, -0.18223, -0.039615, 0.982458]
+- name: beach-v1-dusk
+  continue: beach-start
+  hour: 18
+  camera:
+    pos: [-450560.0, 163840.0, -245760.0]
+    rot: [0.983229, -0.0, 0.182373, -0.007225, 0.999215, 0.038951, -0.18223, -0.039615, 0.982458]

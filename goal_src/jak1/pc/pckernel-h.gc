@@ -67,7 +67,7 @@
 
 (defconstant PC_MIN_HEIGHT 240)
 
-(defconstant PC_DEFAULT_MSAA 1)
+(defconstant PC_DEFAULT_MSAA 2) ;; sandover: 2x, for vanilla rendering, stereo and XR
 
 ;; how many entries the music log has. the game only has 21 tracks but let's have more space for no reason.
 (defconstant PC_MUSIC_LOG_LENGTH 30)
@@ -272,6 +272,9 @@
 
 (define *display-sha* *debug-segment*)
 
+;; sandover: on-screen debug text (console lines, unknown hint ids); play sessions turn it off
+(define *display-debug-text* #t)
+
 ;; collision renderer things. debug only.
 (define *collision-renderer* #f)
 
@@ -431,6 +434,12 @@
 
 (defmacro fullscreen? ()
   `(or (= (pc-get-display-mode) 'fullscreen) (= (pc-get-display-mode) 'borderless)))
+
+(defmacro pc-game-fps ()
+  "The rate the game clock steps at: the frame rate setting, or the XR session's tick (60) while
+   a session paces the game."
+  `(let ((xr-fps (pc-get-xr-game-rate)))
+     (if (nonzero? xr-fps) xr-fps (-> *pc-settings* target-fps))))
 
 (defun bcd->dec ((bcd uint))
   "Convert a number encoded in BCD to its decimal equivalent"

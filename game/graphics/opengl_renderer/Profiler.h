@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <list>
 #include <string>
 #include <vector>
 
@@ -40,6 +41,14 @@ class ProfilerNode {
   void add_tri(int count = 1) { m_stats.triangles += count; }
   float get_elapsed_time() const { return m_timer.getSeconds(); }
   const ProfilerStats& stats() const { return m_stats; }
+  /// own draws plus those of the finished children (finish() sums them later)
+  u32 draw_calls_so_far() const {
+    u32 n = m_stats.draw_calls;
+    for (const auto& c : m_children) {
+      n += c.m_stats.draw_calls;
+    }
+    return n;
+  }
 
  private:
   friend class Profiler;
@@ -47,7 +56,8 @@ class ProfilerNode {
 
   std::string m_name;
   ProfilerStats m_stats;
-  std::vector<ProfilerNode> m_children;
+  // a list: a scoped child keeps its node pointer while siblings are added
+  std::list<ProfilerNode> m_children;
   Timer m_timer;
   bool m_finished = false;
 };
@@ -67,6 +77,7 @@ class ScopedProfilerNode {
   void add_draw_call(int count = 1) { m_node->add_draw_call(count); }
   void add_tri(int count = 1) { m_node->add_tri(count); }
   float get_elapsed_time() const { return m_node->get_elapsed_time(); }
+  u32 draw_calls() const { return m_node->draw_calls_so_far(); }
 
  private:
   ProfilerNode* m_node;

@@ -1,0 +1,64 @@
+# Backlit leaves with sun transmittance, confirmation of the chosen look (B2) on the merge build.
+# Bin foliage-sun-occlusion-5, SANDOVER_GK_PROJ_PATH at worktrees/foliage-sun-occlusion-5-root.
+# Every arm's forms are ONE
+# after-load string: the clock pin, the play look (reset, reapply, update), the Sandover wave clock
+# pin, then the variant. Do NOT also pass --play-look (it would add a second string). C gets the
+# clock pin only. Toggles persist within an instance; C first (vanilla boot).
+#   A  (no backlight):                      26 0, 27 0, 28 0, 30 0
+#   B1 (backlight as before):              26 1, 27 1, 28 1, sun occlusion off (30 0)
+#   B2 (with sun transmittance):            B1 + 30 1, density 31 2.5
+#   B3 (stronger backlight, with occlusion): 26 2 (double leaf transmission), 30 1, 31 2.5
+# Canopy shade (shadow option 11) is off in every arm. Same clocks in every arm: the stage hook
+# moves all game clocks to 100000 s 4 frames before the shot (rig-set-clock), the wave clock is
+# pinned at 120 s (water option 90), wind is off and actors frozen (rig default), so only the
+# backlight differs.
+# Cameras from existing frames (BUILD-RULES camera rule):
+# - village1-hut-dusk: class-response-002/B/village1-hut-dusk.png (pose pinned here
+#   rather than from_continue, so the arms align).
+# - village1-palm-sun: class-response-002/B/village1-palm-sun.png (looking up through
+#   the fronds toward the 15 h sun: fronds with other fronds between them and the sun).
+# - jungle-canopy-sun: foliage-sun-001/B1/jungle-canopy-sun.png.
+# village1-palm-whole is dropped (foreground bush and plank, small palm).
+# What foliage-sun-001 showed (pixel diffs of the captured frames, hut-dusk): B1 reproduces the
+# class-response-002 B glow on the palms (+12 to +19 levels on the palm crowns, about 1% of this
+# wide frame); class-response-002's larger share of changed pixels came from the water and a
+# 1.4 degree camera difference, not the palms. B2 takes the glow of the palms behind the buildings
+# to about 0 (four crowns: +14 -> 0, +17 -> +3, +12 -> 0, +19 -> 0) and keeps it on open
+# foreground plants (+12.8 -> +12.8, +12.0 -> +11.7). B3 doubles the glow where it survives.
+schema: 1
+set: foliage-sun-006
+looks:
+  A: &A
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none))) (sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-water 90 120000000) (pc-set-pbr-param 26 0) (pc-set-pbr-param 27 0) (pc-set-pbr-param 28 0) (pc-set-pbr-param 30 0) (pc-set-shadow-option 11 0)'
+  B1: &B1
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none))) (sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-water 90 120000000) (pc-set-pbr-param 26 1000000) (pc-set-pbr-param 27 1000000) (pc-set-pbr-param 28 1) (pc-set-pbr-param 30 0) (pc-set-shadow-option 11 0)'
+  B2: &B2
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none))) (sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-water 90 120000000) (pc-set-pbr-param 26 1000000) (pc-set-pbr-param 27 1000000) (pc-set-pbr-param 28 1) (pc-set-pbr-param 30 1) (pc-set-pbr-param 31 2500000) (pc-set-shadow-option 11 0)'
+  B3: &B3
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none))) (sandover-settings-reset! (-> *pc-settings* sandover)) (sandover-settings-reapply) (sandover-settings-update) (pc-set-water 90 120000000) (pc-set-pbr-param 26 2000000) (pc-set-pbr-param 27 1000000) (pc-set-pbr-param 28 1) (pc-set-pbr-param 30 1) (pc-set-pbr-param 31 2500000) (pc-set-shadow-option 11 0)'
+  C: &C  # original game: the clock pin only
+    - '(set! *rig-stage-hook* (lambda () (rig-set-clock (seconds 100000)) (none)))'
+defaults:
+  resolution: [2560, 1440]
+  msaa: 4
+  settle_frames: 300
+  effects: on
+  wind: off
+  particles: off
+  jak: show
+shots:
+  - {name: village1-hut-dusk-C, continue: village1-hut, hour: 18, camera: {pos: [-668114.125, 164536.3125, 828633.0625], rot: [-0.8947, 0.0, -0.4464, 0.1082, 0.9701, -0.2169, 0.4331, -0.2424, -0.868]}, goals_after_load: *C}
+  - {name: village1-palm-sun-C, continue: village1-hut, hour: 15, jak: hide, camera: {pos: [-439951.4, 115466.2, 569794.6], rot: [-0.983913, 0.0, 0.17865, 0.073084, 0.912493, 0.402511, -0.163017, 0.409092, -0.897814]}, goals_after_load: *C}
+  - {name: jungle-canopy-sun-C, continue: jungle-start, hour: 15, jak: hide, camera: {pos: [1086344.8, 84446.5, -734407.9], rot: [-0.967879, 0.0, 0.251417, 0.097765, 0.921298, 0.376366, -0.23163, 0.388857, -0.891705]}, goals_after_load: *C}
+  - {name: village1-hut-dusk-A, continue: village1-hut, hour: 18, camera: {pos: [-668114.125, 164536.3125, 828633.0625], rot: [-0.8947, 0.0, -0.4464, 0.1082, 0.9701, -0.2169, 0.4331, -0.2424, -0.868]}, goals_after_load: *A}
+  - {name: village1-palm-sun-A, continue: village1-hut, hour: 15, jak: hide, camera: {pos: [-439951.4, 115466.2, 569794.6], rot: [-0.983913, 0.0, 0.17865, 0.073084, 0.912493, 0.402511, -0.163017, 0.409092, -0.897814]}, goals_after_load: *A}
+  - {name: jungle-canopy-sun-A, continue: jungle-start, hour: 15, jak: hide, camera: {pos: [1086344.8, 84446.5, -734407.9], rot: [-0.967879, 0.0, 0.251417, 0.097765, 0.921298, 0.376366, -0.23163, 0.388857, -0.891705]}, goals_after_load: *A}
+  - {name: village1-hut-dusk-B1, continue: village1-hut, hour: 18, camera: {pos: [-668114.125, 164536.3125, 828633.0625], rot: [-0.8947, 0.0, -0.4464, 0.1082, 0.9701, -0.2169, 0.4331, -0.2424, -0.868]}, goals_after_load: *B1}
+  - {name: village1-palm-sun-B1, continue: village1-hut, hour: 15, jak: hide, camera: {pos: [-439951.4, 115466.2, 569794.6], rot: [-0.983913, 0.0, 0.17865, 0.073084, 0.912493, 0.402511, -0.163017, 0.409092, -0.897814]}, goals_after_load: *B1}
+  - {name: jungle-canopy-sun-B1, continue: jungle-start, hour: 15, jak: hide, camera: {pos: [1086344.8, 84446.5, -734407.9], rot: [-0.967879, 0.0, 0.251417, 0.097765, 0.921298, 0.376366, -0.23163, 0.388857, -0.891705]}, goals_after_load: *B1}
+  - {name: village1-hut-dusk-B2, continue: village1-hut, hour: 18, camera: {pos: [-668114.125, 164536.3125, 828633.0625], rot: [-0.8947, 0.0, -0.4464, 0.1082, 0.9701, -0.2169, 0.4331, -0.2424, -0.868]}, goals_after_load: *B2}
+  - {name: village1-palm-sun-B2, continue: village1-hut, hour: 15, jak: hide, camera: {pos: [-439951.4, 115466.2, 569794.6], rot: [-0.983913, 0.0, 0.17865, 0.073084, 0.912493, 0.402511, -0.163017, 0.409092, -0.897814]}, goals_after_load: *B2}
+  - {name: jungle-canopy-sun-B2, continue: jungle-start, hour: 15, jak: hide, camera: {pos: [1086344.8, 84446.5, -734407.9], rot: [-0.967879, 0.0, 0.251417, 0.097765, 0.921298, 0.376366, -0.23163, 0.388857, -0.891705]}, goals_after_load: *B2}
+  - {name: village1-hut-dusk-B3, continue: village1-hut, hour: 18, camera: {pos: [-668114.125, 164536.3125, 828633.0625], rot: [-0.8947, 0.0, -0.4464, 0.1082, 0.9701, -0.2169, 0.4331, -0.2424, -0.868]}, goals_after_load: *B3}
+  - {name: village1-palm-sun-B3, continue: village1-hut, hour: 15, jak: hide, camera: {pos: [-439951.4, 115466.2, 569794.6], rot: [-0.983913, 0.0, 0.17865, 0.073084, 0.912493, 0.402511, -0.163017, 0.409092, -0.897814]}, goals_after_load: *B3}
+  - {name: jungle-canopy-sun-B3, continue: jungle-start, hour: 15, jak: hide, camera: {pos: [1086344.8, 84446.5, -734407.9], rot: [-0.967879, 0.0, 0.251417, 0.097765, 0.921298, 0.376366, -0.23163, 0.388857, -0.891705]}, goals_after_load: *B3}

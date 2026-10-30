@@ -819,9 +819,10 @@ void GlowRenderer::draw_sprites(SharedRenderState* render_state, ScopedProfilerN
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
   render_state->shaders[ShaderId::GLOW_DRAW].activate();
-  if (!m_debug.enable_glow_boost && Gfx::g_global_settings.target_fps > 60.0f) {
-    // on higher framerates, more glow sprites are drawn, so we scale the boost a bit
-    m_debug.glow_boost = 60.0f / Gfx::g_global_settings.target_fps;
+  if (!m_debug.enable_glow_boost) {
+    // on higher framerates, more glow sprites are drawn, so we scale the boost a bit; back to 1
+    // when the rate drops (an XR session steps the game at 60)
+    m_debug.glow_boost = std::min(1.f, 60.0f / Gfx::game_fps());
   }
   glUniform1f(glGetUniformLocation(render_state->shaders[ShaderId::GLOW_DRAW].id(), "glow_boost"),
               m_debug.glow_boost);
